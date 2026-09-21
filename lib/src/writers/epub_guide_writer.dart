@@ -1,8 +1,11 @@
-import '../schema/opf/epub_guide.dart';
 import 'package:xml/xml.dart';
 
+import '../schema/opf/epub_guide.dart';
+
 class EpubGuideWriter {
-  static void writeGuide(XmlBuilder builder, EpubGuide? guide) {
+  const EpubGuideWriter();
+
+  void writeGuide(XmlBuilder builder, EpubGuide? guide) {
     builder.element('guide', nest: () {
       for (var guideItem in guide!.Items!) {
         builder.element('reference', attributes: {

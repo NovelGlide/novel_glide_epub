@@ -1,8 +1,11 @@
-import '../schema/opf/epub_manifest.dart';
 import 'package:xml/xml.dart';
 
+import '../schema/opf/epub_manifest.dart';
+
 class EpubManifestWriter {
-  static void writeManifest(XmlBuilder builder, EpubManifest? manifest) {
+  const EpubManifestWriter();
+
+  void writeManifest(XmlBuilder builder, EpubManifest? manifest) {
     builder.element('manifest', nest: () {
       for (var item in manifest!.Items!) {
         builder.element('item', nest: () {

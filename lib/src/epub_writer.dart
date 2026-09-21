@@ -1,18 +1,30 @@
-import 'package:archive/archive.dart';
 import 'dart:convert' as convert;
-import './utils/zip_path_resolver.dart';
-import './writers/epub_package_writer.dart';
+
+import 'package:archive/archive.dart';
 
 import 'entities/epub_book.dart';
 import 'entities/epub_byte_content_file.dart';
 import 'entities/epub_text_content_file.dart';
+import 'utils/zip_path_resolver.dart';
+import 'writers/epub_package_writer.dart';
 
+/// Serialises an [EpubBook] back into an EPUB container.
+///
+/// [writeBook] is static on purpose, mirroring [EpubReader]: it is this
+/// package's write-side entry point and is called by name from outside. The
+/// assembly it delegates to is an ordinary instance method, so the type is a
+/// unit with a static convenience entry rather than a namespace.
 class EpubWriter {
+  const EpubWriter();
+
   static const _container_file =
       '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>';
 
+  final ZipPathResolver _pathResolver = const ZipPathResolver();
+  final EpubPackageWriter _packageWriter = const EpubPackageWriter();
+
   // Creates a Zip Archive of an EpubBook
-  static Archive _createArchive(EpubBook book) {
+  Archive _createArchive(EpubBook book) {
     var arch = Archive();
 
     // Add simple metadata
@@ -34,18 +46,17 @@ class EpubWriter {
       }
 
       arch.addFile(ArchiveFile(
-          const ZipPathResolver()
-              .combine(book.Schema!.ContentDirectoryPath, name)!,
+          _pathResolver.combine(book.Schema!.ContentDirectoryPath, name)!,
           content!.length,
           content));
     });
 
     // Generate the content.opf file and add it to the Archive
-    var contentopf = EpubPackageWriter.writeContent(book.Schema!.Package!);
+    var contentopf = _packageWriter.writeContent(book.Schema!.Package!);
 
     arch.addFile(ArchiveFile(
-        const ZipPathResolver()
-            .combine(book.Schema!.ContentDirectoryPath, 'content.opf')!,
+        _pathResolver.combine(
+            book.Schema!.ContentDirectoryPath, 'content.opf')!,
         contentopf.length,
         convert.utf8.encode(contentopf)));
 
@@ -53,9 +64,6 @@ class EpubWriter {
   }
 
   // Serializes the EpubBook into a byte array
-  static List<int>? writeBook(EpubBook book) {
-    var arch = _createArchive(book);
-
-    return ZipEncoder().encode(arch);
-  }
+  static List<int>? writeBook(EpubBook book) =>
+      ZipEncoder().encode(const EpubWriter()._createArchive(book));
 }

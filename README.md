@@ -41,23 +41,53 @@ Not published to pub.dev; consumed by git reference.
 
 ## Status
 
-**Coverage at extraction: 21%** (311 / 1481 lines), from seven test cases that
-were written to pin two specific bugs rather than to cover the package. Forty
-of its fifty-five files had never been executed by a test. Raising that is the
-work in progress.
+**Coverage: 99.4%** (1504 / 1513 lines), up from 21% at extraction, when the
+suite was seven test cases written to pin two specific bugs and forty of the
+fifty-five files had never been executed at all. The nine remaining lines are
+in `root_file_path_reader.dart`, `chapter_reader.dart`, `package_reader.dart`
+and `navigation_reader.dart`.
 
-**The writing side is out of scope for now.** `epub_writer.dart` and
-`writers/` — six files, 122 lines, 0% covered — serialise an EPUB back out, and
-nothing in NovelGlide writes EPUBs. They are left in place rather than deleted
-so the capability survives, but they are not part of the coverage target and
-carry no tests. Treat them as unverified: anyone reaching for them should test
-them first.
+**The writing side is covered, and lossy in named ways.** `epub_writer.dart`
+and `writers/` serialise an EPUB back out. Nothing in NovelGlide writes EPUBs,
+so they exist to keep the capability rather than to serve a caller — but they
+are no longer unverified: every line is executed, the read → write → read trip
+is asserted as whole-`EpubBook` equality, and each serialiser has direct tests
+for its own branches.
 
-**The source is still upstream's style** — `var`, PascalCase fields, few
-explicit types. The lint set here is deliberately `package:lints/recommended`
-rather than this org's stricter one: turning the strict set on before the test
-suite exists would bury real findings under a few hundred style violations.
-Aligning the style is a separate pass, after coverage.
+What those tests pin is that the trip loses specific things. Each item below
+has a test that fails if the behaviour changes, so they are recorded rather
+than hidden:
+
+- The container is written with a constant `OEBPS/content.opf` root path, so a
+  book whose OPF sat anywhere else is written unreadable.
+- Spine linearity inverts on every trip: `readSpine` maps both an absent
+  `linear` and `linear="no"` to `IsLinear = true`, and the writer maps `true`
+  back to `"yes"`. The pair has no fixed point.
+- A book with no `<guide>`, and a spine with no `toc`, cannot be written at
+  all — both writers dereference what the reader leaves null.
+- `page-progression-direction` and the manifest's `properties` and fallback
+  attributes have no writer, so a right-to-left book and an EPUB3 nav
+  declaration do not survive.
+- `EpubNavigationWriter` has no caller at all — `EpubWriter` carries the NCX
+  through as a raw content file — and what it writes is not quite NCX: the
+  `docTitle` lacks the `<text>` wrapper the reader requires, so it reads back
+  empty, and nested `navPoint`s are not written.
+
+Treat the writer as able to round-trip a book this parser has just read out of
+a conventional EPUB2 container, and not yet as a general EPUB serialiser.
+
+**The lint is this org's set** — `dart_lints`, run with `dart run dart_lints`;
+`dart_lints.yaml` holds this package's half and `analysis_options.yaml` the
+stock-analyzer lints it does not take. One finding is left on purpose, and it
+is named in the code: `EpubReader` is a static-only class because `readBook`
+and `openBook` are the entry points the NovelGlide app calls by name, and
+making them instance calls would be a breaking change across two repositories.
+
+Four stock lints are held out with their reasons in `analysis_options.yaml` —
+the PascalCase public members and the SCREAMING_CASE enum values carried over
+from upstream, the `xml` package's deprecated `.text` (where `value` versus
+`innerText` is a parsing decision, not a substitution), and two findings inside
+`ZipPathResolver.combine`, which a pending fix rewrites.
 
 ## Development
 

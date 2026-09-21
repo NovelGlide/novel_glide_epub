@@ -1,8 +1,11 @@
-import '../schema/opf/epub_spine.dart';
 import 'package:xml/xml.dart';
 
+import '../schema/opf/epub_spine.dart';
+
 class EpubSpineWriter {
-  static void writeSpine(XmlBuilder builder, EpubSpine spine) {
+  const EpubSpineWriter();
+
+  void writeSpine(XmlBuilder builder, EpubSpine spine) {
     builder.element('spine', attributes: {'toc': spine.TableOfContents!},
         nest: () {
       for (var spineitem in spine.Items!) {
