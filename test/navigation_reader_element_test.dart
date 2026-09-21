@@ -412,8 +412,7 @@ void main() {
     // Reported to the caller; the fix belongs in lib/.
     for (final String child in <String>[
       '<navLabel><text>NGE-SEED Label</text></navLabel>',
-      '<navTarget id="nt-1">'
-          '<navLabel><text>NGE-SEED Target</text></navLabel></navTarget>',
+      '<navTarget id="nt-1"><navLabel><text>NGE-SEED Target</text></navLabel></navTarget>',
     ]) {
       test(
         'TC-NAVU-26 [Error guessing]: navList child throws TypeError on the '

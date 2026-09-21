@@ -56,9 +56,9 @@ class EpubReader {
       loadedBytes = bytes;
     }
 
-    var epubArchive = ZipDecoder().decodeBytes(loadedBytes);
+    final Archive epubArchive = ZipDecoder().decodeBytes(loadedBytes);
 
-    var bookRef = EpubBookRef(epubArchive);
+    final EpubBookRef bookRef = EpubBookRef(epubArchive);
     bookRef.Schema = await const SchemaReader().readSchema(epubArchive);
     bookRef.Title = bookRef.Schema!.Package!.Metadata!.Titles!
         .firstWhere((String name) => true, orElse: () => '');
@@ -72,7 +72,7 @@ class EpubReader {
 
   /// Opens the book asynchronously and reads all of its content into the memory. Does not hold the handle to the EPUB file.
   static Future<EpubBook> readBook(FutureOr<List<int>> bytes) async {
-    var result = EpubBook();
+    final EpubBook result = EpubBook();
     List<int> loadedBytes;
     if (bytes is Future) {
       loadedBytes = await bytes;
@@ -80,21 +80,21 @@ class EpubReader {
       loadedBytes = bytes;
     }
 
-    var epubBookRef = await openBook(loadedBytes);
+    final EpubBookRef epubBookRef = await openBook(loadedBytes);
     result.Schema = epubBookRef.Schema;
     result.Title = epubBookRef.Title;
     result.AuthorList = epubBookRef.AuthorList;
     result.Author = epubBookRef.Author;
     result.Content = await readContent(epubBookRef.Content!);
     result.CoverImage = await epubBookRef.readCover();
-    var chapterRefs = await epubBookRef.getChapters();
+    final List<EpubChapterRef> chapterRefs = await epubBookRef.getChapters();
     result.Chapters = await readChapters(chapterRefs);
 
     return result;
   }
 
   static Future<EpubContent> readContent(EpubContentRef contentRef) async {
-    var result = EpubContent();
+    final EpubContent result = EpubContent();
     result.Html = await readTextContentFiles(contentRef.Html!);
     result.Css = await readTextContentFiles(contentRef.Css!);
     result.Images = await readByteContentFiles(contentRef.Images!);
@@ -127,11 +127,11 @@ class EpubReader {
 
   static Future<Map<String, EpubTextContentFile>> readTextContentFiles(
       Map<String, EpubTextContentFileRef> textContentFileRefs) async {
-    var result = <String, EpubTextContentFile>{};
+    final Map<String, EpubTextContentFile> result = <String, EpubTextContentFile>{};
 
     await Future.forEach(textContentFileRefs.keys, (dynamic key) async {
-      EpubContentFileRef value = textContentFileRefs[key]!;
-      var textContentFile = EpubTextContentFile();
+      final EpubContentFileRef value = textContentFileRefs[key]!;
+      final EpubTextContentFile textContentFile = EpubTextContentFile();
       textContentFile.FileName = value.FileName;
       textContentFile.ContentType = value.ContentType;
       textContentFile.ContentMimeType = value.ContentMimeType;
@@ -143,7 +143,7 @@ class EpubReader {
 
   static Future<Map<String, EpubByteContentFile>> readByteContentFiles(
       Map<String, EpubByteContentFileRef> byteContentFileRefs) async {
-    var result = <String, EpubByteContentFile>{};
+    final Map<String, EpubByteContentFile> result = <String, EpubByteContentFile>{};
     await Future.forEach(byteContentFileRefs.keys, (dynamic key) async {
       result[key] = await readByteContentFile(byteContentFileRefs[key]!);
     });
@@ -152,7 +152,7 @@ class EpubReader {
 
   static Future<EpubByteContentFile> readByteContentFile(
       EpubContentFileRef contentFileRef) async {
-    var result = EpubByteContentFile();
+    final EpubByteContentFile result = EpubByteContentFile();
 
     result.FileName = contentFileRef.FileName;
     result.ContentType = contentFileRef.ContentType;
@@ -164,9 +164,9 @@ class EpubReader {
 
   static Future<List<EpubChapter>> readChapters(
       List<EpubChapterRef> chapterRefs) async {
-    var result = <EpubChapter>[];
+    final List<EpubChapter> result = <EpubChapter>[];
     await Future.forEach(chapterRefs, (EpubChapterRef chapterRef) async {
-      var chapter = EpubChapter();
+      final EpubChapter chapter = EpubChapter();
 
       chapter.Title = chapterRef.Title;
       chapter.ContentFileName = chapterRef.ContentFileName;

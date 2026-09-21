@@ -6,34 +6,34 @@ import 'package:quiver/core.dart';
 import 'epub_text_content_file_ref.dart';
 
 class EpubChapterRef {
+
+  EpubChapterRef(this.epubTextContentFileRef);
   // Referece to Text content reader.
   EpubTextContentFileRef? epubTextContentFileRef;
   // If the chapter is split into multiple files, this list contains the references to content readers of the other files.
-  List<EpubTextContentFileRef> otherTextContentFileRefs = [];
+  List<EpubTextContentFileRef> otherTextContentFileRefs = <EpubTextContentFileRef>[];
 
   String? Title;
   String? ContentFileName;
   String? Anchor;
   List<EpubChapterRef>? SubChapters;
   // If the chapter is split into multiple files, this list contains the names of the other files.
-  List<String> OtherContentFileNames = [];
-
-  EpubChapterRef(this.epubTextContentFileRef);
+  List<String> OtherContentFileNames = <String>[];
 
   @override
   int get hashCode {
-    var objects = [
+    final List<int> objects = <int>[
       Title.hashCode,
       ContentFileName.hashCode,
       // The two split-chapter lists are hashed by ELEMENT, like
       // `SubChapters`: every ref gets its own list instance from the field
       // initialiser, so hashing the list object would give two refs over one
       // chapter two different hash codes.
-      ...OtherContentFileNames.map((fileName) => fileName.hashCode),
-      ...otherTextContentFileRefs.map((fileRef) => fileRef.hashCode),
+      ...OtherContentFileNames.map((String fileName) => fileName.hashCode),
+      ...otherTextContentFileRefs.map((EpubTextContentFileRef fileRef) => fileRef.hashCode),
       Anchor.hashCode,
       epubTextContentFileRef.hashCode,
-      ...SubChapters?.map((subChapter) => subChapter.hashCode) ?? [0],
+      ...SubChapters?.map((EpubChapterRef subChapter) => subChapter.hashCode) ?? <int>[0],
     ];
     return hashObjects(objects);
   }
@@ -53,14 +53,14 @@ class EpubChapterRef {
 
   Future<String> readHtmlContent() async {
     // Started before the other parts so all of them read concurrently.
-    var contentFuture = epubTextContentFileRef!.readContentAsText();
+    final Future<String> contentFuture = epubTextContentFileRef!.readContentAsText();
     if (OtherContentFileNames.isEmpty) {
       return contentFuture;
     }
 
-    var contents = await Future.wait(<Future<String>>[
+    final List<String> contents = await Future.wait(<Future<String>>[
       contentFuture,
-      for (var otherContentFileRef in otherTextContentFileRefs)
+      for (EpubTextContentFileRef otherContentFileRef in otherTextContentFileRefs)
         otherContentFileRef.readContentAsText(),
     ]);
     return contents.join();

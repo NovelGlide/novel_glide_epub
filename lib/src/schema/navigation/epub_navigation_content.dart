@@ -8,7 +8,7 @@ class EpubNavigationContent {
   int get hashCode => hash2(Id.hashCode, Source.hashCode);
 
   @override
-  bool operator ==(other) {
+  bool operator ==(Object other) {
     if (other is! EpubNavigationContent) {
       return false;
     }

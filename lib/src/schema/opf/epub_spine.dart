@@ -10,10 +10,10 @@ class EpubSpine {
 
   @override
   int get hashCode {
-    var objs = [
+    final List<int> objs = <int>[
       TableOfContents.hashCode,
       ltr.hashCode,
-      ...Items!.map((item) => item.hashCode)
+      ...Items!.map((EpubSpineItemRef item) => item.hashCode)
     ];
     return hashObjects(objs);
   }
@@ -27,6 +27,6 @@ class EpubSpine {
     if (!collections.listsEqual(Items, other.Items)) {
       return false;
     }
-    return ((TableOfContents == other.TableOfContents) && (ltr == other.ltr));
+    return (TableOfContents == other.TableOfContents) && (ltr == other.ltr);
   }
 }

@@ -12,7 +12,7 @@ class EpubManifestItem {
   String? Properties;
 
   @override
-  int get hashCode => hashObjects([
+  int get hashCode => hashObjects(<dynamic>[
         Id.hashCode,
         Href.hashCode,
         MediaType.hashCode,

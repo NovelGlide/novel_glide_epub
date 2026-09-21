@@ -27,22 +27,22 @@ class EpubMetadata {
 
   @override
   int get hashCode {
-    var objects = [
-      ...Titles!.map((title) => title.hashCode),
-      ...Creators!.map((creator) => creator.hashCode),
-      ...Subjects!.map((subject) => subject.hashCode),
-      ...Publishers!.map((publisher) => publisher.hashCode),
-      ...Contributors!.map((contributor) => contributor.hashCode),
-      ...Dates!.map((date) => date.hashCode),
-      ...Types!.map((type) => type.hashCode),
-      ...Formats!.map((format) => format.hashCode),
-      ...Identifiers!.map((identifier) => identifier.hashCode),
-      ...Sources!.map((source) => source.hashCode),
-      ...Languages!.map((language) => language.hashCode),
-      ...Relations!.map((relation) => relation.hashCode),
-      ...Coverages!.map((coverage) => coverage.hashCode),
-      ...Rights!.map((right) => right.hashCode),
-      ...MetaItems!.map((metaItem) => metaItem.hashCode),
+    final List<int> objects = <int>[
+      ...Titles!.map((String title) => title.hashCode),
+      ...Creators!.map((EpubMetadataCreator creator) => creator.hashCode),
+      ...Subjects!.map((String subject) => subject.hashCode),
+      ...Publishers!.map((String publisher) => publisher.hashCode),
+      ...Contributors!.map((EpubMetadataContributor contributor) => contributor.hashCode),
+      ...Dates!.map((EpubMetadataDate date) => date.hashCode),
+      ...Types!.map((String type) => type.hashCode),
+      ...Formats!.map((String format) => format.hashCode),
+      ...Identifiers!.map((EpubMetadataIdentifier identifier) => identifier.hashCode),
+      ...Sources!.map((String source) => source.hashCode),
+      ...Languages!.map((String language) => language.hashCode),
+      ...Relations!.map((String relation) => relation.hashCode),
+      ...Coverages!.map((String coverage) => coverage.hashCode),
+      ...Rights!.map((String right) => right.hashCode),
+      ...MetaItems!.map((EpubMetadataMeta metaItem) => metaItem.hashCode),
       Description.hashCode
     ];
 

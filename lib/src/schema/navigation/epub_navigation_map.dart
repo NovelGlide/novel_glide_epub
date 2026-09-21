@@ -8,7 +8,7 @@ class EpubNavigationMap {
 
   @override
   int get hashCode {
-    return hashObjects(Points?.map((point) => point.hashCode) ?? [0]);
+    return hashObjects(Points?.map((EpubNavigationPoint point) => point.hashCode) ?? <dynamic>[0]);
   }
 
   @override

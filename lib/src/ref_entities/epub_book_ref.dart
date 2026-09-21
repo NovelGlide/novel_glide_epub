@@ -13,6 +13,9 @@ import 'epub_chapter_ref.dart';
 import 'epub_content_ref.dart';
 
 class EpubBookRef {
+  EpubBookRef(Archive epubArchive) {
+    _epubArchive = epubArchive;
+  }
   Archive? _epubArchive;
 
   String? Title;
@@ -20,24 +23,21 @@ class EpubBookRef {
   List<String?>? AuthorList;
   EpubSchema? Schema;
   EpubContentRef? Content;
-  EpubBookRef(Archive epubArchive) {
-    _epubArchive = epubArchive;
-  }
 
   @override
   int get hashCode {
-    var objects = [
+    final List<int> objects = <int>[
       Title.hashCode,
       Author.hashCode,
       Schema.hashCode,
       Content.hashCode,
-      ...AuthorList?.map((author) => author.hashCode) ?? [0],
+      ...AuthorList?.map((String? author) => author.hashCode) ?? <int>[0],
     ];
     return hashObjects(objects);
   }
 
   @override
-  bool operator ==(other) {
+  bool operator ==(Object other) {
     if (other is! EpubBookRef) {
       return false;
     }

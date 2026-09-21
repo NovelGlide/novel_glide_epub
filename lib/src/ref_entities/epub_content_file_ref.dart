@@ -12,33 +12,33 @@ import '../utils/zip_path_resolver.dart';
 import 'epub_book_ref.dart';
 
 abstract class EpubContentFileRef {
+  EpubContentFileRef(this.epubBookRef);
   late EpubBookRef epubBookRef;
 
   String? FileName;
 
   EpubContentType? ContentType;
   String? ContentMimeType;
-  EpubContentFileRef(this.epubBookRef);
 
   @override
   int get hashCode =>
       hash3(FileName.hashCode, ContentMimeType.hashCode, ContentType.hashCode);
 
   @override
-  bool operator ==(other) {
+  bool operator ==(Object other) {
     if (other is! EpubContentFileRef) {
       return false;
     }
 
-    return (other.FileName == FileName &&
+    return other.FileName == FileName &&
         other.ContentMimeType == ContentMimeType &&
-        other.ContentType == ContentType);
+        other.ContentType == ContentType;
   }
 
   ArchiveFile getContentFileEntry() {
-    var contentFilePath = const ZipPathResolver()
+    final String? contentFilePath = const ZipPathResolver()
         .combine(epubBookRef.Schema!.ContentDirectoryPath, FileName);
-    var contentFileEntry = epubBookRef.EpubArchive()!
+    final ArchiveFile? contentFileEntry = epubBookRef.EpubArchive()!
         .files
         .firstWhereOrNull((ArchiveFile x) => x.name == contentFilePath);
     if (contentFileEntry == null) {
@@ -53,7 +53,7 @@ abstract class EpubContentFileRef {
   }
 
   List<int> openContentStream(ArchiveFile contentFileEntry) {
-    var contentStream = <int>[];
+    final List<int> contentStream = <int>[];
     if (contentFileEntry.content == null) {
       throw EpubMissingArchiveEntryException(
           'Incorrect EPUB file: content file "$FileName" specified in manifest is not found.');
@@ -63,14 +63,14 @@ abstract class EpubContentFileRef {
   }
 
   Future<Uint8List> readContentAsBytes() async {
-    var contentFileEntry = getContentFileEntry();
-    var content = openContentStream(contentFileEntry);
+    final ArchiveFile contentFileEntry = getContentFileEntry();
+    final List<int> content = openContentStream(contentFileEntry);
     return Uint8List.fromList(content);
   }
 
   Future<String> readContentAsText() async {
-    var contentStream = getContentStream();
-    var result = convert.utf8.decode(contentStream);
+    final List<int> contentStream = getContentStream();
+    final String result = convert.utf8.decode(contentStream);
     return result;
   }
 }

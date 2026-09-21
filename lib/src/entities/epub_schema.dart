@@ -13,7 +13,7 @@ class EpubSchema {
       Package.hashCode, Navigation.hashCode, ContentDirectoryPath.hashCode);
 
   @override
-  bool operator ==(other) {
+  bool operator ==(Object other) {
     if (other is! EpubSchema) {
       return false;
     }

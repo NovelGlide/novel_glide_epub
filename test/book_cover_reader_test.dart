@@ -180,13 +180,11 @@ void main() {
     for (final List<String> row in <List<String>>[
       <String>[
         'properties="cover-image"',
-        '<item id="img-1" href="cover.png" media-type="image/png" '
-            'properties="cover-image"/>',
+        '<item id="img-1" href="cover.png" media-type="image/png" properties="cover-image"/>',
       ],
       <String>[
         'properties="cover"',
-        '<item id="img-1" href="cover.png" media-type="image/png" '
-            'properties="cover"/>',
+        '<item id="img-1" href="cover.png" media-type="image/png" properties="cover"/>',
       ],
       <String>[
         'id="cover"',

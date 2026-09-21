@@ -10,7 +10,7 @@ class EpubMetadataMeta {
   Map<String, String>? Attributes;
 
   @override
-  int get hashCode => hashObjects([
+  int get hashCode => hashObjects(<dynamic>[
         Name.hashCode,
         Content.hashCode,
         Id.hashCode,

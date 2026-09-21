@@ -1,3 +1,5 @@
+import 'package:novel_glide_epub/src/schema/navigation/epub_navigation_head_meta.dart';
+import 'package:novel_glide_epub/src/schema/navigation/epub_navigation_label.dart';
 import 'package:xml/xml.dart';
 
 import '../schema/navigation/epub_navigation.dart';
@@ -12,10 +14,10 @@ class EpubNavigationWriter {
   static const String _namespace = 'http://www.daisy.org/z3986/2005/ncx/';
 
   String writeNavigation(EpubNavigation navigation) {
-    var builder = XmlBuilder();
+    final XmlBuilder builder = XmlBuilder();
     builder.processing('xml', 'version="1.0"');
 
-    builder.element('ncx', attributes: {
+    builder.element('ncx', attributes: <String, String>{
       'version': '2005-1',
       'lang': 'en',
     }, nest: () {
@@ -32,42 +34,40 @@ class EpubNavigationWriter {
   void writeNavigationDocTitle(
       XmlBuilder builder, EpubNavigationDocTitle title) {
     builder.element('docTitle', nest: () {
-      for (var element in title.Titles!) {
-        builder.text(element);
-      }
+      title.Titles!.forEach(builder.text);
     });
   }
 
   void writeNavigationHead(XmlBuilder builder, EpubNavigationHead head) {
     builder.element('head', nest: () {
-      for (var item in head.Metadata!) {
+      for (EpubNavigationHeadMeta item in head.Metadata!) {
         builder.element('meta',
-            attributes: {'content': item.Content!, 'name': item.Name!});
+            attributes: <String, String>{'content': item.Content!, 'name': item.Name!});
       }
     });
   }
 
   void writeNavigationMap(XmlBuilder builder, EpubNavigationMap map) {
     builder.element('navMap', nest: () {
-      for (var item in map.Points!) {
+      for (EpubNavigationPoint item in map.Points!) {
         writeNavigationPoint(builder, item);
       }
     });
   }
 
   void writeNavigationPoint(XmlBuilder builder, EpubNavigationPoint point) {
-    builder.element('navPoint', attributes: {
+    builder.element('navPoint', attributes: <String, String>{
       'id': point.Id!,
       'playOrder': point.PlayOrder!,
     }, nest: () {
-      for (var element in point.NavigationLabels!) {
+      for (EpubNavigationLabel element in point.NavigationLabels!) {
         builder.element('navLabel', nest: () {
           builder.element('text', nest: () {
             builder.text(element.Text!);
           });
         });
       }
-      builder.element('content', attributes: {'src': point.Content!.Source!});
+      builder.element('content', attributes: <String, String>{'src': point.Content!.Source!});
     });
   }
 }

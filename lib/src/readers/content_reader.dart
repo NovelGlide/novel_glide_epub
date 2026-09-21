@@ -11,9 +11,9 @@ class ContentReader {
   EpubContentRef parseContentMap(EpubBookRef bookRef) {
     // The five buckets are initialised by `EpubContentRef`'s own constructor;
     // re-assigning them here was a no-op.
-    var result = EpubContentRef();
+    final EpubContentRef result = EpubContentRef();
 
-    for (var manifestItem in bookRef.Schema!.Package!.Manifest!.Items!) {
+    for (EpubManifestItem manifestItem in bookRef.Schema!.Package!.Manifest!.Items!) {
       _addManifestItem(result, bookRef, manifestItem);
     }
     return result;
@@ -27,19 +27,19 @@ class ContentReader {
   /// runs into downstream.
   void _addManifestItem(EpubContentRef result, EpubBookRef bookRef,
       EpubManifestItem manifestItem) {
-    var fileName = manifestItem.Href!;
-    var contentMimeType = manifestItem.MediaType!;
-    var contentType = getContentTypeByContentMimeType(contentMimeType);
+    final String fileName = manifestItem.Href!;
+    final String contentMimeType = manifestItem.MediaType!;
+    final EpubContentType contentType = getContentTypeByContentMimeType(contentMimeType);
 
     if (_isTextContentType(contentType)) {
-      var contentFile = EpubTextContentFileRef(bookRef)
+      final EpubTextContentFileRef contentFile = EpubTextContentFileRef(bookRef)
         ..FileName = Uri.decodeFull(fileName)
         ..ContentMimeType = contentMimeType
         ..ContentType = contentType;
       _textBucketOf(result, contentType)?[fileName] = contentFile;
       result.AllFiles![fileName] = contentFile;
     } else {
-      var contentFile = EpubByteContentFileRef(bookRef)
+      final EpubByteContentFileRef contentFile = EpubByteContentFileRef(bookRef)
         ..FileName = Uri.decodeFull(fileName)
         ..ContentMimeType = contentMimeType
         ..ContentType = contentType;

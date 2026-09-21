@@ -6,11 +6,6 @@ import 'epub_content_file_ref.dart';
 import 'epub_text_content_file_ref.dart';
 
 class EpubContentRef {
-  Map<String, EpubTextContentFileRef>? Html;
-  Map<String, EpubTextContentFileRef>? Css;
-  Map<String, EpubByteContentFileRef>? Images;
-  Map<String, EpubByteContentFileRef>? Fonts;
-  Map<String, EpubContentFileRef>? AllFiles;
 
   EpubContentRef() {
     Html = <String, EpubTextContentFileRef>{};
@@ -19,27 +14,32 @@ class EpubContentRef {
     Fonts = <String, EpubByteContentFileRef>{};
     AllFiles = <String, EpubContentFileRef>{};
   }
+  Map<String, EpubTextContentFileRef>? Html;
+  Map<String, EpubTextContentFileRef>? Css;
+  Map<String, EpubByteContentFileRef>? Images;
+  Map<String, EpubByteContentFileRef>? Fonts;
+  Map<String, EpubContentFileRef>? AllFiles;
 
   @override
   int get hashCode {
-    var objects = [
-      ...Html!.keys.map((key) => key.hashCode),
-      ...Html!.values.map((value) => value.hashCode),
-      ...Css!.keys.map((key) => key.hashCode),
-      ...Css!.values.map((value) => value.hashCode),
-      ...Images!.keys.map((key) => key.hashCode),
-      ...Images!.values.map((value) => value.hashCode),
-      ...Fonts!.keys.map((key) => key.hashCode),
-      ...Fonts!.values.map((value) => value.hashCode),
-      ...AllFiles!.keys.map((key) => key.hashCode),
-      ...AllFiles!.values.map((value) => value.hashCode)
+    final List<int> objects = <int>[
+      ...Html!.keys.map((String key) => key.hashCode),
+      ...Html!.values.map((EpubTextContentFileRef value) => value.hashCode),
+      ...Css!.keys.map((String key) => key.hashCode),
+      ...Css!.values.map((EpubTextContentFileRef value) => value.hashCode),
+      ...Images!.keys.map((String key) => key.hashCode),
+      ...Images!.values.map((EpubByteContentFileRef value) => value.hashCode),
+      ...Fonts!.keys.map((String key) => key.hashCode),
+      ...Fonts!.values.map((EpubByteContentFileRef value) => value.hashCode),
+      ...AllFiles!.keys.map((String key) => key.hashCode),
+      ...AllFiles!.values.map((EpubContentFileRef value) => value.hashCode)
     ];
 
     return hashObjects(objects);
   }
 
   @override
-  bool operator ==(other) {
+  bool operator ==(Object other) {
     if (other is! EpubContentRef) {
       return false;
     }

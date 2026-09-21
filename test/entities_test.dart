@@ -105,16 +105,16 @@ class SeedBareContentFile extends EpubContentFile {
 /// is a real runtime check. Typing it `Object` rather than inlining a literal
 /// is what keeps these tests free of an `unrelated_type_equality_checks`
 /// suppression, which this package's lint forbids outright.
-final Object unrelatedOperand = 'NGE-SEED-not-a-domain-object';
+const Object unrelatedOperand = 'NGE-SEED-not-a-domain-object';
 
 /// A null operand, typed nullable so the analyzer does not fold the comparison
 /// away as a statically-known mismatch. Every class under test must answer
 /// false here rather than throw.
-final Object? nullOperand = null;
+const Object? nullOperand = null;
 
 /// The same idea as [unrelatedOperand], for the one site that needs a
 /// non-String operand.
-final Object unrelatedNumber = 42;
+const Object unrelatedNumber = 42;
 
 void main() {
   group('EpubContentFile (the abstract base, via its subclasses)', () {

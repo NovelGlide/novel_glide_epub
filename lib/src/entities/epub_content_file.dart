@@ -12,7 +12,7 @@ abstract class EpubContentFile {
       hash3(FileName.hashCode, ContentType.hashCode, ContentMimeType.hashCode);
 
   @override
-  bool operator ==(other) {
+  bool operator ==(Object other) {
     if (other is! EpubContentFile) {
       return false;
     }

@@ -25,7 +25,7 @@ class PackageReader {
   const PackageReader();
 
   EpubGuide readGuide(XmlElement guideNode) {
-    var result = EpubGuide();
+    final EpubGuide result = EpubGuide();
     result.Items = _childrenNamed(guideNode, 'reference')
         .map(_readGuideReference)
         .toList();
@@ -33,8 +33,8 @@ class PackageReader {
   }
 
   EpubGuideReference _readGuideReference(XmlElement guideReferenceNode) {
-    var result = EpubGuideReference();
-    for (var guideReferenceNodeAttribute in guideReferenceNode.attributes) {
+    final EpubGuideReference result = EpubGuideReference();
+    for (XmlAttribute guideReferenceNodeAttribute in guideReferenceNode.attributes) {
       _applyGuideReferenceAttribute(result, guideReferenceNodeAttribute);
     }
     if (result.Type == null || result.Type!.isEmpty) {
@@ -50,7 +50,7 @@ class PackageReader {
 
   void _applyGuideReferenceAttribute(
       EpubGuideReference result, XmlAttribute attribute) {
-    var attributeValue = attribute.value;
+    final String attributeValue = attribute.value;
     switch (attribute.name.local.toLowerCase()) {
       case 'type':
         result.Type = attributeValue;
@@ -65,15 +65,15 @@ class PackageReader {
   }
 
   EpubManifest readManifest(XmlElement manifestNode) {
-    var result = EpubManifest();
+    final EpubManifest result = EpubManifest();
     result.Items =
         _childrenNamed(manifestNode, 'item').map(_readManifestItem).toList();
     return result;
   }
 
   EpubManifestItem _readManifestItem(XmlElement manifestItemNode) {
-    var result = EpubManifestItem();
-    for (var manifestItemNodeAttribute in manifestItemNode.attributes) {
+    final EpubManifestItem result = EpubManifestItem();
+    for (XmlAttribute manifestItemNodeAttribute in manifestItemNode.attributes) {
       _applyManifestItemAttribute(result, manifestItemNodeAttribute);
     }
     _requireManifestItemFields(result);
@@ -100,7 +100,7 @@ class PackageReader {
 
   void _applyManifestItemAttribute(
       EpubManifestItem result, XmlAttribute attribute) {
-    var attributeValue = attribute.value;
+    final String attributeValue = attribute.value;
     switch (attribute.name.local.toLowerCase()) {
       case 'id':
         result.Id = attributeValue;
@@ -133,7 +133,7 @@ class PackageReader {
   }
 
   EpubMetadata readMetadata(XmlElement metadataNode, EpubVersion? epubVersion) {
-    var result = EpubMetadata();
+    final EpubMetadata result = EpubMetadata();
     result.Titles = <String>[];
     result.Creators = <EpubMetadataCreator>[];
     result.Subjects = <String>[];
@@ -149,7 +149,7 @@ class PackageReader {
     result.Coverages = <String>[];
     result.Rights = <String>[];
     result.MetaItems = <EpubMetadataMeta>[];
-    for (var metadataItemNode
+    for (XmlElement metadataItemNode
         in metadataNode.children.whereType<XmlElement>()) {
       _addMetadataItem(result, metadataItemNode, epubVersion);
     }
@@ -158,7 +158,7 @@ class PackageReader {
 
   void _addMetadataItem(EpubMetadata result, XmlElement metadataItemNode,
       EpubVersion? epubVersion) {
-    var innerText = metadataItemNode.text;
+    final String innerText = metadataItemNode.text;
     switch (metadataItemNode.name.local.toLowerCase()) {
       case 'title':
         result.Titles!.add(innerText);
@@ -229,10 +229,10 @@ class PackageReader {
 
   EpubMetadataContributor readMetadataContributor(
       XmlElement metadataContributorNode) {
-    var result = EpubMetadataContributor();
-    for (var metadataContributorNodeAttribute
+    final EpubMetadataContributor result = EpubMetadataContributor();
+    for (XmlAttribute metadataContributorNodeAttribute
         in metadataContributorNode.attributes) {
-      var attributeValue = metadataContributorNodeAttribute.value;
+      final String attributeValue = metadataContributorNodeAttribute.value;
       switch (metadataContributorNodeAttribute.name.local.toLowerCase()) {
         case 'role':
           result.Role = attributeValue;
@@ -247,9 +247,9 @@ class PackageReader {
   }
 
   EpubMetadataCreator readMetadataCreator(XmlElement metadataCreatorNode) {
-    var result = EpubMetadataCreator();
-    for (var metadataCreatorNodeAttribute in metadataCreatorNode.attributes) {
-      var attributeValue = metadataCreatorNodeAttribute.value;
+    final EpubMetadataCreator result = EpubMetadataCreator();
+    for (XmlAttribute metadataCreatorNodeAttribute in metadataCreatorNode.attributes) {
+      final String attributeValue = metadataCreatorNodeAttribute.value;
       switch (metadataCreatorNodeAttribute.name.local.toLowerCase()) {
         case 'role':
           result.Role = attributeValue;
@@ -264,8 +264,8 @@ class PackageReader {
   }
 
   EpubMetadataDate readMetadataDate(XmlElement metadataDateNode) {
-    var result = EpubMetadataDate();
-    var eventAttribute = metadataDateNode.getAttribute('event',
+    final EpubMetadataDate result = EpubMetadataDate();
+    final String? eventAttribute = metadataDateNode.getAttribute('event',
         namespace: metadataDateNode.name.namespaceUri);
     if (eventAttribute != null && eventAttribute.isNotEmpty) {
       result.Event = eventAttribute;
@@ -276,10 +276,10 @@ class PackageReader {
 
   EpubMetadataIdentifier readMetadataIdentifier(
       XmlElement metadataIdentifierNode) {
-    var result = EpubMetadataIdentifier();
-    for (var metadataIdentifierNodeAttribute
+    final EpubMetadataIdentifier result = EpubMetadataIdentifier();
+    for (XmlAttribute metadataIdentifierNodeAttribute
         in metadataIdentifierNode.attributes) {
-      var attributeValue = metadataIdentifierNodeAttribute.value;
+      final String attributeValue = metadataIdentifierNodeAttribute.value;
       switch (metadataIdentifierNodeAttribute.name.local.toLowerCase()) {
         case 'id':
           result.Id = attributeValue;
@@ -294,9 +294,9 @@ class PackageReader {
   }
 
   EpubMetadataMeta readMetadataMetaVersion2(XmlElement metadataMetaNode) {
-    var result = EpubMetadataMeta();
-    for (var metadataMetaNodeAttribute in metadataMetaNode.attributes) {
-      var attributeValue = metadataMetaNodeAttribute.value;
+    final EpubMetadataMeta result = EpubMetadataMeta();
+    for (XmlAttribute metadataMetaNodeAttribute in metadataMetaNode.attributes) {
+      final String attributeValue = metadataMetaNodeAttribute.value;
       switch (metadataMetaNodeAttribute.name.local.toLowerCase()) {
         case 'name':
           result.Name = attributeValue;
@@ -310,10 +310,10 @@ class PackageReader {
   }
 
   EpubMetadataMeta readMetadataMetaVersion3(XmlElement metadataMetaNode) {
-    var result = EpubMetadataMeta();
-    result.Attributes = {};
-    for (var metadataMetaNodeAttribute in metadataMetaNode.attributes) {
-      var attributeValue = metadataMetaNodeAttribute.value;
+    final EpubMetadataMeta result = EpubMetadataMeta();
+    result.Attributes = <String, String>{};
+    for (XmlAttribute metadataMetaNodeAttribute in metadataMetaNode.attributes) {
+      final String attributeValue = metadataMetaNodeAttribute.value;
       result.Attributes![metadataMetaNodeAttribute.name.local.toLowerCase()] =
           attributeValue;
       switch (metadataMetaNodeAttribute.name.local.toLowerCase()) {
@@ -337,20 +337,20 @@ class PackageReader {
 
   Future<EpubPackage> readPackage(
       Archive epubArchive, String rootFilePath) async {
-    var rootFileEntry = epubArchive.files.firstWhereOrNull(
+    final ArchiveFile? rootFileEntry = epubArchive.files.firstWhereOrNull(
         (ArchiveFile testFile) => testFile.name == rootFilePath);
     if (rootFileEntry == null) {
-      throw EpubMissingArchiveEntryException(
+      throw const EpubMissingArchiveEntryException(
           'EPUB parsing error: root file not found in archive.');
     }
-    var containerDocument =
+    final XmlDocument containerDocument =
         XmlDocument.parse(convert.utf8.decode(rootFileEntry.content));
-    var opfNamespace = 'http://www.idpf.org/2007/opf';
-    var packageNode = containerDocument
+    const String opfNamespace = 'http://www.idpf.org/2007/opf';
+    final XmlElement packageNode = containerDocument
         .findElements('package', namespace: opfNamespace)
         .firstWhere((XmlElement? elem) => elem != null);
-    var result = EpubPackage();
-    var epubVersionValue = packageNode.getAttribute('version');
+    final EpubPackage result = EpubPackage();
+    final String? epubVersionValue = packageNode.getAttribute('version');
     if (epubVersionValue == '2.0') {
       result.Version = EpubVersion.Epub2;
     } else if (epubVersionValue == '3.0') {
@@ -359,67 +359,67 @@ class PackageReader {
       throw EpubUnsupportedVersionException(
           'Unsupported EPUB version: $epubVersionValue.');
     }
-    var metadataNode = packageNode
+    final XmlElement? metadataNode = packageNode
         .findElements('metadata', namespace: opfNamespace)
         .cast<XmlElement?>()
         .firstWhere((XmlElement? elem) => elem != null);
     if (metadataNode == null) {
-      throw EpubMissingElementException(
+      throw const EpubMissingElementException(
           'EPUB parsing error: metadata not found in the package.');
     }
-    var metadata = readMetadata(metadataNode, result.Version);
+    final EpubMetadata metadata = readMetadata(metadataNode, result.Version);
     result.Metadata = metadata;
-    var manifestNode = packageNode
+    final XmlElement? manifestNode = packageNode
         .findElements('manifest', namespace: opfNamespace)
         .cast<XmlElement?>()
         .firstWhere((XmlElement? elem) => elem != null);
     if (manifestNode == null) {
-      throw EpubMissingElementException(
+      throw const EpubMissingElementException(
           'EPUB parsing error: manifest not found in the package.');
     }
-    var manifest = readManifest(manifestNode);
+    final EpubManifest manifest = readManifest(manifestNode);
     result.Manifest = manifest;
 
-    var spineNode = packageNode
+    final XmlElement? spineNode = packageNode
         .findElements('spine', namespace: opfNamespace)
         .cast<XmlElement?>()
         .firstWhere((XmlElement? elem) => elem != null);
     if (spineNode == null) {
-      throw EpubMissingElementException(
+      throw const EpubMissingElementException(
           'EPUB parsing error: spine not found in the package.');
     }
-    var spine = readSpine(spineNode);
+    final EpubSpine spine = readSpine(spineNode);
     result.Spine = spine;
-    var guideNode = packageNode
+    final XmlElement? guideNode = packageNode
         .findElements('guide', namespace: opfNamespace)
         .firstWhereOrNull((XmlElement? elem) => elem != null);
     if (guideNode != null) {
-      var guide = readGuide(guideNode);
+      final EpubGuide guide = readGuide(guideNode);
       result.Guide = guide;
     }
     return result;
   }
 
   EpubSpine readSpine(XmlElement spineNode) {
-    var result = EpubSpine();
+    final EpubSpine result = EpubSpine();
     result.Items = <EpubSpineItemRef>[];
-    var tocAttribute = spineNode.getAttribute('toc');
+    final String? tocAttribute = spineNode.getAttribute('toc');
     result.TableOfContents = tocAttribute;
-    var pageProgression = spineNode.getAttribute('page-progression-direction');
+    final String? pageProgression = spineNode.getAttribute('page-progression-direction');
     result.ltr =
-        ((pageProgression == null) || pageProgression.toLowerCase() == 'ltr');
+        (pageProgression == null) || pageProgression.toLowerCase() == 'ltr';
     spineNode.children
         .whereType<XmlElement>()
         .forEach((XmlElement spineItemNode) {
       if (spineItemNode.name.local.toLowerCase() == 'itemref') {
-        var spineItemRef = EpubSpineItemRef();
-        var idRefAttribute = spineItemNode.getAttribute('idref');
+        final EpubSpineItemRef spineItemRef = EpubSpineItemRef();
+        final String? idRefAttribute = spineItemNode.getAttribute('idref');
         if (idRefAttribute == null || idRefAttribute.isEmpty) {
-          throw EpubMissingValueException(
+          throw const EpubMissingValueException(
               'Incorrect EPUB spine: item ID ref is missing');
         }
         spineItemRef.IdRef = idRefAttribute;
-        var linearAttribute = spineItemNode.getAttribute('linear');
+        final String? linearAttribute = spineItemNode.getAttribute('linear');
         spineItemRef.IsLinear =
             linearAttribute == null || (linearAttribute.toLowerCase() == 'no');
         result.Items!.add(spineItemRef);

@@ -1,37 +1,37 @@
 import 'dart:async';
-
-import '../epub_exception.dart';
+import 'dart:convert' as convert;
 
 import 'package:archive/archive.dart';
-import 'dart:convert' as convert;
 import 'package:collection/collection.dart' show IterableExtension;
 import 'package:xml/xml.dart' as xml;
+
+import '../epub_exception.dart';
 
 class RootFilePathReader {
   const RootFilePathReader();
 
   Future<String?> getRootFilePath(Archive epubArchive) async {
-    const epubContainerFilePath = 'META-INF/container.xml';
+    const String epubContainerFilePath = 'META-INF/container.xml';
 
-    var containerFileEntry = epubArchive.files.firstWhereOrNull(
+    final ArchiveFile? containerFileEntry = epubArchive.files.firstWhereOrNull(
         (ArchiveFile file) => file.name == epubContainerFilePath);
     if (containerFileEntry == null) {
-      throw EpubMissingArchiveEntryException(
+      throw const EpubMissingArchiveEntryException(
           'EPUB parsing error: $epubContainerFilePath file not found in archive.');
     }
 
-    var containerDocument =
+    final xml.XmlDocument containerDocument =
         xml.XmlDocument.parse(convert.utf8.decode(containerFileEntry.content));
-    var packageElement = containerDocument
+    final xml.XmlElement? packageElement = containerDocument
         .findAllElements('container',
             namespace: 'urn:oasis:names:tc:opendocument:xmlns:container')
         .firstWhereOrNull((xml.XmlElement? elem) => elem != null);
     if (packageElement == null) {
-      throw EpubMissingElementException(
+      throw const EpubMissingElementException(
           'EPUB parsing error: Invalid epub container');
     }
 
-    var rootFileElement = packageElement.descendants.firstWhereOrNull(
+    final xml.XmlElement rootFileElement = packageElement.descendants.firstWhereOrNull(
         (xml.XmlNode testElem) =>
             (testElem is xml.XmlElement) &&
             'rootfile' == testElem.name.local) as xml.XmlElement;

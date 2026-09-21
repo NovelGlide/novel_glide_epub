@@ -17,14 +17,14 @@ class EpubBook {
 
   @override
   int get hashCode {
-    var objects = [
+    final List<int> objects = <int>[
       Title.hashCode,
       Author.hashCode,
       Schema.hashCode,
       Content.hashCode,
-      ...CoverImage?.getBytes().map((byte) => byte.hashCode) ?? [0],
-      ...AuthorList?.map((author) => author.hashCode) ?? [0],
-      ...Chapters?.map((chapter) => chapter.hashCode) ?? [0],
+      ...CoverImage?.getBytes().map((int byte) => byte.hashCode) ?? <int>[0],
+      ...AuthorList?.map((String? author) => author.hashCode) ?? <int>[0],
+      ...Chapters?.map((EpubChapter chapter) => chapter.hashCode) ?? <int>[0],
     ];
     return hashObjects(objects);
   }

@@ -11,7 +11,7 @@ class EnumFromString<T> {
   List<T> enumValues;
 
   T? get(String value) {
-    var target = '$T.$value'.toUpperCase();
+    final String target = '$T.$value'.toUpperCase();
     return enumValues
         .firstWhereOrNull((T f) => f.toString().toUpperCase() == target);
   }

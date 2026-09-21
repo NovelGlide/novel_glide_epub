@@ -7,7 +7,7 @@ class ZipPathResolver {
   const ZipPathResolver();
 
   String getDirectoryPath(String filePath) {
-    var lastSlashIndex = filePath.lastIndexOf('/');
+    final int lastSlashIndex = filePath.lastIndexOf('/');
     if (lastSlashIndex == -1) {
       return '';
     } else {

@@ -14,19 +14,23 @@ class BookCoverReader {
   const BookCoverReader();
 
   Future<images.Image?> readBookCover(EpubBookRef bookRef) async {
-    var metaItems = bookRef.Schema!.Package!.Metadata!.MetaItems;
-    if (metaItems == null || metaItems.isEmpty) return null;
+    final List<EpubMetadataMeta>? metaItems = bookRef.Schema!.Package!.Metadata!.MetaItems;
+    if (metaItems == null || metaItems.isEmpty) {
+      return null;
+    }
 
-    var coverMetaItem = metaItems.firstWhereOrNull(
+    final EpubMetadataMeta? coverMetaItem = metaItems.firstWhereOrNull(
         (EpubMetadataMeta metaItem) =>
             metaItem.Name != null && metaItem.Name!.toLowerCase() == 'cover');
-    if (coverMetaItem == null) return null;
+    if (coverMetaItem == null) {
+      return null;
+    }
     if (coverMetaItem.Content == null || coverMetaItem.Content!.isEmpty) {
       throw const EpubMissingValueException(
           'Incorrect EPUB metadata: cover item content is missing.');
     }
 
-    var coverManifestItem = bookRef.Schema!.Package!.Manifest!.Items!
+    final EpubManifestItem? coverManifestItem = bookRef.Schema!.Package!.Manifest!.Items!
         .firstWhereOrNull((EpubManifestItem manifestItem) =>
             manifestItem.Id!.toLowerCase() ==
             coverMetaItem.Content!.toLowerCase());
@@ -42,9 +46,9 @@ class BookCoverReader {
     }
 
     coverImageContentFileRef = bookRef.Content!.Images![coverManifestItem.Href];
-    var coverImageContent =
+    final Uint8List coverImageContent =
         await coverImageContentFileRef!.readContentAsBytes();
-    var retval = images.decodeImage(Uint8List.fromList(coverImageContent));
+    final images.Image? retval = images.decodeImage(Uint8List.fromList(coverImageContent));
     return retval;
   }
 
@@ -59,15 +63,21 @@ class BookCoverReader {
   /// `<meta name="cover">` → manifest-item-by-id path, and the EPUB3 manifest
   /// item flagged `properties="cover-image"` (or id `cover` / `cover-image`).
   Future<Uint8List?> readBookCoverBytes(EpubBookRef bookRef) async {
-    var coverHref =
+    final String? coverHref =
         _coverHrefFromMetadata(bookRef) ?? _coverHrefFromManifest(bookRef);
-    if (coverHref == null) return null;
+    if (coverHref == null) {
+      return null;
+    }
 
-    var images = bookRef.Content?.Images;
-    if (images == null || !images.containsKey(coverHref)) return null;
+    final Map<String, EpubByteContentFileRef>? images = bookRef.Content?.Images;
+    if (images == null || !images.containsKey(coverHref)) {
+      return null;
+    }
 
-    var coverImageContentFileRef = images[coverHref];
-    if (coverImageContentFileRef == null) return null;
+    final EpubByteContentFileRef? coverImageContentFileRef = images[coverHref];
+    if (coverImageContentFileRef == null) {
+      return null;
+    }
 
     try {
       return await coverImageContentFileRef.readContentAsBytes();
@@ -84,11 +94,13 @@ class BookCoverReader {
   /// EPUB2 cover href: a `<meta name="cover">` whose content is a manifest
   /// item id.
   String? _coverHrefFromMetadata(EpubBookRef bookRef) {
-    var coverId = _metaItemsOf(bookRef)
+    final String? coverId = _metaItemsOf(bookRef)
         .firstWhereOrNull((EpubMetadataMeta metaItem) =>
             metaItem.Name?.toLowerCase() == 'cover')
         ?.Content;
-    if (coverId == null || coverId.isEmpty) return null;
+    if (coverId == null || coverId.isEmpty) {
+      return null;
+    }
 
     return _manifestItemsOf(bookRef)
         .firstWhereOrNull((EpubManifestItem manifestItem) =>
@@ -108,7 +120,7 @@ class BookCoverReader {
       _isCoverName(item.Id) || _isCoverName(item.Properties);
 
   bool _isCoverName(String? value) {
-    var name = value?.toLowerCase();
+    final String? name = value?.toLowerCase();
     return name == 'cover' || name == 'cover-image';
   }
 

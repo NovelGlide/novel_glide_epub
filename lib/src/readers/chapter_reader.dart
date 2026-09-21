@@ -16,11 +16,11 @@ class ChapterReader {
 
   List<EpubChapterRef> getChaptersImpl(
       EpubBookRef bookRef, List<EpubNavigationPoint> navigationPoints) {
-    var result = <EpubChapterRef>[];
-    for (var navigationPoint in navigationPoints) {
+    final List<EpubChapterRef> result = <EpubChapterRef>[];
+    for (EpubNavigationPoint navigationPoint in navigationPoints) {
       // A navigation point with no content source points nowhere, so it is
       // skipped rather than refused.
-      var source = navigationPoint.Content?.Source;
+      final String? source = navigationPoint.Content?.Source;
       if (source == null) {
         continue;
       }
@@ -31,11 +31,11 @@ class ChapterReader {
 
   EpubChapterRef _readChapterRef(EpubBookRef bookRef,
       EpubNavigationPoint navigationPoint, String contentSource) {
-    var anchorCharIndex = contentSource.indexOf('#');
-    var contentFileName = Uri.decodeFull(anchorCharIndex == -1
+    final int anchorCharIndex = contentSource.indexOf('#');
+    final String contentFileName = Uri.decodeFull(anchorCharIndex == -1
         ? contentSource
         : contentSource.substring(0, anchorCharIndex));
-    var anchor = anchorCharIndex == -1
+    final String? anchor = anchorCharIndex == -1
         ? null
         : contentSource.substring(anchorCharIndex + 1);
 
@@ -44,7 +44,7 @@ class ChapterReader {
           'Incorrect EPUB manifest: item with href = "$contentFileName" is missing.');
     }
 
-    var chapterRef = EpubChapterRef(bookRef.Content!.Html![contentFileName])
+    final EpubChapterRef chapterRef = EpubChapterRef(bookRef.Content!.Html![contentFileName])
       ..ContentFileName = contentFileName
       ..Anchor = anchor
       ..Title = navigationPoint.NavigationLabels!.first.Text
@@ -62,8 +62,8 @@ class ChapterReader {
     if (!chapterRef.ContentFileName!.contains('_split_')) {
       return;
     }
-    var fileNamePart = chapterRef.ContentFileName!.split('_split_')[0];
-    for (var fileName in bookRef.Content!.Html!.keys) {
+    final String fileNamePart = chapterRef.ContentFileName!.split('_split_')[0];
+    for (String fileName in bookRef.Content!.Html!.keys) {
       if (fileName.contains(fileNamePart) && fileName != contentFileName) {
         chapterRef.otherTextContentFileRefs
             .add(bookRef.Content!.Html![fileName]!);

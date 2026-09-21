@@ -7,20 +7,20 @@ class EpubChapter {
   String? Anchor;
   String? HtmlContent;
   List<EpubChapter>? SubChapters;
-  List<String> OtherContentFileNames = [];
+  List<String> OtherContentFileNames = <String>[];
 
   @override
   int get hashCode {
-    var objects = [
+    final List<int> objects = <int>[
       Title.hashCode,
       ContentFileName.hashCode,
       // By ELEMENT, like every other collection field here: the list is
       // handed to each instance fresh, so hashing the list object would give
       // two chapters with identical data two different hash codes.
-      ...OtherContentFileNames.map((fileName) => fileName.hashCode),
+      ...OtherContentFileNames.map((String fileName) => fileName.hashCode),
       Anchor.hashCode,
       HtmlContent.hashCode,
-      ...SubChapters?.map((subChapter) => subChapter.hashCode) ?? [0],
+      ...SubChapters?.map((EpubChapter subChapter) => subChapter.hashCode) ?? <int>[0],
     ];
     return hashObjects(objects);
   }

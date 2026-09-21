@@ -1,6 +1,7 @@
 import 'dart:convert' as convert;
 
 import 'package:archive/archive.dart';
+import 'package:novel_glide_epub/src/entities/epub_content_file.dart';
 
 import 'entities/epub_book.dart';
 import 'entities/epub_byte_content_file.dart';
@@ -15,17 +16,21 @@ import 'writers/epub_package_writer.dart';
 /// assembly it delegates to is an ordinary instance method, so the type is a
 /// unit with a static convenience entry rather than a namespace.
 class EpubWriter {
-  const EpubWriter();
+  const EpubWriter({
+    ZipPathResolver pathResolver = const ZipPathResolver(),
+    EpubPackageWriter packageWriter = const EpubPackageWriter(),
+  })  : _pathResolver = pathResolver,
+        _packageWriter = packageWriter;
 
-  static const _container_file =
+  static const String _container_file =
       '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>';
 
-  final ZipPathResolver _pathResolver = const ZipPathResolver();
-  final EpubPackageWriter _packageWriter = const EpubPackageWriter();
+  final ZipPathResolver _pathResolver;
+  final EpubPackageWriter _packageWriter;
 
   // Creates a Zip Archive of an EpubBook
   Archive _createArchive(EpubBook book) {
-    var arch = Archive();
+    final Archive arch = Archive();
 
     // Add simple metadata
     arch.addFile(ArchiveFile.noCompress(
@@ -36,7 +41,7 @@ class EpubWriter {
         convert.utf8.encode(_container_file)));
 
     // Add all content to the archive
-    book.Content!.AllFiles!.forEach((name, file) {
+    book.Content!.AllFiles!.forEach((String name, EpubContentFile file) {
       List<int>? content;
 
       if (file is EpubByteContentFile) {
@@ -52,7 +57,7 @@ class EpubWriter {
     });
 
     // Generate the content.opf file and add it to the Archive
-    var contentopf = _packageWriter.writeContent(book.Schema!.Package!);
+    final String contentopf = _packageWriter.writeContent(book.Schema!.Package!);
 
     arch.addFile(ArchiveFile(
         _pathResolver.combine(

@@ -14,13 +14,13 @@ class EpubNavigationPoint {
 
   @override
   int get hashCode {
-    var objects = [
+    final List<int> objects = <int>[
       Id.hashCode,
       Class.hashCode,
       PlayOrder.hashCode,
       Content.hashCode,
-      ...NavigationLabels!.map((label) => label.hashCode),
-      ...ChildNavigationPoints!.map((point) => point.hashCode)
+      ...NavigationLabels!.map((EpubNavigationLabel label) => label.hashCode),
+      ...ChildNavigationPoints!.map((EpubNavigationPoint point) => point.hashCode)
     ];
     return hashObjects(objects);
   }

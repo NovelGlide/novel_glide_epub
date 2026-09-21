@@ -14,7 +14,7 @@ class EpubPackage {
   EpubGuide? Guide;
 
   @override
-  int get hashCode => hashObjects([
+  int get hashCode => hashObjects(<dynamic>[
         Version.hashCode,
         Metadata.hashCode,
         Manifest.hashCode,

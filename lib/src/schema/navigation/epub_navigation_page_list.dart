@@ -8,7 +8,7 @@ class EpubNavigationPageList {
 
   @override
   int get hashCode {
-    return hashObjects(Targets?.map((target) => target.hashCode) ?? [0]);
+    return hashObjects(Targets?.map((EpubNavigationPageTarget target) => target.hashCode) ?? <dynamic>[0]);
   }
 
   @override

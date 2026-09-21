@@ -1,3 +1,4 @@
+import 'package:novel_glide_epub/src/schema/opf/epub_manifest_item.dart';
 import 'package:xml/xml.dart';
 
 import '../schema/opf/epub_manifest.dart';
@@ -7,7 +8,7 @@ class EpubManifestWriter {
 
   void writeManifest(XmlBuilder builder, EpubManifest? manifest) {
     builder.element('manifest', nest: () {
-      for (var item in manifest!.Items!) {
+      for (EpubManifestItem item in manifest!.Items!) {
         builder.element('item', nest: () {
           builder
             ..attribute('id', item.Id!)
