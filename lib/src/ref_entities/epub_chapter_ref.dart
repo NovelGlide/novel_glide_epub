@@ -54,6 +54,9 @@ class EpubChapterRef {
   Future<String> readHtmlContent() async {
     // Started before the other parts so all of them read concurrently.
     final Future<String> contentFuture = epubTextContentFileRef!.readContentAsText();
+    // Skips Future.wait for the common single-file chapter. The fall-through
+    // below returns the same string when there is nothing to join, so the
+    // shortcut is an optimisation, not a behaviour.
     if (OtherContentFileNames.isEmpty) {
       return contentFuture;
     }

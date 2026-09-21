@@ -1,10 +1,10 @@
-import 'package:novel_glide_epub/src/schema/opf/epub_metadata_contributor.dart';
-import 'package:novel_glide_epub/src/schema/opf/epub_metadata_creator.dart';
-import 'package:novel_glide_epub/src/schema/opf/epub_metadata_date.dart';
-import 'package:novel_glide_epub/src/schema/opf/epub_metadata_identifier.dart';
 import 'package:xml/xml.dart';
 
 import '../schema/opf/epub_metadata.dart';
+import '../schema/opf/epub_metadata_contributor.dart';
+import '../schema/opf/epub_metadata_creator.dart';
+import '../schema/opf/epub_metadata_date.dart';
+import '../schema/opf/epub_metadata_identifier.dart';
 import '../schema/opf/epub_metadata_meta.dart';
 import '../schema/opf/epub_version.dart';
 

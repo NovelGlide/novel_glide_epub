@@ -9,8 +9,6 @@ class ContentReader {
   const ContentReader();
 
   EpubContentRef parseContentMap(EpubBookRef bookRef) {
-    // The five buckets are initialised by `EpubContentRef`'s own constructor;
-    // re-assigning them here was a no-op.
     final EpubContentRef result = EpubContentRef();
 
     for (EpubManifestItem manifestItem in bookRef.Schema!.Package!.Manifest!.Items!) {

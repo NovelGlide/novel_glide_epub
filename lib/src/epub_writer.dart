@@ -1,10 +1,10 @@
 import 'dart:convert' as convert;
 
 import 'package:archive/archive.dart';
-import 'package:novel_glide_epub/src/entities/epub_content_file.dart';
 
 import 'entities/epub_book.dart';
 import 'entities/epub_byte_content_file.dart';
+import 'entities/epub_content_file.dart';
 import 'entities/epub_text_content_file.dart';
 import 'utils/zip_path_resolver.dart';
 import 'writers/epub_package_writer.dart';
@@ -16,17 +16,13 @@ import 'writers/epub_package_writer.dart';
 /// assembly it delegates to is an ordinary instance method, so the type is a
 /// unit with a static convenience entry rather than a namespace.
 class EpubWriter {
-  const EpubWriter({
-    ZipPathResolver pathResolver = const ZipPathResolver(),
-    EpubPackageWriter packageWriter = const EpubPackageWriter(),
-  })  : _pathResolver = pathResolver,
-        _packageWriter = packageWriter;
+  const EpubWriter();
 
   static const String _container_file =
       '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>';
 
-  final ZipPathResolver _pathResolver;
-  final EpubPackageWriter _packageWriter;
+  ZipPathResolver get _pathResolver => const ZipPathResolver();
+  EpubPackageWriter get _packageWriter => const EpubPackageWriter();
 
   // Creates a Zip Archive of an EpubBook
   Archive _createArchive(EpubBook book) {

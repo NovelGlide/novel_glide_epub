@@ -8,22 +8,14 @@ import 'epub_metadata_writer.dart';
 import 'epub_spine_writer.dart';
 
 class EpubPackageWriter {
-  const EpubPackageWriter({
-    EpubMetadataWriter metadataWriter = const EpubMetadataWriter(),
-    EpubManifestWriter manifestWriter = const EpubManifestWriter(),
-    EpubSpineWriter spineWriter = const EpubSpineWriter(),
-    EpubGuideWriter guideWriter = const EpubGuideWriter(),
-  })  : _metadataWriter = metadataWriter,
-        _manifestWriter = manifestWriter,
-        _spineWriter = spineWriter,
-        _guideWriter = guideWriter;
+  const EpubPackageWriter();
 
   static const String _namespace = 'http://www.idpf.org/2007/opf';
 
-  final EpubMetadataWriter _metadataWriter;
-  final EpubManifestWriter _manifestWriter;
-  final EpubSpineWriter _spineWriter;
-  final EpubGuideWriter _guideWriter;
+  EpubMetadataWriter get _metadataWriter => const EpubMetadataWriter();
+  EpubManifestWriter get _manifestWriter => const EpubManifestWriter();
+  EpubSpineWriter get _spineWriter => const EpubSpineWriter();
+  EpubGuideWriter get _guideWriter => const EpubGuideWriter();
 
   String writeContent(EpubPackage package) {
     final XmlBuilder builder = XmlBuilder();

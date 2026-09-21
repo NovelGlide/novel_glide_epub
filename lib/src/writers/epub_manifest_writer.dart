@@ -1,7 +1,7 @@
-import 'package:novel_glide_epub/src/schema/opf/epub_manifest_item.dart';
 import 'package:xml/xml.dart';
 
 import '../schema/opf/epub_manifest.dart';
+import '../schema/opf/epub_manifest_item.dart';
 
 class EpubManifestWriter {
   const EpubManifestWriter();

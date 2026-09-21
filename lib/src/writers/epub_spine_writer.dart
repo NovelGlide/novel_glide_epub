@@ -1,7 +1,7 @@
-import 'package:novel_glide_epub/src/schema/opf/epub_spine_item_ref.dart';
 import 'package:xml/xml.dart';
 
 import '../schema/opf/epub_spine.dart';
+import '../schema/opf/epub_spine_item_ref.dart';
 
 class EpubSpineWriter {
   const EpubSpineWriter();

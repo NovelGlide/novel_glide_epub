@@ -1,7 +1,7 @@
-import 'package:novel_glide_epub/src/schema/opf/epub_guide_reference.dart';
 import 'package:xml/xml.dart';
 
 import '../schema/opf/epub_guide.dart';
+import '../schema/opf/epub_guide_reference.dart';
 
 class EpubGuideWriter {
   const EpubGuideWriter();

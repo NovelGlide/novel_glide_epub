@@ -28,13 +28,11 @@ import '../utils/enum_from_string.dart';
 import '../utils/zip_path_resolver.dart';
 
 class NavigationReader {
-  const NavigationReader({
-    ZipPathResolver pathResolver = const ZipPathResolver(),
-  }) : _pathResolver = pathResolver;
+  const NavigationReader();
 
   static const String _ncxNamespace = 'http://www.daisy.org/z3986/2005/ncx/';
 
-  final ZipPathResolver _pathResolver;
+  ZipPathResolver get _pathResolver => const ZipPathResolver();
 
   Future<EpubNavigation> readNavigation(Archive epubArchive,
       String contentDirectoryPath, EpubPackage package) async {

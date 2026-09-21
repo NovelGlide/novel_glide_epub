@@ -70,6 +70,12 @@ linter:
     # The app's reason for the rule is monorepo path legibility, which a
     # single-purpose package does not have. 150 findings, every one of them
     # this package importing its own siblings.
+    #
+    # Holding the rule out is not the same as enforcing the opposite: `dart
+    # fix` added a dozen `package:novel_glide_epub/src/...` self-imports the
+    # moment nothing forbade them. `prefer_relative_imports` is what makes this
+    # decision a gate rather than a comment.
+    - prefer_relative_imports
     - annotate_overrides
     # - avoid_annotating_with_dynamic # conflicts with always_specify_types
     # - avoid_bool_literals_in_conditional_expressions # not yet tested
