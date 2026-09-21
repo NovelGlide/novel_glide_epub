@@ -1,7 +1,6 @@
 import '../entities/epub_content_type.dart';
 import '../ref_entities/epub_book_ref.dart';
 import '../ref_entities/epub_byte_content_file_ref.dart';
-import '../ref_entities/epub_content_file_ref.dart';
 import '../ref_entities/epub_content_ref.dart';
 import '../ref_entities/epub_text_content_file_ref.dart';
 import '../schema/opf/epub_manifest_item.dart';
@@ -10,12 +9,9 @@ class ContentReader {
   const ContentReader();
 
   EpubContentRef parseContentMap(EpubBookRef bookRef) {
+    // The five buckets are initialised by `EpubContentRef`'s own constructor;
+    // re-assigning them here was a no-op.
     var result = EpubContentRef();
-    result.Html = <String, EpubTextContentFileRef>{};
-    result.Css = <String, EpubTextContentFileRef>{};
-    result.Images = <String, EpubByteContentFileRef>{};
-    result.Fonts = <String, EpubByteContentFileRef>{};
-    result.AllFiles = <String, EpubContentFileRef>{};
 
     for (var manifestItem in bookRef.Schema!.Package!.Manifest!.Items!) {
       _addManifestItem(result, bookRef, manifestItem);
