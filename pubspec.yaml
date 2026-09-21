@@ -18,5 +18,14 @@ dependencies:
 
 dev_dependencies:
   coverage: ^1.11.0
+  # Mutation testing. A git dependency on a personal toolchain repo, which is
+  # unusual for a public package — it is dev-only, so it never reaches anyone
+  # consuming this library, and the alternative is having no mutation gate on
+  # a parser that reads untrusted files.
+  dart_mutants:
+    git:
+      url: https://github.com/kai-tw/kai-packages.git
+      path: packages/dart_mutants
+      ref: dart_mutants-v0.2.9
   lints: ^5.0.0
   test: ^1.25.0

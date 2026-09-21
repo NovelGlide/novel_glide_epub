@@ -41,6 +41,18 @@ Not published to pub.dev; consumed by git reference.
 
 ## Status
 
+**Coverage at extraction: 21%** (311 / 1481 lines), from seven test cases that
+were written to pin two specific bugs rather than to cover the package. Forty
+of its fifty-five files had never been executed by a test. Raising that is the
+work in progress.
+
+**The writing side is out of scope for now.** `epub_writer.dart` and
+`writers/` — six files, 122 lines, 0% covered — serialise an EPUB back out, and
+nothing in NovelGlide writes EPUBs. They are left in place rather than deleted
+so the capability survives, but they are not part of the coverage target and
+carry no tests. Treat them as unverified: anyone reaching for them should test
+them first.
+
 **The source is still upstream's style** — `var`, PascalCase fields, few
 explicit types. The lint set here is deliberately `package:lints/recommended`
 rather than this org's stricter one: turning the strict set on before the test
