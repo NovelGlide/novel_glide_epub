@@ -254,8 +254,8 @@ void main() {
     );
 
     // TC-NAVE-9 [Error guessing]: an EPUB3 nav document with a head but no
-    // `nav` element. The parser reuses the head-element wording here; the
-    // assertion pins the behaviour that exists, not the message that should.
+    // `nav` element. The guard used to reuse the head-element wording; it now
+    // names the element it actually looked for.
     test(
       'TC-NAVE-9 [Error guessing]: EPUB3 nav document without a nav element '
       'is rejected',
@@ -264,7 +264,7 @@ void main() {
           () => EpubReader.openBook(
             _epub3With(nav: '<html><head/><body><p>NGE-SEED</p></body></html>'),
           ),
-          _throwsMessageContaining('does not contain head element'),
+          _throwsMessageContaining('does not contain nav element'),
         );
       },
     );

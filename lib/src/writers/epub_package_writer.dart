@@ -1,9 +1,9 @@
-import 'package:novel_glide_epub/src/schema/opf/epub_package.dart';
-import 'package:novel_glide_epub/src/schema/opf/epub_version.dart';
-import 'package:novel_glide_epub/src/writers/epub_guide_writer.dart';
-import 'package:novel_glide_epub/src/writers/epub_manifest_writer.dart';
-import 'package:novel_glide_epub/src/writers/epub_spine_writer.dart';
-import 'package:xml/src/xml/builder.dart' show XmlBuilder;
+import '../schema/opf/epub_package.dart';
+import '../schema/opf/epub_version.dart';
+import './epub_guide_writer.dart';
+import './epub_manifest_writer.dart';
+import './epub_spine_writer.dart';
+import 'package:xml/xml.dart';
 import 'epub_metadata_writer.dart';
 
 class EpubPackageWriter {

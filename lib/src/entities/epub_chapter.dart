@@ -24,7 +24,7 @@ class EpubChapter {
 
   @override
   bool operator ==(other) {
-    if (!(other is EpubChapter)) {
+    if (other is! EpubChapter) {
       return false;
     }
     return Title == other.Title &&

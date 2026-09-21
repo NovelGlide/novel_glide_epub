@@ -1,0 +1,50 @@
+# Lint configuration. The rules themselves live in `dart_lints`
+# (kai-tw/kai-packages), pinned by tag in pubspec.yaml; this file is this
+# package's half — which areas exist and which bundles run in each.
+#
+# Run it with `dart run dart_lints`. Unlike the NovelGlide app, this package
+# has no rules of its own, so there is no wrapper script to go through.
+
+analyzer:
+  command: dart
+  # Linter diagnostics are INFO severity, so without `--fatal-infos` the
+  # analyzer prints every finding and still exits 0.
+  args: ["--fatal-infos"]
+  paths: ["lib", "test"]
+
+# Only `core`. This is a pure Dart library: no Flutter, no bloc, no get_it, no
+# clean-architecture layering — the bundles that encode those would have
+# nothing to match here.
+bundles: [core]
+
+options:
+  avoid_high_cyclomatic_complexity:
+    # Same threshold as the NovelGlide app: Uncle Bob's CRAP threshold, which
+    # at 100% coverage collapses to plain cyclomatic complexity, so "CRAP ≤ 8"
+    # and "CC ≤ 8" are the same statement.
+    maxComplexity: 8
+    # A unit whose whole body is one exhaustive switch with branch-free arms
+    # was being counted per-arm. Dart has no `on (A||B) catch` union and a flat
+    # enum-to-value switch has nowhere to hide the arm count, so the count was
+    # measuring the language, not the code.
+    exemptFlatDispatch: true
+
+areas:
+  production:
+    paths: ["lib/**"]
+    # The four stock-analyzer lints this package still trips are held out in
+    # `analysis_options.yaml` — `disable:` here only takes dart_lints' own
+    # rules.
+
+  test:
+    paths: ["test/**"]
+    disable:
+      # Every test file is top-level `main()` plus top-level fixture helpers.
+      - avoid_top_level_identifiers
+      # A `!` on a fixture the test just built is the test asserting its own
+      # setup, not a production invariant being skipped.
+      - avoid_production_null_assertion
+      # A test file is named for its SUBJECT; the helpers it declares live only
+      # inside it. The rule protects cross-file symbol lookup, which a
+      # test-local helper has no part in.
+      - public_class_names_its_file

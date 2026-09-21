@@ -7,7 +7,9 @@ import '../ref_entities/epub_text_content_file_ref.dart';
 import '../schema/opf/epub_manifest_item.dart';
 
 class ContentReader {
-  static EpubContentRef parseContentMap(EpubBookRef bookRef) {
+  const ContentReader();
+
+  EpubContentRef parseContentMap(EpubBookRef bookRef) {
     var result = EpubContentRef();
     result.Html = <String, EpubTextContentFileRef>{};
     result.Css = <String, EpubTextContentFileRef>{};
@@ -15,89 +17,91 @@ class ContentReader {
     result.Fonts = <String, EpubByteContentFileRef>{};
     result.AllFiles = <String, EpubContentFileRef>{};
 
-    bookRef.Schema!.Package!.Manifest!.Items!
-        .forEach((EpubManifestItem manifestItem) {
-      var fileName = manifestItem.Href;
-      var contentMimeType = manifestItem.MediaType!;
-      var contentType = getContentTypeByContentMimeType(contentMimeType);
-      switch (contentType) {
-        case EpubContentType.XHTML_1_1:
-        case EpubContentType.CSS:
-        case EpubContentType.OEB1_DOCUMENT:
-        case EpubContentType.OEB1_CSS:
-        case EpubContentType.XML:
-        case EpubContentType.DTBOOK:
-        case EpubContentType.DTBOOK_NCX:
-          var epubTextContentFile = EpubTextContentFileRef(bookRef);
-          {
-            epubTextContentFile.FileName = Uri.decodeFull(fileName!);
-            epubTextContentFile.ContentMimeType = contentMimeType;
-            epubTextContentFile.ContentType = contentType;
-          }
-          ;
-          switch (contentType) {
-            case EpubContentType.XHTML_1_1:
-              result.Html![fileName] = epubTextContentFile;
-              break;
-            case EpubContentType.CSS:
-              result.Css![fileName] = epubTextContentFile;
-              break;
-            case EpubContentType.DTBOOK:
-            case EpubContentType.DTBOOK_NCX:
-            case EpubContentType.OEB1_DOCUMENT:
-            case EpubContentType.XML:
-            case EpubContentType.OEB1_CSS:
-            case EpubContentType.IMAGE_GIF:
-            case EpubContentType.IMAGE_JPEG:
-            case EpubContentType.IMAGE_PNG:
-            case EpubContentType.IMAGE_SVG:
-            case EpubContentType.IMAGE_BMP:
-            case EpubContentType.FONT_TRUETYPE:
-            case EpubContentType.FONT_OPENTYPE:
-            case EpubContentType.OTHER:
-              break;
-          }
-          result.AllFiles![fileName] = epubTextContentFile;
-          break;
-        default:
-          var epubByteContentFile = EpubByteContentFileRef(bookRef);
-          {
-            epubByteContentFile.FileName = Uri.decodeFull(fileName!);
-            epubByteContentFile.ContentMimeType = contentMimeType;
-            epubByteContentFile.ContentType = contentType;
-          }
-          ;
-          switch (contentType) {
-            case EpubContentType.IMAGE_GIF:
-            case EpubContentType.IMAGE_JPEG:
-            case EpubContentType.IMAGE_PNG:
-            case EpubContentType.IMAGE_SVG:
-            case EpubContentType.IMAGE_BMP:
-              result.Images![fileName] = epubByteContentFile;
-              break;
-            case EpubContentType.FONT_TRUETYPE:
-            case EpubContentType.FONT_OPENTYPE:
-              result.Fonts![fileName] = epubByteContentFile;
-              break;
-            case EpubContentType.CSS:
-            case EpubContentType.XHTML_1_1:
-            case EpubContentType.DTBOOK:
-            case EpubContentType.DTBOOK_NCX:
-            case EpubContentType.OEB1_DOCUMENT:
-            case EpubContentType.XML:
-            case EpubContentType.OEB1_CSS:
-            case EpubContentType.OTHER:
-              break;
-          }
-          result.AllFiles![fileName] = epubByteContentFile;
-          break;
-      }
-    });
+    for (var manifestItem in bookRef.Schema!.Package!.Manifest!.Items!) {
+      _addManifestItem(result, bookRef, manifestItem);
+    }
     return result;
   }
 
-  static EpubContentType getContentTypeByContentMimeType(
-      String contentMimeType) {
+  /// Files the manifest with the bucket its media type belongs to, plus
+  /// `AllFiles`.
+  ///
+  /// The bucket keys stay as the manifest wrote them while `FileName` is
+  /// percent-decoded, which is the mismatch a manifest with escaped hrefs
+  /// runs into downstream.
+  void _addManifestItem(EpubContentRef result, EpubBookRef bookRef,
+      EpubManifestItem manifestItem) {
+    var fileName = manifestItem.Href!;
+    var contentMimeType = manifestItem.MediaType!;
+    var contentType = getContentTypeByContentMimeType(contentMimeType);
+
+    if (_isTextContentType(contentType)) {
+      var contentFile = EpubTextContentFileRef(bookRef)
+        ..FileName = Uri.decodeFull(fileName)
+        ..ContentMimeType = contentMimeType
+        ..ContentType = contentType;
+      _textBucketOf(result, contentType)?[fileName] = contentFile;
+      result.AllFiles![fileName] = contentFile;
+    } else {
+      var contentFile = EpubByteContentFileRef(bookRef)
+        ..FileName = Uri.decodeFull(fileName)
+        ..ContentMimeType = contentMimeType
+        ..ContentType = contentType;
+      _byteBucketOf(result, contentType)?[fileName] = contentFile;
+      result.AllFiles![fileName] = contentFile;
+    }
+  }
+
+  /// Whether a content type is read as text; everything else is read as bytes.
+  bool _isTextContentType(EpubContentType contentType) {
+    switch (contentType) {
+      case EpubContentType.XHTML_1_1:
+      case EpubContentType.CSS:
+      case EpubContentType.OEB1_DOCUMENT:
+      case EpubContentType.OEB1_CSS:
+      case EpubContentType.XML:
+      case EpubContentType.DTBOOK:
+      case EpubContentType.DTBOOK_NCX:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /// The named bucket a text file also belongs in, or null when the type has
+  /// no bucket of its own and is reachable only through `AllFiles`.
+  Map<String, EpubTextContentFileRef>? _textBucketOf(
+      EpubContentRef result, EpubContentType contentType) {
+    switch (contentType) {
+      case EpubContentType.XHTML_1_1:
+        return result.Html;
+      case EpubContentType.CSS:
+        return result.Css;
+      default:
+        return null;
+    }
+  }
+
+  /// The named bucket a byte file also belongs in, or null when the type has
+  /// no bucket of its own and is reachable only through `AllFiles`.
+  Map<String, EpubByteContentFileRef>? _byteBucketOf(
+      EpubContentRef result, EpubContentType contentType) {
+    switch (contentType) {
+      case EpubContentType.IMAGE_GIF:
+      case EpubContentType.IMAGE_JPEG:
+      case EpubContentType.IMAGE_PNG:
+      case EpubContentType.IMAGE_SVG:
+      case EpubContentType.IMAGE_BMP:
+        return result.Images;
+      case EpubContentType.FONT_TRUETYPE:
+      case EpubContentType.FONT_OPENTYPE:
+        return result.Fonts;
+      default:
+        return null;
+    }
+  }
+
+  EpubContentType getContentTypeByContentMimeType(String contentMimeType) {
     switch (contentMimeType.toLowerCase()) {
       case 'application/xhtml+xml':
       case 'text/html':

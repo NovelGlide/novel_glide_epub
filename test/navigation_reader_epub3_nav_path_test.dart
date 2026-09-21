@@ -16,7 +16,7 @@
 // `Exception('Incorrect EPUB manifest: item with href = "..." is missing.')`
 // for every navPoint — the whole TOC fails, not a single entry.
 //
-// Fixed shape: `navDirectory = ZipPathUtils.getDirectoryPath(tocManifestItem.Href!)`
+// Fixed shape: `navDirectory = ZipPathResolver().getDirectoryPath(tocManifestItem.Href!)`
 // — the nav item's own href directory, independent of where the OPF sits.
 //
 // Fixtures are minimal synthetic EPUBs assembled in-memory with

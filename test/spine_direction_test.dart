@@ -12,7 +12,7 @@ void main() {
         '</spine>',
       ).rootElement;
 
-      final EpubSpine spine = PackageReader.readSpine(spineNode);
+      final EpubSpine spine = const PackageReader().readSpine(spineNode);
 
       expect(spine.ltr, isFalse);
     });
@@ -24,7 +24,7 @@ void main() {
         '</spine>',
       ).rootElement;
 
-      final EpubSpine spine = PackageReader.readSpine(spineNode);
+      final EpubSpine spine = const PackageReader().readSpine(spineNode);
 
       expect(spine.ltr, isTrue);
     });
@@ -36,7 +36,7 @@ void main() {
         '</spine>',
       ).rootElement;
 
-      final EpubSpine spine = PackageReader.readSpine(spineNode);
+      final EpubSpine spine = const PackageReader().readSpine(spineNode);
 
       expect(spine.ltr, isTrue);
     });
@@ -48,7 +48,7 @@ void main() {
         '</spine>',
       ).rootElement;
 
-      final EpubSpine spine = PackageReader.readSpine(spineNode);
+      final EpubSpine spine = const PackageReader().readSpine(spineNode);
 
       expect(spine.ltr, isFalse);
     });

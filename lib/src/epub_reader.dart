@@ -18,15 +18,13 @@ import 'ref_entities/epub_content_ref.dart';
 import 'ref_entities/epub_text_content_file_ref.dart';
 import 'schema/opf/epub_metadata_creator.dart';
 
-/// A class that provides the primary interface to read Epub files.
+/// The primary interface for reading an EPUB file.
 ///
-/// To open an Epub and load all data at once use the [readBook()] method.
+/// [openBook] loads the structure and text metadata only, leaving each content
+/// file to be read on demand; [readBook] loads the whole book into memory.
+/// Both are static on purpose: they are this package's entry point, and the
+/// NovelGlide app calls them by name.
 ///
-/// To open an Epub and load only basic metadata use the [openBook()] method.
-/// This is a good option to quickly load text-based metadata, while leaving the
-/// heavier lifting of loading images and main content for subsequent operations.
-///
-/// ## Example
 /// ```dart
 /// // Read the basic metadata.
 /// EpubBookRef epub = await EpubReader.openBook(epubFileBytes);
@@ -61,14 +59,14 @@ class EpubReader {
     var epubArchive = ZipDecoder().decodeBytes(loadedBytes);
 
     var bookRef = EpubBookRef(epubArchive);
-    bookRef.Schema = await SchemaReader.readSchema(epubArchive);
+    bookRef.Schema = await const SchemaReader().readSchema(epubArchive);
     bookRef.Title = bookRef.Schema!.Package!.Metadata!.Titles!
         .firstWhere((String name) => true, orElse: () => '');
     bookRef.AuthorList = bookRef.Schema!.Package!.Metadata!.Creators!
         .map((EpubMetadataCreator creator) => creator.Creator)
         .toList();
     bookRef.Author = bookRef.AuthorList!.join(', ');
-    bookRef.Content = ContentReader.parseContentMap(bookRef);
+    bookRef.Content = const ContentReader().parseContentMap(bookRef);
     return bookRef;
   }
 

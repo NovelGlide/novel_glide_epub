@@ -1,7 +1,7 @@
 import 'package:archive/archive.dart';
 import 'dart:convert' as convert;
-import 'package:novel_glide_epub/src/utils/zip_path_utils.dart';
-import 'package:novel_glide_epub/src/writers/epub_package_writer.dart';
+import './utils/zip_path_resolver.dart';
+import './writers/epub_package_writer.dart';
 
 import 'entities/epub_book.dart';
 import 'entities/epub_byte_content_file.dart';
@@ -34,7 +34,8 @@ class EpubWriter {
       }
 
       arch.addFile(ArchiveFile(
-          ZipPathUtils.combine(book.Schema!.ContentDirectoryPath, name)!,
+          const ZipPathResolver()
+              .combine(book.Schema!.ContentDirectoryPath, name)!,
           content!.length,
           content));
     });
@@ -43,7 +44,8 @@ class EpubWriter {
     var contentopf = EpubPackageWriter.writeContent(book.Schema!.Package!);
 
     arch.addFile(ArchiveFile(
-        ZipPathUtils.combine(book.Schema!.ContentDirectoryPath, 'content.opf')!,
+        const ZipPathResolver()
+            .combine(book.Schema!.ContentDirectoryPath, 'content.opf')!,
         contentopf.length,
         convert.utf8.encode(contentopf)));
 

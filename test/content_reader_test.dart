@@ -97,7 +97,7 @@ void main() {
         'TC-CNT-1 [Equivalence partitioning]: "$mimeType" maps to $expected',
         () {
           expect(
-            ContentReader.getContentTypeByContentMimeType(mimeType),
+            const ContentReader().getContentTypeByContentMimeType(mimeType),
             expected,
           );
         },
@@ -111,7 +111,8 @@ void main() {
         'TC-CNT-2 [Equivalence partitioning]: an unknown mime type maps to '
         'OTHER', () {
       expect(
-        ContentReader.getContentTypeByContentMimeType('application/nge-seed'),
+        const ContentReader()
+            .getContentTypeByContentMimeType('application/nge-seed'),
         EpubContentType.OTHER,
       );
     });
@@ -120,7 +121,7 @@ void main() {
     // that shouts its media type is still classified.
     test('TC-CNT-3 [Boundary]: the mime-type lookup is case-insensitive', () {
       expect(
-        ContentReader.getContentTypeByContentMimeType('IMAGE/PNG'),
+        const ContentReader().getContentTypeByContentMimeType('IMAGE/PNG'),
         EpubContentType.IMAGE_PNG,
       );
     });

@@ -1,6 +1,6 @@
-import 'package:novel_glide_epub/src/schema/opf/epub_metadata.dart';
-import 'package:novel_glide_epub/src/schema/opf/epub_version.dart';
-import 'package:xml/src/xml/builder.dart' show XmlBuilder;
+import '../schema/opf/epub_metadata.dart';
+import '../schema/opf/epub_version.dart';
+import 'package:xml/xml.dart';
 
 class EpubMetadataWriter {
   static const _dc_namespace = 'http://purl.org/dc/elements/1.1/';

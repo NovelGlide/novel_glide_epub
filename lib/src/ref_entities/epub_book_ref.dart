@@ -38,7 +38,7 @@ class EpubBookRef {
 
   @override
   bool operator ==(other) {
-    if (!(other is EpubBookRef)) {
+    if (other is! EpubBookRef) {
       return false;
     }
 
@@ -54,14 +54,14 @@ class EpubBookRef {
   }
 
   Future<List<EpubChapterRef>> getChapters() async {
-    return ChapterReader.getChapters(this);
+    return const ChapterReader().getChapters(this);
   }
 
   Future<Image?> readCover() async {
-    return await BookCoverReader.readBookCover(this);
+    return await const BookCoverReader().readBookCover(this);
   }
 
   Future<Uint8List?> readCoverBytes() async {
-    return await BookCoverReader.readBookCoverBytes(this);
+    return await const BookCoverReader().readBookCoverBytes(this);
   }
 }

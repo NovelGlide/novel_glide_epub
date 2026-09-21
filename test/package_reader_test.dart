@@ -33,7 +33,7 @@ void main() {
     test(
         'TC-PKG-1 [Scenario]: reads type/title/href and skips foreign '
         'children', () {
-      final EpubGuide guide = PackageReader.readGuide(
+      final EpubGuide guide = const PackageReader().readGuide(
         _element('<guide>'
             '<notAReference type="x" href="y"/>'
             '<reference type="cover" title="NGE-SEED Cover" '
@@ -60,7 +60,8 @@ void main() {
     ]) {
       test('TC-PKG-2 [Boundary]: guide reference ${row[0]} is rejected', () {
         expect(
-          () => PackageReader.readGuide(_element('<guide>${row[0]}</guide>')),
+          () => const PackageReader()
+              .readGuide(_element('<guide>${row[0]}</guide>')),
           _throwsMessageContaining(row[1]),
         );
       });
@@ -71,7 +72,7 @@ void main() {
     // TC-PKG-3 [Scenario/use-case]: every manifest item attribute the parser
     // knows is mapped onto the entity.
     test('TC-PKG-3 [Scenario]: reads every known manifest item attribute', () {
-      final EpubManifest manifest = PackageReader.readManifest(
+      final EpubManifest manifest = const PackageReader().readManifest(
         _element('<manifest>'
             '<notAnItem id="ignored"/>'
             '<item id="ch1" href="chapter1.xhtml" '
@@ -121,7 +122,7 @@ void main() {
     ]) {
       test('TC-PKG-4 [Boundary]: manifest item ${row[0]} is rejected', () {
         expect(
-          () => PackageReader.readManifest(
+          () => const PackageReader().readManifest(
             _element('<manifest>${row[0]}</manifest>'),
           ),
           _throwsMessageContaining(row[1]),
@@ -156,7 +157,7 @@ void main() {
     // an unknown element is ignored rather than failing the parse.
     test('TC-PKG-5 [Scenario]: every Dublin Core element lands in its list',
         () {
-      final EpubMetadata metadata = PackageReader.readMetadata(
+      final EpubMetadata metadata = const PackageReader().readMetadata(
         _element(everyDublinCoreElement),
         EpubVersion.Epub2,
       );
@@ -179,7 +180,7 @@ void main() {
     test(
         'TC-PKG-6 [Scenario]: creator, contributor, date and identifier keep '
         'their attributes', () {
-      final EpubMetadata metadata = PackageReader.readMetadata(
+      final EpubMetadata metadata = const PackageReader().readMetadata(
         _element(everyDublinCoreElement),
         EpubVersion.Epub2,
       );
@@ -202,7 +203,7 @@ void main() {
     test(
         'TC-PKG-7 [Boundary]: a date with an empty event attribute leaves '
         'Event null', () {
-      final EpubMetadataDate date = PackageReader.readMetadataDate(
+      final EpubMetadataDate date = const PackageReader().readMetadataDate(
         _element('<date event="">2026-09-21</date>'),
       );
 
@@ -216,7 +217,7 @@ void main() {
     test(
         'TC-PKG-8 [Equivalence partitioning]: EPUB2 meta reads name and '
         'content attributes', () {
-      final EpubMetadata metadata = PackageReader.readMetadata(
+      final EpubMetadata metadata = const PackageReader().readMetadata(
         _element('<metadata><meta name="cover" content="cover-img"/>'
             '</metadata>'),
         EpubVersion.Epub2,
@@ -229,7 +230,7 @@ void main() {
     test(
         'TC-PKG-9 [Equivalence partitioning]: EPUB3 meta reads the property '
         'dialect and the element text', () {
-      final EpubMetadata metadata = PackageReader.readMetadata(
+      final EpubMetadata metadata = const PackageReader().readMetadata(
         _element('<metadata>'
             '<meta id="m1" refines="#uid" property="identifier-type" '
             'scheme="onix:codelist5">15</meta>'
@@ -254,7 +255,7 @@ void main() {
     test(
         'TC-PKG-10 [Equivalence partitioning]: a null EPUB version collects '
         'no meta items', () {
-      final EpubMetadata metadata = PackageReader.readMetadata(
+      final EpubMetadata metadata = const PackageReader().readMetadata(
         _element('<metadata><meta name="cover" content="cover-img"/>'
             '</metadata>'),
         null,
@@ -270,7 +271,7 @@ void main() {
     test(
         'TC-PKG-11 [Scenario]: reads toc and itemrefs and skips foreign '
         'children', () {
-      final EpubSpine spine = PackageReader.readSpine(
+      final EpubSpine spine = const PackageReader().readSpine(
         _element('<spine toc="ncx">'
             '<notAnItemRef idref="ignored"/>'
             '<itemref idref="ch1"/>'
@@ -294,7 +295,8 @@ void main() {
     for (final String node in <String>['<itemref/>', '<itemref idref=""/>']) {
       test('TC-PKG-12 [Boundary]: spine $node is rejected', () {
         expect(
-          () => PackageReader.readSpine(_element('<spine>$node</spine>')),
+          () =>
+              const PackageReader().readSpine(_element('<spine>$node</spine>')),
           _throwsMessageContaining('item ID ref is missing'),
         );
       });
@@ -333,7 +335,7 @@ void main() {
     test(
         'TC-PKG-13 [Scenario]: assembles every package section including the '
         'optional guide', () async {
-      final EpubPackage package = await PackageReader.readPackage(
+      final EpubPackage package = await const PackageReader().readPackage(
         ZipDecoder().decodeBytes(
           archiveWith(
             opf(
@@ -357,7 +359,7 @@ void main() {
     test(
         'TC-PKG-14 [Equivalence partitioning]: a package without a guide '
         'leaves Guide null', () async {
-      final EpubPackage package = await PackageReader.readPackage(
+      final EpubPackage package = await const PackageReader().readPackage(
         ZipDecoder().decodeBytes(archiveWith(opf())),
         'content.opf',
       );
@@ -369,7 +371,7 @@ void main() {
     // anything else — including an absent version — is refused by name.
     test('TC-PKG-15 [Equivalence partitioning]: version 3.0 maps to Epub3',
         () async {
-      final EpubPackage package = await PackageReader.readPackage(
+      final EpubPackage package = await const PackageReader().readPackage(
         ZipDecoder().decodeBytes(archiveWith(opf(version: '3.0'))),
         'content.opf',
       );
@@ -381,7 +383,7 @@ void main() {
         'TC-PKG-16 [Error guessing]: an unsupported version is rejected by '
         'value', () {
       expect(
-        () => PackageReader.readPackage(
+        () => const PackageReader().readPackage(
           ZipDecoder().decodeBytes(archiveWith(opf(version: '1.0'))),
           'content.opf',
         ),
@@ -407,7 +409,7 @@ void main() {
           );
 
           expect(
-            () => PackageReader.readPackage(
+            () => const PackageReader().readPackage(
               ZipDecoder().decodeBytes(archiveWith(stripped)),
               'content.opf',
             ),
@@ -423,7 +425,7 @@ void main() {
         'TC-PKG-17 [Error guessing]: a root file missing from the archive is '
         'rejected', () {
       expect(
-        () => PackageReader.readPackage(
+        () => const PackageReader().readPackage(
           ZipDecoder().decodeBytes(archiveWith(opf())),
           'nge-seed-absent.opf',
         ),

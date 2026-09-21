@@ -1,16 +1,18 @@
-class EnumFromString<T> {
-  List<T> enumValues;
+import 'package:collection/collection.dart' show IterableExtension;
 
+/// Looks an enum value up by the name it carries in the EPUB, case-insensitively.
+///
+/// A name no value answers to yields null: an EPUB is free to carry a value
+/// from a later version of the format than this parser knows, and that is not
+/// a reason to refuse the book.
+class EnumFromString<T> {
   EnumFromString(this.enumValues);
 
+  List<T> enumValues;
+
   T? get(String value) {
-    value = '$T.$value';
-    try {
-      var x = enumValues
-          .firstWhere((f) => f.toString().toUpperCase() == value.toUpperCase());
-      return x;
-    } catch (e) {
-      return null;
-    }
+    var target = '$T.$value'.toUpperCase();
+    return enumValues
+        .firstWhereOrNull((T f) => f.toString().toUpperCase() == target);
   }
 }

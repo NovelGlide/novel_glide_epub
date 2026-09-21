@@ -1,15 +1,16 @@
-import 'package:novel_glide_epub/src/schema/opf/epub_spine.dart';
-import 'package:xml/src/xml/builder.dart' show XmlBuilder;
+import '../schema/opf/epub_spine.dart';
+import 'package:xml/xml.dart';
 
 class EpubSpineWriter {
   static void writeSpine(XmlBuilder builder, EpubSpine spine) {
     builder.element('spine', attributes: {'toc': spine.TableOfContents!},
         nest: () {
-      spine.Items!.forEach((spineitem) => builder.element('itemref',
-              attributes: {
-                'idref': spineitem.IdRef!,
-                'linear': spineitem.IsLinear! ? 'yes' : 'no'
-              }));
+      for (var spineitem in spine.Items!) {
+        builder.element('itemref', attributes: {
+          'idref': spineitem.IdRef!,
+          'linear': spineitem.IsLinear! ? 'yes' : 'no'
+        });
+      }
     });
   }
 }

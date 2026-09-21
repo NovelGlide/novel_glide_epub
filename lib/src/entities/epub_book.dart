@@ -31,7 +31,7 @@ class EpubBook {
 
   @override
   bool operator ==(other) {
-    if (!(other is EpubBook)) {
+    if (other is! EpubBook) {
       return false;
     }
 

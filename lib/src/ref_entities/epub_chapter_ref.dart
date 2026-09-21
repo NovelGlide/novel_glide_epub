@@ -18,9 +18,7 @@ class EpubChapterRef {
   // If the chapter is split into multiple files, this list contains the names of the other files.
   List<String> OtherContentFileNames = [];
 
-  EpubChapterRef(EpubTextContentFileRef? epubTextContentFileRef) {
-    this.epubTextContentFileRef = epubTextContentFileRef;
-  }
+  EpubChapterRef(this.epubTextContentFileRef);
 
   @override
   int get hashCode {
@@ -38,7 +36,7 @@ class EpubChapterRef {
 
   @override
   bool operator ==(other) {
-    if (!(other is EpubChapterRef)) {
+    if (other is! EpubChapterRef) {
       return false;
     }
     return Title == other.Title &&

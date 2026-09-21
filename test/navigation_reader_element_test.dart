@@ -16,8 +16,6 @@ import 'package:novel_glide_epub/src/schema/navigation/epub_navigation_map.dart'
 import 'package:novel_glide_epub/src/schema/navigation/epub_navigation_page_list.dart';
 import 'package:novel_glide_epub/src/schema/navigation/epub_navigation_page_target.dart';
 import 'package:novel_glide_epub/src/schema/navigation/epub_navigation_page_target_type.dart';
-import 'package:novel_glide_epub/src/schema/navigation/epub_navigation_point.dart';
-import 'package:novel_glide_epub/src/schema/navigation/epub_navigation_target.dart';
 import 'package:test/test.dart';
 import 'package:xml/xml.dart';
 
@@ -35,8 +33,8 @@ void main() {
   group('NavigationReader.readNavigationContent', () {
     // TC-NAVU-1 [Scenario/use-case]: an NCX `content` node yields id + src.
     test('TC-NAVU-1 [Scenario]: reads id and src from a content node', () {
-      final EpubNavigationContent content =
-          NavigationReader.readNavigationContent(
+      final EpubNavigationContent content = const NavigationReader()
+          .readNavigationContent(
               _element('<content id="c-1" src="chapter1.xhtml#a"/>'));
 
       expect(content.Id, 'c-1');
@@ -53,7 +51,7 @@ void main() {
           'TC-NAVU-2 [Boundary]: content without a usable src is rejected '
           '($node)', () {
         expect(
-          () => NavigationReader.readNavigationContent(_element(node)),
+          () => const NavigationReader().readNavigationContent(_element(node)),
           _throwsMessageContaining('content source is missing'),
         );
       });
@@ -66,7 +64,8 @@ void main() {
     test(
         'TC-NAVU-3 [Scenario]: reads meta attributes and skips non-meta '
         'children', () {
-      final EpubNavigationHead head = NavigationReader.readNavigationHead(
+      final EpubNavigationHead head =
+          const NavigationReader().readNavigationHead(
         _element('<head>'
             '<meta name="dtb:uid" content="NGE-SEED-UID" scheme="uuid"/>'
             '<notMeta name="ignored"/>'
@@ -83,7 +82,7 @@ void main() {
     // content attribute (empty content is allowed, absent is not).
     test('TC-NAVU-4 [Error guessing]: meta without a name is rejected', () {
       expect(
-        () => NavigationReader.readNavigationHead(
+        () => const NavigationReader().readNavigationHead(
           _element('<head><meta content="NGE-SEED-UID"/></head>'),
         ),
         _throwsMessageContaining('meta name is missing'),
@@ -92,7 +91,7 @@ void main() {
 
     test('TC-NAVU-5 [Error guessing]: meta without content is rejected', () {
       expect(
-        () => NavigationReader.readNavigationHead(
+        () => const NavigationReader().readNavigationHead(
           _element('<head><meta name="dtb:uid"/></head>'),
         ),
         _throwsMessageContaining('meta content is missing'),
@@ -102,7 +101,8 @@ void main() {
     // TC-NAVU-6 [Boundary value]: content="" passes the guard — the guard is
     // null-only, unlike the name guard beside it.
     test('TC-NAVU-6 [Boundary]: meta with empty content is accepted', () {
-      final EpubNavigationHead head = NavigationReader.readNavigationHead(
+      final EpubNavigationHead head =
+          const NavigationReader().readNavigationHead(
         _element('<head><meta name="dtb:depth" content=""/></head>'),
       );
 
@@ -115,7 +115,7 @@ void main() {
     // foreign children are skipped, for both readers.
     test('TC-NAVU-7 [Scenario]: docTitle collects text children only', () {
       final EpubNavigationDocTitle title =
-          NavigationReader.readNavigationDocTitle(
+          const NavigationReader().readNavigationDocTitle(
         _element('<docTitle><text>NGE-SEED A</text><img src="x"/>'
             '<text>NGE-SEED B</text></docTitle>'),
       );
@@ -125,7 +125,7 @@ void main() {
 
     test('TC-NAVU-8 [Scenario]: docAuthor collects text children only', () {
       final EpubNavigationDocAuthor author =
-          NavigationReader.readNavigationDocAuthor(
+          const NavigationReader().readNavigationDocAuthor(
         _element('<docAuthor><img src="x"/><text>NGE-SEED Author</text>'
             '</docAuthor>'),
       );
@@ -137,7 +137,8 @@ void main() {
   group('NavigationReader.readNavigationLabel', () {
     // TC-NAVU-9 [Scenario/use-case]: the label's text element supplies Text.
     test('TC-NAVU-9 [Scenario]: reads the label text element', () {
-      final EpubNavigationLabel label = NavigationReader.readNavigationLabel(
+      final EpubNavigationLabel label =
+          const NavigationReader().readNavigationLabel(
         _element('<navLabel><text>NGE-SEED Label</text></navLabel>'),
       );
 
@@ -149,7 +150,7 @@ void main() {
         'TC-NAVU-10 [Error guessing]: label without a text element is '
         'rejected', () {
       expect(
-        () => NavigationReader.readNavigationLabel(
+        () => const NavigationReader().readNavigationLabel(
           _element('<navLabel><notText>x</notText></navLabel>'),
         ),
         _throwsMessageContaining('label text element is missing'),
@@ -159,7 +160,8 @@ void main() {
     // TC-NAVU-11 [Scenario/use-case]: the EPUB3 label reader takes the node's
     // own text, trimmed — there is no nested text element in a nav document.
     test('TC-NAVU-11 [Scenario]: the V3 label reader trims the node text', () {
-      final EpubNavigationLabel label = NavigationReader.readNavigationLabelV3(
+      final EpubNavigationLabel label =
+          const NavigationReader().readNavigationLabelV3(
         _element('<a href="chapter1.xhtml">  NGE-SEED V3 Label  </a>'),
       );
 
@@ -175,7 +177,7 @@ void main() {
     // each required, and each has its own message.
     test('TC-NAVU-12 [Error guessing]: navPoint without an id is rejected', () {
       expect(
-        () => NavigationReader.readNavigationPoint(
+        () => const NavigationReader().readNavigationPoint(
           _element('<navPoint>$label$content</navPoint>'),
         ),
         _throwsMessageContaining('point ID is missing'),
@@ -186,7 +188,7 @@ void main() {
         'TC-NAVU-13 [Error guessing]: navPoint without a navLabel is '
         'rejected', () {
       expect(
-        () => NavigationReader.readNavigationPoint(
+        () => const NavigationReader().readNavigationPoint(
           _element('<navPoint id="np-1">$content</navPoint>'),
         ),
         _throwsMessageContaining('at least one navigation label'),
@@ -196,7 +198,7 @@ void main() {
     test('TC-NAVU-14 [Error guessing]: navPoint without content is rejected',
         () {
       expect(
-        () => NavigationReader.readNavigationPoint(
+        () => const NavigationReader().readNavigationPoint(
           _element('<navPoint id="np-1">$label</navPoint>'),
         ),
         _throwsMessageContaining('should contain content'),
@@ -206,7 +208,7 @@ void main() {
     // TC-NAVU-15 [Boundary value]: an empty id is rejected like an absent one.
     test('TC-NAVU-15 [Boundary]: navPoint with an empty id is rejected', () {
       expect(
-        () => NavigationReader.readNavigationPoint(
+        () => const NavigationReader().readNavigationPoint(
           _element('<navPoint id="">$label$content</navPoint>'),
         ),
         _throwsMessageContaining('point ID is missing'),
@@ -217,7 +219,7 @@ void main() {
   group('NavigationReader.readNavigationMap', () {
     // TC-NAVU-16 [Scenario/use-case]: only `navPoint` children are walked.
     test('TC-NAVU-16 [Scenario]: navMap skips non-navPoint children', () {
-      final EpubNavigationMap map = NavigationReader.readNavigationMap(
+      final EpubNavigationMap map = const NavigationReader().readNavigationMap(
         _element('<navMap>'
             '<pageTarget id="ignored"/>'
             '<navPoint id="np-1">'
@@ -248,7 +250,7 @@ void main() {
         '"${pair.key}" resolves to ${pair.value}',
         () {
           final EpubNavigationPageTarget target =
-              NavigationReader.readNavigationPageTarget(
+              const NavigationReader().readNavigationPageTarget(
             _element('<pageTarget id="pt-1" value="1" type="${pair.key}" '
                 'class="pagenum" playOrder="2">$label</pageTarget>'),
           );
@@ -269,7 +271,7 @@ void main() {
         'TC-NAVU-18 [Error guessing]: page target typed "undefined" is '
         'rejected', () {
       expect(
-        () => NavigationReader.readNavigationPageTarget(
+        () => const NavigationReader().readNavigationPageTarget(
           _element('<pageTarget id="pt-1" type="undefined">$label'
               '</pageTarget>'),
         ),
@@ -283,7 +285,7 @@ void main() {
         'TC-NAVU-19 [Error guessing]: unrecognised page target type leaves '
         'Type null instead of throwing', () {
       final EpubNavigationPageTarget target =
-          NavigationReader.readNavigationPageTarget(
+          const NavigationReader().readNavigationPageTarget(
         _element('<pageTarget id="pt-1" type="nge-seed-unknown">$label'
             '</pageTarget>'),
       );
@@ -296,7 +298,7 @@ void main() {
         'TC-NAVU-20 [Error guessing]: page target without a navLabel is '
         'rejected', () {
       expect(
-        () => NavigationReader.readNavigationPageTarget(
+        () => const NavigationReader().readNavigationPageTarget(
           _element('<pageTarget id="pt-1" type="normal">'
               '<content src="chapter1.xhtml"/></pageTarget>'),
         ),
@@ -312,7 +314,7 @@ void main() {
         'TC-NAVU-21 [Scenario]: pageList skips children that are not '
         'pageTarget', () {
       final EpubNavigationPageList list =
-          NavigationReader.readNavigationPageList(
+          const NavigationReader().readNavigationPageList(
         _element('<pageList>'
             '<PAGETARGET id="wrong-case" type="normal">'
             '<navLabel><text>x</text></navLabel></PAGETARGET>'
@@ -340,7 +342,7 @@ void main() {
         'TC-NAVU-22 [Error guessing]: navTarget with a navLabel throws '
         'TypeError (uninitialised NavigationLabels)', () {
       expect(
-        () => NavigationReader.readNavigationTarget(
+        () => const NavigationReader().readNavigationTarget(
           _element('<navTarget id="nt-1" value="v" class="c" playOrder="3">'
               '$label<content src="chapter1.xhtml"/></navTarget>'),
         ),
@@ -353,7 +355,7 @@ void main() {
     test('TC-NAVU-23 [Error guessing]: navTarget without an id is rejected',
         () {
       expect(
-        () => NavigationReader.readNavigationTarget(
+        () => const NavigationReader().readNavigationTarget(
           _element('<navTarget>$label</navTarget>'),
         ),
         _throwsMessageContaining('navigation target ID is missing'),
@@ -367,7 +369,7 @@ void main() {
         'TC-NAVU-28 [Scenario]: a content-only navTarget still parses its'
         'content before the label list trips', () {
       expect(
-        () => NavigationReader.readNavigationTarget(
+        () => const NavigationReader().readNavigationTarget(
           _element('<navTarget id="nt-1">'
               '<content src="chapter1.xhtml"/></navTarget>'),
         ),
@@ -382,7 +384,7 @@ void main() {
         'TC-NAVU-24 [Error guessing]: childless navTarget throws TypeError '
         'at the label-count guard instead of its own Exception', () {
       expect(
-        () => NavigationReader.readNavigationTarget(
+        () => const NavigationReader().readNavigationTarget(
           _element('<navTarget id="nt-1"/>'),
         ),
         throwsA(isA<TypeError>()),
@@ -395,7 +397,8 @@ void main() {
     // children is the only shape that survives (see TC-NAVU-26).
     test('TC-NAVU-25 [Scenario]: reads id and class from a childless navList',
         () {
-      final EpubNavigationList list = NavigationReader.readNavigationList(
+      final EpubNavigationList list =
+          const NavigationReader().readNavigationList(
         _element('<navList id="nl-1" class="illustrations"/>'),
       );
 
@@ -417,7 +420,7 @@ void main() {
         'uninitialised list (${child.substring(0, 9)})',
         () {
           expect(
-            () => NavigationReader.readNavigationList(
+            () => const NavigationReader().readNavigationList(
               _element('<navList id="nl-1">$child</navList>'),
             ),
             throwsA(isA<TypeError>()),
@@ -448,7 +451,7 @@ void main() {
         'resolves to "${row[2]}"',
         () {
           expect(
-            NavigationReader.extractContentPath(row[0], row[1]),
+            const NavigationReader().extractContentPath(row[0], row[1]),
             row[2],
           );
         },

@@ -13,11 +13,20 @@ dependencies:
   archive: ^3.1.6
   collection: ^1.15.0
   image: ^4.0.17
+  # Used by navigation_reader; was reached transitively until
+  # `depend_on_referenced_packages` pointed out it was never declared.
+  path: ^1.9.0
   quiver: ^3.0.1+1
   xml: ^6.0.1
 
 dev_dependencies:
   coverage: ^1.11.0
+  # The org's shared lint rules. See dart_lints.yaml for this package's half.
+  dart_lints:
+    git:
+      url: https://github.com/kai-tw/kai-packages.git
+      path: packages/dart_lints
+      ref: dart_lints-v0.7.0
   # Mutation testing. A git dependency on a personal toolchain repo, which is
   # unusual for a public package — it is dev-only, so it never reaches anyone
   # consuming this library, and the alternative is having no mutation gate on
