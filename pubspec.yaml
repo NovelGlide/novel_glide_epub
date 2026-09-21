@@ -1,0 +1,22 @@
+name: novel_glide_epub
+description: >-
+  EPUB parser for Dart, used by the NovelGlide reader. A maintained fork of
+  epubx (rbcprolabs/epubx.dart).
+repository: https://github.com/NovelGlide/novel_glide_epub
+issue_tracker: https://github.com/NovelGlide/novel_glide_epub/issues
+version: 0.1.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  archive: ^3.1.6
+  collection: ^1.15.0
+  image: ^4.0.17
+  quiver: ^3.0.1+1
+  xml: ^6.0.1
+
+dev_dependencies:
+  coverage: ^1.11.0
+  lints: ^5.0.0
+  test: ^1.25.0

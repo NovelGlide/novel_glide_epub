@@ -1,0 +1,13 @@
+# Deliberately the mild set, not this org's strict one. The source carries
+# upstream's style (`var`, PascalCase fields, implicit types); switching the
+# strict set on before a test suite exists would bury real findings under a
+# few hundred style violations. Tightening is a pass of its own, after
+# coverage — see README §Status.
+include: package:lints/recommended.yaml
+
+analyzer:
+  errors:
+    # The public API keeps upstream's PascalCase members (`Schema`, `Content`,
+    # `FileName`). Renaming them is a breaking change to every call site in the
+    # app and belongs in the style pass, not in a lint override that hides it.
+    non_constant_identifier_names: ignore

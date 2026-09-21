@@ -1,0 +1,47 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install dependencies
+        run: dart pub get
+
+      # Errors only, not `--fatal-infos`: the source is still upstream's style
+      # and the mild lint set still has plenty to say about it (README
+      # §Status). Tightening this to infos is part of the style pass, once the
+      # test suite exists to catch what the cleanup breaks.
+      - name: Analyze
+        run: dart analyze
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Run tests with coverage
+        run: dart test --coverage=coverage
+
+      # Printed, not gated — the suite does not cover the package yet, and a
+      # threshold set before the tests exist would either pass at any number
+      # or block every PR. The gate lands with the coverage work.
+      - name: Report coverage
+        run: |
+          dart pub global activate coverage
+          dart pub global run coverage:format_coverage \
+            --lcov --in=coverage --out=coverage/lcov.info \
+            --report-on=lib --packages=.dart_tool/package_config.json
+          awk -F: '/^LF:/ {lines += $2} /^LH:/ {hit += $2} END {
+            if (lines == 0) { print "no lines instrumented"; exit }
+            printf "line coverage: %d/%d (%.1f%%)\n", hit, lines, hit * 100 / lines
+          }' coverage/lcov.info
