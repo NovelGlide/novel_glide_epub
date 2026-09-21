@@ -25,42 +25,45 @@ class EpubChapterRef {
     var objects = [
       Title.hashCode,
       ContentFileName.hashCode,
-      OtherContentFileNames.hashCode,
+      // The two split-chapter lists are hashed by ELEMENT, like
+      // `SubChapters`: every ref gets its own list instance from the field
+      // initialiser, so hashing the list object would give two refs over one
+      // chapter two different hash codes.
+      ...OtherContentFileNames.map((fileName) => fileName.hashCode),
+      ...otherTextContentFileRefs.map((fileRef) => fileRef.hashCode),
       Anchor.hashCode,
       epubTextContentFileRef.hashCode,
-      otherTextContentFileRefs.hashCode,
       ...SubChapters?.map((subChapter) => subChapter.hashCode) ?? [0],
     ];
     return hashObjects(objects);
   }
 
   @override
-  bool operator ==(other) {
-    if (other is! EpubChapterRef) {
-      return false;
-    }
-    return Title == other.Title &&
-        ContentFileName == other.ContentFileName &&
-        OtherContentFileNames == other.OtherContentFileNames &&
-        Anchor == other.Anchor &&
-        epubTextContentFileRef == other.epubTextContentFileRef &&
-        otherTextContentFileRefs == other.otherTextContentFileRefs &&
-        collections.listsEqual(SubChapters, other.SubChapters);
-  }
+  bool operator ==(Object other) =>
+      other is EpubChapterRef &&
+      Title == other.Title &&
+      ContentFileName == other.ContentFileName &&
+      collections.listsEqual(
+          OtherContentFileNames, other.OtherContentFileNames) &&
+      Anchor == other.Anchor &&
+      epubTextContentFileRef == other.epubTextContentFileRef &&
+      collections.listsEqual(
+          otherTextContentFileRefs, other.otherTextContentFileRefs) &&
+      collections.listsEqual(SubChapters, other.SubChapters);
 
   Future<String> readHtmlContent() async {
+    // Started before the other parts so all of them read concurrently.
     var contentFuture = epubTextContentFileRef!.readContentAsText();
-    if (OtherContentFileNames.isNotEmpty) {
-      var allContentFutures = <Future<String>>[contentFuture];
-      for (var otherContentFileRef in otherTextContentFileRefs) {
-        allContentFutures.add(otherContentFileRef.readContentAsText());
-      }
-      return Future.wait(allContentFutures).then((List<String> contents) {
-        return contents.join('');
-      });
-    } else {
+    if (OtherContentFileNames.isEmpty) {
       return contentFuture;
     }
+
+    var contents = await Future.wait(<Future<String>>[
+      contentFuture,
+      for (var otherContentFileRef in otherTextContentFileRefs)
+        otherContentFileRef.readContentAsText(),
+    ]);
+    return contents.join();
   }
 
   @override

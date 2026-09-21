@@ -8,13 +8,12 @@ class EpubSpineItemRef {
   int get hashCode => hash2(IdRef.hashCode, IsLinear.hashCode);
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubSpineItemRef?;
-    if (otherAs == null) {
+  bool operator ==(Object other) {
+    if (other is! EpubSpineItemRef) {
       return false;
     }
 
-    return IdRef == otherAs.IdRef && IsLinear == otherAs.IsLinear;
+    return IdRef == other.IdRef && IsLinear == other.IsLinear;
   }
 
   @override

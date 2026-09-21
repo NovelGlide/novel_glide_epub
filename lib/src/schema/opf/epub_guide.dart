@@ -18,12 +18,11 @@ class EpubGuide {
   }
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubGuide?;
-    if (otherAs == null) {
+  bool operator ==(Object other) {
+    if (other is! EpubGuide) {
       return false;
     }
 
-    return collections.listsEqual(Items, otherAs.Items);
+    return collections.listsEqual(Items, other.Items);
   }
 }

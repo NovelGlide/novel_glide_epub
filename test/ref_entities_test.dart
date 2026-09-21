@@ -192,8 +192,8 @@ void main() {
     });
 
     // TC-REF-4 [Error guessing]: `is!`-guarded, so an unrelated operand is
-    // rejected rather than throwing — the ref entities differ from the OPF
-    // schema classes here (see TC-OPF-1).
+    // rejected rather than throwing — the trait the OPF and navigation
+    // schema classes had to be fixed to match (TC-OPF-1, TC-NSC-1).
     test('TC-REF-4 [Error guessing]: an unrelated operand is not equal',
         () async {
       final EpubBookRef bookRef = await EpubReader.openBook(seedArchive());
@@ -374,9 +374,10 @@ void main() {
     });
 
     // TC-REF-12 [Error guessing]: a manifest href with no matching archive
-    // entry is rejected with the archive path in the message. The ref's
-    // `FileName` is reassigned because a manifest the reader accepted is by
-    // construction resolvable — this is the state a hand-edited EPUB reaches.
+    // entry is rejected as a typed `EpubMissingArchiveEntryException`, with
+    // the archive path in the message. The ref's `FileName` is reassigned
+    // because a manifest the reader accepted is by construction resolvable —
+    // this is the state a hand-edited EPUB reaches.
     test('TC-REF-12 [Error guessing]: an unresolvable file name throws',
         () async {
       final EpubBookRef bookRef = await EpubReader.openBook(seedArchive());
@@ -387,16 +388,19 @@ void main() {
       expect(
         chapter.getContentFileEntry,
         throwsA(
-          isA<Exception>().having(
-            (Exception e) => e.toString(),
+          isA<EpubMissingArchiveEntryException>().having(
+            (EpubMissingArchiveEntryException e) => e.message,
             'message',
             contains('OEBPS/NGE-SEED-missing.xhtml not found in archive'),
           ),
         ),
       );
-      expect(chapter.getContentStream, throwsA(isA<Exception>()));
-      expect(chapter.readContentAsText, throwsA(isA<Exception>()));
-      expect(chapter.readContentAsBytes, throwsA(isA<Exception>()));
+      expect(chapter.getContentStream,
+          throwsA(isA<EpubMissingArchiveEntryException>()));
+      expect(chapter.readContentAsText,
+          throwsA(isA<EpubMissingArchiveEntryException>()));
+      expect(chapter.readContentAsBytes,
+          throwsA(isA<EpubMissingArchiveEntryException>()));
     });
 
     // TC-REF-13 [Scenario/use-case]: `==` compares the three declared fields
@@ -551,8 +555,8 @@ void main() {
       expect(
         () => chapter.openContentStream(empty),
         throwsA(
-          isA<Exception>().having(
-            (Exception e) => e.toString(),
+          isA<EpubMissingArchiveEntryException>().having(
+            (EpubMissingArchiveEntryException e) => e.message,
             'message',
             contains('content file "chapter1.xhtml" specified in manifest is '
                 'not found'),
@@ -640,16 +644,17 @@ void main() {
           'Title: NGE-SEED Chapter One, Subchapter count: 1');
     });
 
-    // TC-REF-21 [Error guessing]: KNOWN DEFECT, the same one `EpubChapter`
-    // carries (TC-ENT-22). `OtherContentFileNames` is compared with `==` on
-    // two `List` objects — identity — while `SubChapters` goes through
-    // `listsEqual`. Every chapter ref gets its own fresh list from the field
-    // initialiser, so two refs built from two opens of ONE archive are never
-    // equal and never share a `hashCode`. Pinned as it behaves today; when the
-    // comparison becomes `listsEqual`, both expectations flip.
+    // TC-REF-21 [Error guessing]: the regression guard for the identity
+    // comparison this class carried alongside `EpubChapter` (TC-ENT-22). The
+    // two split-chapter lists — `OtherContentFileNames` and
+    // `otherTextContentFileRefs` — were compared with `==` on the list
+    // OBJECTS while `SubChapters` went through `listsEqual`, and every ref
+    // gets its own fresh list from the field initialiser, so two refs over one
+    // archive were never equal and never shared a `hashCode`. Both are now
+    // compared and hashed by element.
     test(
-        'TC-REF-21 [Error guessing]: KNOWN DEFECT — chapter refs from two '
-        'opens are never equal', () async {
+        'TC-REF-21 [Error guessing]: chapter refs from two opens of one '
+        'archive are equal', () async {
       final Uint8List bytes = seedArchive();
       final EpubChapterRef first =
           (await (await EpubReader.openBook(bytes)).getChapters()).single;
@@ -658,19 +663,20 @@ void main() {
 
       expect(first.Title, equals(second.Title));
       expect(first.OtherContentFileNames, equals(second.OtherContentFileNames));
-      expect(first, isNot(equals(second)));
-      expect(first.hashCode, isNot(equals(second.hashCode)));
-
-      // Sharing the two identity-compared lists is what makes them equal.
-      second
-        ..OtherContentFileNames = first.OtherContentFileNames
-        ..otherTextContentFileRefs = first.otherTextContentFileRefs;
+      expect(
+        identical(first.OtherContentFileNames, second.OtherContentFileNames),
+        isFalse,
+      );
       expect(first, equals(second));
       expect(first.hashCode, equals(second.hashCode));
+
+      // The split-chapter list still decides equality when it differs.
+      second.OtherContentFileNames = <String>['NGE-SEED-part2.xhtml'];
+      expect(first, isNot(equals(second)));
     });
 
-    // TC-REF-22 [Equivalence partitioning]: with the two identity-compared
-    // lists shared, each remaining field decides equality once.
+    // TC-REF-22 [Equivalence partitioning]: each remaining field decides
+    // equality once.
     for (final String field in <String>[
       'Title',
       'ContentFileName',
@@ -686,9 +692,6 @@ void main() {
         final EpubChapterRef first = (await bookRef.getChapters()).single;
         final EpubChapterRef second =
             (await (await EpubReader.openBook(bytes)).getChapters()).single;
-        second
-          ..OtherContentFileNames = first.OtherContentFileNames
-          ..otherTextContentFileRefs = first.otherTextContentFileRefs;
 
         switch (field) {
           case 'Title':

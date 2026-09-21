@@ -152,11 +152,12 @@ final Object? nullOperand = null;
 
 void main() {
   group('The navigation layer as a whole', () {
-    // TC-NSC-1 [Error guessing]: KNOWN DEFECT, shared by every class in this
-    // directory EXCEPT `EpubNavigationContent`. `operator ==` opens with
-    // `other as X?` — a cast — so an unrelated operand throws a `TypeError`
-    // where the Dart contract requires `false`. Pinned as it behaves today;
-    // rewriting these as `is!` checks flips every row to `isFalse`.
+    // TC-NSC-1 [Error guessing]: the regression guard for a defect every
+    // class in this directory carried except `EpubNavigationContent`.
+    // `operator ==` used to open with `other as X?` — a cast — so an unrelated
+    // operand threw a `TypeError` where the Dart contract requires `false`.
+    // Every class answers false now, which is why `EpubNavigationContent` —
+    // the lone counter-example, formerly TC-NSC-2 — is simply a row here.
     for (final MapEntry<String, Object> row in <String, Object>{
       'EpubNavigation': seedNavigation(),
       'EpubNavigationHead': seedHead(),
@@ -164,6 +165,7 @@ void main() {
       'EpubNavigationDocTitle': seedDocTitle(),
       'EpubNavigationDocAuthor': seedDocAuthor(),
       'EpubNavigationLabel': seedLabel(),
+      'EpubNavigationContent': seedNavContent(),
       'EpubNavigationMap': seedMap(),
       'EpubNavigationPoint': seedPoint(),
       'EpubNavigationPageList': seedPageList(),
@@ -172,25 +174,12 @@ void main() {
       'EpubNavigationTarget': seedTarget(),
     }.entries) {
       test(
-          'TC-NSC-1 [Error guessing]: KNOWN DEFECT — ${row.key} == an '
-          'unrelated type throws instead of returning false', () {
-        expect(
-          () => row.value == 'NGE-SEED-not-a-navigation-object',
-          throwsA(isA<TypeError>()),
-        );
+          'TC-NSC-1 [Error guessing]: ${row.key} == an unrelated type '
+          'returns false', () {
+        expect(row.value == unrelatedOperand, isFalse);
         expect(row.value == nullOperand, isFalse);
       });
     }
-
-    // TC-NSC-2 [Error guessing]: `EpubNavigationContent` is the one class here
-    // written with `is!`, so it is the contrast that shows TC-NSC-1 is a
-    // per-class slip and not a layer-wide convention.
-    test(
-        'TC-NSC-2 [Error guessing]: EpubNavigationContent rejects an '
-        'unrelated operand without throwing', () {
-      expect(seedNavContent() == unrelatedOperand, isFalse);
-      expect(seedNavContent() == nullOperand, isFalse);
-    });
 
     // TC-NSC-3 [Error guessing]: KNOWN DEFECT. `EpubNavigationPoint.hashCode`
     // dereferences both `NavigationLabels!` and `ChildNavigationPoints!`, and
@@ -209,13 +198,14 @@ void main() {
       expect(noContent.toString, throwsA(isA<TypeError>()));
     });
 
-    // TC-NSC-4 [Error guessing]: KNOWN DEFECT. `EpubNavigationLabel.toString`
-    // returns `Text!`, so a label whose text was never set cannot be printed.
-    // Pinned as it behaves today.
+    // TC-NSC-4 [Error guessing]: `EpubNavigationLabel.toString` used to return
+    // `Text!`, so a label whose text was never set — a state the NCX reader
+    // can produce — could not be printed at all. It now renders as the empty
+    // string, and a populated label still renders its text verbatim.
     test(
-        'TC-NSC-4 [Error guessing]: KNOWN DEFECT — a label with no text '
-        'cannot be printed', () {
-      expect(EpubNavigationLabel().toString, throwsA(isA<TypeError>()));
+        'TC-NSC-4 [Error guessing]: a label with no text prints as empty '
+        'rather than throwing', () {
+      expect(EpubNavigationLabel().toString(), isEmpty);
       expect(seedLabel().toString(), 'NGE-SEED Label');
     });
 

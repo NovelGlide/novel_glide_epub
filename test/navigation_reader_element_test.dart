@@ -6,7 +6,7 @@
 // reader does with one node, including the guards that a whole-book fixture
 // cannot reach without also tripping an earlier one.
 import 'package:novel_glide_epub/src/readers/navigation_reader.dart';
-import 'package:novel_glide_epub/src/schema/navigation/epub_metadata.dart';
+import 'package:novel_glide_epub/src/schema/navigation/epub_navigation_content.dart';
 import 'package:novel_glide_epub/src/schema/navigation/epub_navigation_doc_author.dart';
 import 'package:novel_glide_epub/src/schema/navigation/epub_navigation_doc_title.dart';
 import 'package:novel_glide_epub/src/schema/navigation/epub_navigation_head.dart';

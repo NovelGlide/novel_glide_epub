@@ -5,10 +5,11 @@
 // `toString`, so they are exercised by direct construction; the archive-backed
 // half of the package is covered through `EpubReader` in the reader suites.
 //
-// Two upstream defects shape this file and are pinned AS THEY BEHAVE TODAY,
-// each in a test that says so: `EpubChapter` compares
-// `OtherContentFileNames` by identity (TC-ENT-22), and `EpubBook.==` throws
-// when exactly one side has a cover (TC-ENT-30).
+// Two upstream defects used to shape this file; both are now FIXED and each
+// is still covered by the test that pinned it. `EpubChapter` compared
+// `OtherContentFileNames` by identity (TC-ENT-22), and `EpubBook.==` threw
+// when exactly one side had a cover (TC-ENT-30). TC-ENT-33 is where the first
+// fix shows up on values the reader actually produces.
 import 'dart:typed_data';
 
 import 'package:novel_glide_epub/novel_glide_epub.dart';
@@ -49,11 +50,9 @@ EpubByteContentFile seedByteFile({
       ..ContentType = contentType
       ..ContentMimeType = mimeType;
 
-/// [otherContentFileNames] defaults to the canonical `const <String>[]` rather
-/// than the field's own fresh `[]`, because `EpubChapter.==` compares that
-/// field by identity — see TC-ENT-22. Every other test in this group wants to
-/// exercise the REST of the equality chain, which is only reachable once both
-/// sides share one list instance.
+/// [otherContentFileNames] is a parameter rather than a left-at-default field
+/// so a test can vary the split-chapter list; it no longer has to be SHARED
+/// between the two sides of a comparison, which is what TC-ENT-22 fixed.
 EpubChapter seedChapter({
   String? title = 'NGE-SEED Chapter',
   String? contentFileName = 'NGE-SEED-chapter.xhtml',
@@ -146,8 +145,8 @@ void main() {
     }
 
     // TC-ENT-3 [Error guessing]: the entity classes use `is!`, so an unrelated
-    // operand is rejected rather than throwing — unlike the OPF schema
-    // classes, which cast (see TC-OPF-1).
+    // operand is rejected rather than throwing — the trait the OPF schema
+    // classes had to be fixed to match (TC-OPF-1).
     test('TC-ENT-3 [Error guessing]: an unrelated operand is not equal', () {
       expect(seedTextFile() == unrelatedOperand, isFalse);
       expect(seedTextFile() == nullOperand, isFalse);
@@ -441,8 +440,7 @@ void main() {
   });
 
   group('EpubChapter', () {
-    // TC-ENT-20 [Scenario/use-case]: with the identity-compared field held
-    // constant (see TC-ENT-22), every other field participates and a nested
+    // TC-ENT-20 [Scenario/use-case]: every field participates and a nested
     // subchapter list is compared element-wise.
     test('TC-ENT-20 [Scenario]: identical chapter trees are equal', () {
       EpubChapter build() => seedChapter(
@@ -482,30 +480,45 @@ void main() {
       });
     }
 
-    // TC-ENT-22 [Error guessing]: KNOWN DEFECT, and the widest-reaching one in
-    // this file. `OtherContentFileNames` is compared with `==` on two `List`
-    // objects — identity — while every other collection field goes through
-    // `listsEqual`. Because the field initialiser hands every instance its own
-    // fresh `[]`, two chapters built the ordinary way are NEVER equal and
-    // never share a `hashCode`, however identical their data. That propagates:
-    // `EpubBook.==` compares `Chapters` element-wise, so it inherits the same
-    // result (TC-ENT-33). Pinned as it behaves today; when the comparison
-    // becomes `listsEqual`, the first two expectations here flip to `equals`.
+    // TC-ENT-22 [Error guessing]: the regression guard for this file's
+    // widest-reaching defect. `OtherContentFileNames` was compared with `==`
+    // on two `List` objects — identity — while every other collection field
+    // went through `listsEqual`; because the field initialiser hands every
+    // instance its own fresh `[]`, two chapters built the ordinary way were
+    // NEVER equal and never shared a `hashCode`, however identical their data.
+    // Both halves of the contract are asserted here: equal contents in two
+    // distinct list instances compare equal AND hash alike (`hashCode` hashes
+    // the list by element for the same reason), while differing contents still
+    // separate them.
     test(
-        'TC-ENT-22 [Error guessing]: KNOWN DEFECT — OtherContentFileNames is '
-        'compared by identity, so default-built chapters are never equal', () {
+        'TC-ENT-22 [Error guessing]: OtherContentFileNames is compared by '
+        'value, so default-built chapters are equal', () {
       final EpubChapter a = EpubChapter()..SubChapters = const <EpubChapter>[];
       final EpubChapter b = EpubChapter()..SubChapters = const <EpubChapter>[];
 
       expect(a.OtherContentFileNames, equals(b.OtherContentFileNames));
-      expect(a, isNot(equals(b)));
-      expect(a.hashCode, isNot(equals(b.hashCode)));
-
-      // Sharing one list instance is the only way two chapters compare equal.
-      final List<String> shared = <String>['NGE-SEED-part2.xhtml'];
       expect(
-        seedChapter(otherContentFileNames: shared),
-        equals(seedChapter(otherContentFileNames: shared)),
+          identical(a.OtherContentFileNames, b.OtherContentFileNames), isFalse);
+      expect(a, equals(b));
+      expect(a.hashCode, equals(b.hashCode));
+
+      // Two separately built lists with the same names are equal…
+      expect(
+        seedChapter(otherContentFileNames: <String>['NGE-SEED-part2.xhtml']),
+        equals(
+          seedChapter(otherContentFileNames: <String>['NGE-SEED-part2.xhtml']),
+        ),
+      );
+
+      // …and the field still decides equality when the names differ.
+      expect(
+        seedChapter(otherContentFileNames: <String>['NGE-SEED-part2.xhtml']),
+        isNot(
+          equals(
+            seedChapter(
+                otherContentFileNames: <String>['NGE-SEED-part3.xhtml']),
+          ),
+        ),
       );
     });
 
@@ -530,20 +543,11 @@ void main() {
     // `?? [0]` fallback) and still compares, so only `toString` is affected by
     // TC-ENT-24.
     test('TC-ENT-25 [Boundary]: null SubChapters hashes and compares', () {
-      final List<String> shared = <String>[];
-      final EpubChapter a = seedChapter(
-        subChapters: null,
-        otherContentFileNames: shared,
-      );
+      final EpubChapter a = seedChapter(subChapters: null);
 
       expect(a.hashCode, isA<int>());
-      expect(
-        a,
-        equals(
-          seedChapter(subChapters: null, otherContentFileNames: shared),
-        ),
-      );
-      expect(a, isNot(equals(seedChapter(otherContentFileNames: shared))));
+      expect(a, equals(seedChapter(subChapters: null)));
+      expect(a, isNot(equals(seedChapter())));
     });
   });
 
@@ -594,24 +598,24 @@ void main() {
       expect(seedBook().hashCode, equals(seedBook().hashCode));
     });
 
-    // TC-ENT-30 [Error guessing]: KNOWN DEFECT. When exactly one side has a
-    // cover, the null-pair short circuit fails and the expression falls
-    // through to `CoverImage!.getBytes()` — which throws instead of returning
-    // false. It throws in BOTH directions: the `!` that fires is whichever
-    // side is null. Pinned as it behaves today; the fix makes both directions
-    // return `false` and this test must be rewritten then.
+    // TC-ENT-30 [Error guessing]: the regression guard for the one-sided
+    // cover. The null-pair short circuit used to fall through to
+    // `CoverImage!.getBytes()`, which threw a `TypeError` in BOTH directions —
+    // the `!` that fired was whichever side was null. A missing cover is a
+    // difference, so both directions must answer false, and `==` must stay
+    // symmetric.
     test(
-        'TC-ENT-30 [Error guessing]: KNOWN DEFECT — a one-sided cover throws '
-        'instead of comparing unequal', () {
+        'TC-ENT-30 [Error guessing]: a one-sided cover compares unequal '
+        'instead of throwing', () {
       final EpubBook withCover = seedBook()..CoverImage = seedImage(7);
       final EpubBook withoutCover = seedBook();
 
-      expect(() => withCover == withoutCover, throwsA(isA<TypeError>()));
-      expect(() => withoutCover == withCover, throwsA(isA<TypeError>()));
+      expect(withCover == withoutCover, isFalse);
+      expect(withoutCover == withCover, isFalse);
     });
 
-    // TC-ENT-31 [Error guessing]: `is!`-guarded, so the type check itself is
-    // safe — the throw in TC-ENT-30 is strictly about the cover.
+    // TC-ENT-31 [Error guessing]: `is`-guarded, so an unrelated operand is
+    // rejected rather than throwing.
     test('TC-ENT-31 [Error guessing]: an unrelated operand is not equal', () {
       expect(seedBook() == unrelatedOperand, isFalse);
       expect(seedBook() == nullOperand, isFalse);
@@ -669,15 +673,13 @@ void main() {
         );
 
     // TC-ENT-33 [Scenario/use-case]: reading one archive twice produces two
-    // graphs whose schema and content halves compare equal — and whose
-    // chapters do NOT, because `readChapters` builds each `EpubChapter` fresh
-    // and never assigns `OtherContentFileNames`, so TC-ENT-22's identity
-    // comparison decides. The book therefore never equals itself across two
-    // reads. This is the defect's user-visible consequence, pinned as it
-    // behaves today; fixing TC-ENT-22 turns all four expectations positive.
-    test(
-        'TC-ENT-33 [Scenario]: two reads of one archive agree on schema and '
-        'content but not on chapters', () async {
+    // graphs that compare equal all the way down — schema, content, chapters
+    // and the book itself. This is TC-ENT-22's user-visible consequence:
+    // `readChapters` builds each `EpubChapter` fresh and never assigns
+    // `OtherContentFileNames`, so under the old identity comparison a book
+    // never equalled itself across two reads of the same bytes.
+    test('TC-ENT-33 [Scenario]: two reads of one archive produce equal books',
+        () async {
       final EpubBook first = await EpubReader.readBook(build('NGE-SEED-A'));
       final EpubBook second = await EpubReader.readBook(build('NGE-SEED-A'));
 
@@ -693,11 +695,11 @@ void main() {
         equals(second.Content!.Css!['style.css']),
       );
 
-      expect(first.Chapters, isNot(equals(second.Chapters)));
-      expect(first, isNot(equals(second)));
+      expect(first.Chapters, equals(second.Chapters));
+      expect(first, equals(second));
+      expect(first.hashCode, equals(second.hashCode));
 
-      // The chapters are identical in every field the reader populates; only
-      // the list identity differs.
+      // The chapters are identical in every field the reader populates.
       expect(first.Chapters!.single.Title, second.Chapters!.single.Title);
       expect(
         first.Chapters!.single.HtmlContent,

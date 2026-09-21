@@ -10,12 +10,13 @@ class EpubMetadataContributor {
       hash3(Contributor.hashCode, FileAs.hashCode, Role.hashCode);
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubMetadataContributor?;
-    if (otherAs == null) return false;
+  bool operator ==(Object other) {
+    if (other is! EpubMetadataContributor) {
+      return false;
+    }
 
-    return Contributor == otherAs.Contributor &&
-        FileAs == otherAs.FileAs &&
-        Role == otherAs.Role;
+    return Contributor == other.Contributor &&
+        FileAs == other.FileAs &&
+        Role == other.Role;
   }
 }

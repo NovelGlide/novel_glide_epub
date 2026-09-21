@@ -17,12 +17,11 @@ class EpubNavigationHead {
   }
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubNavigationHead?;
-    if (otherAs == null) {
+  bool operator ==(Object other) {
+    if (other is! EpubNavigationHead) {
       return false;
     }
 
-    return collections.listsEqual(Metadata, otherAs.Metadata);
+    return collections.listsEqual(Metadata, other.Metadata);
   }
 }

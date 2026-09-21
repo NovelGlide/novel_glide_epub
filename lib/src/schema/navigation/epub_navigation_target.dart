@@ -1,7 +1,7 @@
 import 'package:quiver/collection.dart' as collections;
 import 'package:quiver/core.dart';
 
-import 'epub_metadata.dart';
+import 'epub_navigation_content.dart';
 import 'epub_navigation_label.dart';
 
 class EpubNavigationTarget {
@@ -26,18 +26,19 @@ class EpubNavigationTarget {
   }
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubNavigationTarget?;
-    if (otherAs == null) return false;
-
-    if (!(Id == otherAs.Id &&
-        Class == otherAs.Class &&
-        Value == otherAs.Value &&
-        PlayOrder == otherAs.PlayOrder &&
-        Content == otherAs.Content)) {
+  bool operator ==(Object other) {
+    if (other is! EpubNavigationTarget) {
       return false;
     }
 
-    return collections.listsEqual(NavigationLabels, otherAs.NavigationLabels);
+    if (!(Id == other.Id &&
+        Class == other.Class &&
+        Value == other.Value &&
+        PlayOrder == other.PlayOrder &&
+        Content == other.Content)) {
+      return false;
+    }
+
+    return collections.listsEqual(NavigationLabels, other.NavigationLabels);
   }
 }

@@ -23,16 +23,15 @@ class EpubPackage {
       ]);
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubPackage?;
-    if (otherAs == null) {
+  bool operator ==(Object other) {
+    if (other is! EpubPackage) {
       return false;
     }
 
-    return Version == otherAs.Version &&
-        Metadata == otherAs.Metadata &&
-        Manifest == otherAs.Manifest &&
-        Spine == otherAs.Spine &&
-        Guide == otherAs.Guide;
+    return Version == other.Version &&
+        Metadata == other.Metadata &&
+        Manifest == other.Manifest &&
+        Spine == other.Spine &&
+        Guide == other.Guide;
   }
 }

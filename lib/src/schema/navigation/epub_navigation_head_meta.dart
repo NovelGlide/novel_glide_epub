@@ -9,14 +9,13 @@ class EpubNavigationHeadMeta {
   int get hashCode => hash3(Name.hashCode, Content.hashCode, Scheme.hashCode);
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubNavigationHeadMeta?;
-    if (otherAs == null) {
+  bool operator ==(Object other) {
+    if (other is! EpubNavigationHeadMeta) {
       return false;
     }
 
-    return Name == otherAs.Name &&
-        Content == otherAs.Content &&
-        Scheme == otherAs.Scheme;
+    return Name == other.Name &&
+        Content == other.Content &&
+        Scheme == other.Scheme;
   }
 }

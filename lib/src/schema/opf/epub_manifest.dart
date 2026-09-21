@@ -16,11 +16,10 @@ class EpubManifest {
   }
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubManifest?;
-    if (otherAs == null) {
+  bool operator ==(Object other) {
+    if (other is! EpubManifest) {
       return false;
     }
-    return collections.listsEqual(Items, otherAs.Items);
+    return collections.listsEqual(Items, other.Items);
   }
 }

@@ -14,7 +14,10 @@ class EpubChapter {
     var objects = [
       Title.hashCode,
       ContentFileName.hashCode,
-      OtherContentFileNames.hashCode,
+      // By ELEMENT, like every other collection field here: the list is
+      // handed to each instance fresh, so hashing the list object would give
+      // two chapters with identical data two different hash codes.
+      ...OtherContentFileNames.map((fileName) => fileName.hashCode),
       Anchor.hashCode,
       HtmlContent.hashCode,
       ...SubChapters?.map((subChapter) => subChapter.hashCode) ?? [0],
@@ -23,17 +26,15 @@ class EpubChapter {
   }
 
   @override
-  bool operator ==(other) {
-    if (other is! EpubChapter) {
-      return false;
-    }
-    return Title == other.Title &&
-        ContentFileName == other.ContentFileName &&
-        OtherContentFileNames == other.OtherContentFileNames &&
-        Anchor == other.Anchor &&
-        HtmlContent == other.HtmlContent &&
-        collections.listsEqual(SubChapters, other.SubChapters);
-  }
+  bool operator ==(Object other) =>
+      other is EpubChapter &&
+      Title == other.Title &&
+      ContentFileName == other.ContentFileName &&
+      collections.listsEqual(
+          OtherContentFileNames, other.OtherContentFileNames) &&
+      Anchor == other.Anchor &&
+      HtmlContent == other.HtmlContent &&
+      collections.listsEqual(SubChapters, other.SubChapters);
 
   @override
   String toString() {

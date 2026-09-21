@@ -12,10 +12,11 @@ class EpubNavigationMap {
   }
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubNavigationMap?;
-    if (otherAs == null) return false;
+  bool operator ==(Object other) {
+    if (other is! EpubNavigationMap) {
+      return false;
+    }
 
-    return collections.listsEqual(Points, otherAs.Points);
+    return collections.listsEqual(Points, other.Points);
   }
 }

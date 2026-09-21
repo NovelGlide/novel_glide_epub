@@ -30,19 +30,23 @@ class EpubBook {
   }
 
   @override
-  bool operator ==(other) {
-    if (other is! EpubBook) {
-      return false;
-    }
+  bool operator ==(Object other) =>
+      other is EpubBook &&
+      Title == other.Title &&
+      Author == other.Author &&
+      collections.listsEqual(AuthorList, other.AuthorList) &&
+      Schema == other.Schema &&
+      Content == other.Content &&
+      _coversEqual(CoverImage, other.CoverImage) &&
+      collections.listsEqual(Chapters, other.Chapters);
 
-    return Title == other.Title &&
-        Author == other.Author &&
-        collections.listsEqual(AuthorList, other.AuthorList) &&
-        Schema == other.Schema &&
-        Content == other.Content &&
-        ((CoverImage == null && other.CoverImage == null) ||
-            (collections.listsEqual(
-                CoverImage!.getBytes(), other.CoverImage!.getBytes()))) &&
-        collections.listsEqual(Chapters, other.Chapters);
+  /// Two covers match when neither book has one, or when both decode to the
+  /// same bytes. A cover on one side only is a DIFFERENCE, not an error — the
+  /// comparison answers false instead of dereferencing the absent side.
+  static bool _coversEqual(Image? cover, Image? other) {
+    if (cover == null || other == null) {
+      return cover == null && other == null;
+    }
+    return collections.listsEqual(cover.getBytes(), other.getBytes());
   }
 }

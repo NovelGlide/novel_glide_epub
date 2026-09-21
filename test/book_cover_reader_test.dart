@@ -263,7 +263,8 @@ void main() {
 
     // TC-COV-13 [Error guessing]: the cover is declared and classified as an
     // image, but the archive entry is missing — the case the try/catch exists
-    // for. A book with a broken cover must still be openable.
+    // for, and the one that keeps its `on EpubException` honest now that the
+    // catch is typed. A book with a broken cover must still be openable.
     test(
         'TC-COV-13 [Error guessing]: a declared cover missing from the '
         'archive yields null bytes rather than throwing', () async {

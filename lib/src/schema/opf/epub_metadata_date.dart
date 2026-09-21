@@ -8,9 +8,10 @@ class EpubMetadataDate {
   int get hashCode => hash2(Date.hashCode, Event.hashCode);
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubMetadataDate?;
-    if (otherAs == null) return false;
-    return Date == otherAs.Date && Event == otherAs.Event;
+  bool operator ==(Object other) {
+    if (other is! EpubMetadataDate) {
+      return false;
+    }
+    return Date == other.Date && Event == other.Event;
   }
 }

@@ -12,10 +12,11 @@ class EpubNavigationPageList {
   }
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubNavigationPageList?;
-    if (otherAs == null) return false;
+  bool operator ==(Object other) {
+    if (other is! EpubNavigationPageList) {
+      return false;
+    }
 
-    return collections.listsEqual(Targets, otherAs.Targets);
+    return collections.listsEqual(Targets, other.Targets);
   }
 }

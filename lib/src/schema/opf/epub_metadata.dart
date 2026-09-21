@@ -49,30 +49,37 @@ class EpubMetadata {
     return hashObjects(objects);
   }
 
+  /// The fifteen Dublin Core lists are compared in three groups, one per
+  /// question the group answers, so no single unit carries all of them.
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubMetadata?;
-    if (otherAs == null) return false;
-    if (Description != otherAs.Description) return false;
+  bool operator ==(Object other) =>
+      other is EpubMetadata &&
+      Description == other.Description &&
+      collections.listsEqual(MetaItems, other.MetaItems) &&
+      _attributionEqual(other) &&
+      _classificationEqual(other) &&
+      _provenanceEqual(other);
 
-    if (!collections.listsEqual(Titles, otherAs.Titles) ||
-        !collections.listsEqual(Creators, otherAs.Creators) ||
-        !collections.listsEqual(Subjects, otherAs.Subjects) ||
-        !collections.listsEqual(Publishers, otherAs.Publishers) ||
-        !collections.listsEqual(Contributors, otherAs.Contributors) ||
-        !collections.listsEqual(Dates, otherAs.Dates) ||
-        !collections.listsEqual(Types, otherAs.Types) ||
-        !collections.listsEqual(Formats, otherAs.Formats) ||
-        !collections.listsEqual(Identifiers, otherAs.Identifiers) ||
-        !collections.listsEqual(Sources, otherAs.Sources) ||
-        !collections.listsEqual(Languages, otherAs.Languages) ||
-        !collections.listsEqual(Relations, otherAs.Relations) ||
-        !collections.listsEqual(Coverages, otherAs.Coverages) ||
-        !collections.listsEqual(Rights, otherAs.Rights) ||
-        !collections.listsEqual(MetaItems, otherAs.MetaItems)) {
-      return false;
-    }
+  /// Who made this and when — the elements that credit the work.
+  bool _attributionEqual(EpubMetadata other) =>
+      collections.listsEqual(Titles, other.Titles) &&
+      collections.listsEqual(Creators, other.Creators) &&
+      collections.listsEqual(Contributors, other.Contributors) &&
+      collections.listsEqual(Publishers, other.Publishers) &&
+      collections.listsEqual(Dates, other.Dates);
 
-    return true;
-  }
+  /// What kind of thing this is — the elements a catalogue files it under.
+  bool _classificationEqual(EpubMetadata other) =>
+      collections.listsEqual(Subjects, other.Subjects) &&
+      collections.listsEqual(Types, other.Types) &&
+      collections.listsEqual(Formats, other.Formats) &&
+      collections.listsEqual(Languages, other.Languages) &&
+      collections.listsEqual(Coverages, other.Coverages);
+
+  /// Where this came from and on what terms.
+  bool _provenanceEqual(EpubMetadata other) =>
+      collections.listsEqual(Identifiers, other.Identifiers) &&
+      collections.listsEqual(Sources, other.Sources) &&
+      collections.listsEqual(Relations, other.Relations) &&
+      collections.listsEqual(Rights, other.Rights);
 }

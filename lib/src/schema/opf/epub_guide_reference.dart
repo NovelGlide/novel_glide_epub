@@ -9,15 +9,12 @@ class EpubGuideReference {
   int get hashCode => hash3(Type.hashCode, Title.hashCode, Href.hashCode);
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubGuideReference?;
-    if (otherAs == null) {
+  bool operator ==(Object other) {
+    if (other is! EpubGuideReference) {
       return false;
     }
 
-    return Type == otherAs.Type &&
-        Title == otherAs.Title &&
-        Href == otherAs.Href;
+    return Type == other.Type && Title == other.Title && Href == other.Href;
   }
 
   @override

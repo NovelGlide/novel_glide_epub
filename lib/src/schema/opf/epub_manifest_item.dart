@@ -25,22 +25,27 @@ class EpubManifestItem {
       ]);
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubManifestItem?;
-    if (otherAs == null) {
-      return false;
-    }
+  bool operator ==(Object other) =>
+      other is EpubManifestItem &&
+      _describesSameResource(other) &&
+      _hasSameFallbackChain(other);
 
-    return Id == otherAs.Id &&
-        Href == otherAs.Href &&
-        MediaType == otherAs.MediaType &&
-        MediaOverlay == otherAs.MediaOverlay &&
-        RequiredNamespace == otherAs.RequiredNamespace &&
-        RequiredModules == otherAs.RequiredModules &&
-        Fallback == otherAs.Fallback &&
-        FallbackStyle == otherAs.FallbackStyle &&
-        Properties == otherAs.Properties;
-  }
+  /// The half of the item that says WHAT it is: the resource it points at and
+  /// how a reading system is meant to treat it.
+  bool _describesSameResource(EpubManifestItem other) =>
+      Id == other.Id &&
+      Href == other.Href &&
+      MediaType == other.MediaType &&
+      MediaOverlay == other.MediaOverlay &&
+      Properties == other.Properties;
+
+  /// The half that says what to do when the resource CANNOT be used: the
+  /// EPUB2 fallback and required-module attributes.
+  bool _hasSameFallbackChain(EpubManifestItem other) =>
+      Fallback == other.Fallback &&
+      FallbackStyle == other.FallbackStyle &&
+      RequiredNamespace == other.RequiredNamespace &&
+      RequiredModules == other.RequiredModules;
 
   @override
   String toString() {

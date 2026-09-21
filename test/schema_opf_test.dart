@@ -3,15 +3,14 @@
 //
 // These are plain data holders, so they are exercised by direct construction;
 // `package_reader_test.dart` covers how the reader fills them. Two traits run
-// through the whole layer and are pinned once each rather than per class:
+// through the whole layer and are checked once each rather than per class:
 //
-//   * every `==` here is written `other as X?` — a CAST, not an `is` check —
-//     so an unrelated operand THROWS instead of returning false (TC-OPF-1);
+//   * every `==` here answers false for an unrelated operand (TC-OPF-1). They
+//     used to open with `other as X?` — a CAST, not an `is` check — and threw
+//     a `TypeError`; that is fixed, and TC-OPF-1 is now its regression guard.
 //   * several `hashCode` getters dereference their list fields with `!`, so a
-//     bare instance cannot be hashed (TC-OPF-2).
-//
-// Both are pinned AS THEY BEHAVE TODAY; each test says what must change when
-// the defect is fixed.
+//     bare instance cannot be hashed (TC-OPF-2). Still pinned AS IT BEHAVES
+//     TODAY, and that test says what must change when it is fixed.
 import 'package:novel_glide_epub/novel_glide_epub.dart';
 import 'package:novel_glide_epub/src/schema/opf/epub_metadata_contributor.dart';
 import 'package:novel_glide_epub/src/schema/opf/epub_metadata_date.dart';
@@ -157,6 +156,12 @@ EpubPackage seedPackage() => EpubPackage()
   ..Spine = seedSpine()
   ..Guide = seedGuide();
 
+/// An operand of an unrelated type, held as `Object` so each comparison below
+/// is a real runtime check. Typing it `Object` rather than inlining a literal
+/// is what keeps these tests free of an `unrelated_type_equality_checks`
+/// suppression, which this package's lint forbids outright.
+final Object unrelatedOperand = 'NGE-SEED-not-a-schema-object';
+
 /// A null operand, typed nullable so the analyzer does not fold the comparison
 /// away as a statically-known mismatch. Every class under test must answer
 /// false here rather than throw.
@@ -164,12 +169,12 @@ final Object? nullOperand = null;
 
 void main() {
   group('The OPF layer as a whole', () {
-    // TC-OPF-1 [Error guessing]: KNOWN DEFECT, shared by every class in this
-    // directory. `operator ==` opens with `other as X?`, so comparing against
-    // an unrelated type throws a `TypeError` where the Dart contract requires
-    // `false`. Only a null operand is handled, because `as X?` admits null.
-    // Pinned as it behaves today; once these are rewritten as `is!` checks,
-    // every row here flips from `throwsA` to `isFalse`.
+    // TC-OPF-1 [Error guessing]: the regression guard for a defect shared by
+    // every class in this directory. `operator ==` used to open with
+    // `other as X?`, so comparing against an unrelated type threw a
+    // `TypeError` where the Dart contract requires `false` — only a null
+    // operand was handled, because `as X?` admits null. Both operands now
+    // answer false.
     for (final MapEntry<String, Object> row in <String, Object>{
       'EpubPackage': seedPackage(),
       'EpubMetadata': seedMetadata(),
@@ -186,12 +191,9 @@ void main() {
       'EpubGuideReference': seedGuideReference(),
     }.entries) {
       test(
-          'TC-OPF-1 [Error guessing]: KNOWN DEFECT — ${row.key} == an '
-          'unrelated type throws instead of returning false', () {
-        expect(
-          () => row.value == 'NGE-SEED-not-a-schema-object',
-          throwsA(isA<TypeError>()),
-        );
+          'TC-OPF-1 [Error guessing]: ${row.key} == an unrelated type '
+          'returns false', () {
+        expect(row.value == unrelatedOperand, isFalse);
         expect(row.value == nullOperand, isFalse);
       });
     }

@@ -22,18 +22,19 @@ class EpubNavigationList {
   }
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubNavigationList?;
-    if (otherAs == null) return false;
-
-    if (!(Id == otherAs.Id && Class == otherAs.Class)) {
+  bool operator ==(Object other) {
+    if (other is! EpubNavigationList) {
       return false;
     }
 
-    if (!collections.listsEqual(NavigationLabels, otherAs.NavigationLabels)) {
+    if (!(Id == other.Id && Class == other.Class)) {
       return false;
     }
-    if (!collections.listsEqual(NavigationTargets, otherAs.NavigationTargets)) {
+
+    if (!collections.listsEqual(NavigationLabels, other.NavigationLabels)) {
+      return false;
+    }
+    if (!collections.listsEqual(NavigationTargets, other.NavigationTargets)) {
       return false;
     }
     return true;

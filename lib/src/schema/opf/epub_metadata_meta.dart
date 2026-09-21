@@ -20,14 +20,15 @@ class EpubMetadataMeta {
       ]);
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubMetadataMeta?;
-    if (otherAs == null) return false;
-    return Name == otherAs.Name &&
-        Content == otherAs.Content &&
-        Id == otherAs.Id &&
-        Refines == otherAs.Refines &&
-        Property == otherAs.Property &&
-        Scheme == otherAs.Scheme;
+  bool operator ==(Object other) {
+    if (other is! EpubMetadataMeta) {
+      return false;
+    }
+    return Name == other.Name &&
+        Content == other.Content &&
+        Id == other.Id &&
+        Refines == other.Refines &&
+        Property == other.Property &&
+        Scheme == other.Scheme;
   }
 }

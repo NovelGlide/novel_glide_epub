@@ -19,14 +19,14 @@ class EpubSpine {
   }
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubSpine?;
-    if (otherAs == null) return false;
-
-    if (!collections.listsEqual(Items, otherAs.Items)) {
+  bool operator ==(Object other) {
+    if (other is! EpubSpine) {
       return false;
     }
-    return ((TableOfContents == otherAs.TableOfContents) &&
-        (ltr == otherAs.ltr));
+
+    if (!collections.listsEqual(Items, other.Items)) {
+      return false;
+    }
+    return ((TableOfContents == other.TableOfContents) && (ltr == other.ltr));
   }
 }

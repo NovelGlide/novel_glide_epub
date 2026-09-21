@@ -9,11 +9,12 @@ class EpubMetadataIdentifier {
   int get hashCode => hash3(Id.hashCode, Scheme.hashCode, Identifier.hashCode);
 
   @override
-  bool operator ==(other) {
-    var otherAs = other as EpubMetadataIdentifier?;
-    if (otherAs == null) return false;
-    return Id == otherAs.Id &&
-        Scheme == otherAs.Scheme &&
-        Identifier == otherAs.Identifier;
+  bool operator ==(Object other) {
+    if (other is! EpubMetadataIdentifier) {
+      return false;
+    }
+    return Id == other.Id &&
+        Scheme == other.Scheme &&
+        Identifier == other.Identifier;
   }
 }

@@ -71,11 +71,12 @@ class BookCoverReader {
 
     try {
       return await coverImageContentFileRef.readContentAsBytes();
-    } on Exception {
-      // A declared-but-broken archive entry: treat as "no cover" rather than
-      // failing the whole open. Still `on Exception` rather than
-      // `on EpubException`, because the throws it has to catch live in
-      // `ref_entities/epub_content_file_ref.dart` and are still untyped.
+    } on EpubMissingArchiveEntryException {
+      // The one failure `readContentAsBytes` raises: the manifest declares a
+      // cover the ZIP does not carry. Treat it as "no cover" rather than
+      // failing the whole open. Deliberately this narrow — anything else is a
+      // defect in this package or in a dependency, and swallowing it here
+      // would hide it behind a book that merely looks coverless.
       return null;
     }
   }
