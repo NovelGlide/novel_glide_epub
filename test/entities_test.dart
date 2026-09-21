@@ -310,6 +310,20 @@ void main() {
       expect(seedByteFile() == seedTextFile(), isFalse);
       expect(seedByteFile() == nullOperand, isFalse);
     });
+
+    // TC-ENT-39 [Error guessing]: the regression guard for the `?? [0]`
+    // fallback in `hashCode`. TC-ENT-9 already shows two DIFFERING non-null
+    // `Content` lists compare unequal; nothing previously checked that they
+    // also hash differently, which is the one observable effect of that
+    // fallback surviving a mutation to `[0]` outright.
+    test(
+        'TC-ENT-39 [Error guessing]: differing non-null content yields a '
+        'differing hashCode', () {
+      final EpubByteContentFile a = seedByteFile(content: <int>[1, 2, 3]);
+      final EpubByteContentFile b = seedByteFile(content: <int>[9, 9, 9]);
+
+      expect(a.hashCode, isNot(equals(b.hashCode)));
+    });
   });
 
   group('EpubContent', () {
@@ -549,6 +563,21 @@ void main() {
       expect(a, equals(seedChapter(subChapters: null)));
       expect(a, isNot(equals(seedChapter())));
     });
+
+    // TC-ENT-40 [Error guessing]: the regression guard for the `?? [0]`
+    // fallback in `hashCode`. TC-ENT-21 already shows two DIFFERING non-null
+    // `SubChapters` lists compare unequal; nothing previously checked that
+    // they also hash differently.
+    test(
+        'TC-ENT-40 [Error guessing]: differing non-null SubChapters yields a '
+        'differing hashCode', () {
+      final EpubChapter a =
+          seedChapter(subChapters: <EpubChapter>[seedChapter(title: 'One')]);
+      final EpubChapter b =
+          seedChapter(subChapters: <EpubChapter>[seedChapter(title: 'Two')]);
+
+      expect(a.hashCode, isNot(equals(b.hashCode)));
+    });
   });
 
   group('EpubBook', () {
@@ -626,6 +655,30 @@ void main() {
     test('TC-ENT-32 [Boundary]: a bare book hashes and equals another', () {
       expect(EpubBook().hashCode, isA<int>());
       expect(EpubBook(), equals(EpubBook()));
+    });
+
+    // TC-ENT-41 [Error guessing]: the regression guard for the `?? [0]`
+    // fallback in `hashCode`. TC-ENT-27 already shows a differing AuthorList
+    // or Chapters breaks equality; nothing previously checked that two
+    // DIFFERING non-null values of either field also hash differently.
+    test(
+        'TC-ENT-41 [Error guessing]: differing non-null AuthorList yields a '
+        'differing hashCode', () {
+      final EpubBook a = seedBook()..AuthorList = <String?>['NGE-SEED One'];
+      final EpubBook b = seedBook()..AuthorList = <String?>['NGE-SEED Two'];
+
+      expect(a.hashCode, isNot(equals(b.hashCode)));
+    });
+
+    test(
+        'TC-ENT-42 [Error guessing]: differing non-null Chapters yields a '
+        'differing hashCode', () {
+      final EpubBook a = seedBook()
+        ..Chapters = <EpubChapter>[seedChapter(title: 'One')];
+      final EpubBook b = seedBook()
+        ..Chapters = <EpubChapter>[seedChapter(title: 'Two')];
+
+      expect(a.hashCode, isNot(equals(b.hashCode)));
     });
   });
 

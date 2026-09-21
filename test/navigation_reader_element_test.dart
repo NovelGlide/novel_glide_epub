@@ -430,6 +430,26 @@ void main() {
     }
   });
 
+  group('NavigationReader.readNavigationContentV3', () {
+    // TC-NAVU-29 [Equivalence partitioning]: `navBase` is prefixed onto a
+    // relative href, but ONLY when the href does not already carry it — every
+    // full-book EPUB3 fixture elsewhere in this suite uses hrefs that need
+    // the prefix, so the "already prefixed" combination (non-empty navBase
+    // AND an href that already starts with it) was never tried. Getting this
+    // wrong double-prefixes the href instead of leaving it alone.
+    test(
+        'TC-NAVU-29 [Equivalence partitioning]: an href already carrying '
+        'navBase is left unprefixed', () {
+      final EpubNavigationContent content =
+          const NavigationReader().readNavigationContentV3(
+        _element('<a id="c-1" href="OEBPS/chapter1.xhtml"/>'),
+        'OEBPS/',
+      );
+
+      expect(content.Source, 'OEBPS/chapter1.xhtml');
+    });
+  });
+
   group('NavigationReader.extractContentPath', () {
     // TC-NAVU-27 [Equivalence partitioning]: the helper joins a base and a
     // ref, normalising `./` and `../` segments. It has no caller inside the

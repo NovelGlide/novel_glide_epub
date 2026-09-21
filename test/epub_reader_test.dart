@@ -190,6 +190,13 @@ void main() {
         book.Content!.Fonts!['seed.ttf']!.ContentType,
         EpubContentType.FONT_TRUETYPE,
       );
+      // `readByteContentFile` copies three fields off the ref besides
+      // Content; only ContentType was ever asserted above ContentType.
+      expect(book.Content!.Fonts!['seed.ttf']!.FileName, 'seed.ttf');
+      expect(
+        book.Content!.Fonts!['seed.ttf']!.ContentMimeType,
+        'font/truetype',
+      );
     });
 
     // TC-RDR-7 [Equivalence partitioning]: AllFiles is the union — the
@@ -254,6 +261,47 @@ void main() {
           await EpubReader.readBook(Future<List<int>>.value(_buildFullBook()));
 
       expect(book.Title, 'NGE-SEED Read Book');
+    });
+
+    // TC-RDR-10 [Scenario/use-case]: `AllFiles` is not just a union of KEYS
+    // (TC-RDR-7 already covers that) — for every file a typed bucket claims,
+    // the `AllFiles` entry must be the SAME object as the bucketed one, not a
+    // second, independently byte-read copy. That is the one thing the
+    // fallback loop over `contentRef.AllFiles` cannot produce on its own,
+    // since it only fills keys the typed passes left untouched.
+    test(
+        'TC-RDR-10 [Scenario]: AllFiles shares the bucketed instance for '
+        'html, css, images and fonts', () async {
+      final EpubBook book = await EpubReader.readBook(_buildFullBook());
+
+      expect(
+        identical(
+          book.Content!.AllFiles!['chapter1.xhtml'],
+          book.Content!.Html!['chapter1.xhtml'],
+        ),
+        isTrue,
+      );
+      expect(
+        identical(
+          book.Content!.AllFiles!['styles.css'],
+          book.Content!.Css!['styles.css'],
+        ),
+        isTrue,
+      );
+      expect(
+        identical(
+          book.Content!.AllFiles!['cover.png'],
+          book.Content!.Images!['cover.png'],
+        ),
+        isTrue,
+      );
+      expect(
+        identical(
+          book.Content!.AllFiles!['seed.ttf'],
+          book.Content!.Fonts!['seed.ttf'],
+        ),
+        isTrue,
+      );
     });
   });
 }

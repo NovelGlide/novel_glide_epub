@@ -281,7 +281,17 @@ void main() {
       expect(content.Fonts!.keys, <String>['body.ttf']);
       expect(content.AllFiles, hasLength(5));
       expect(content.AllFiles!.keys, contains('toc.ncx'));
-      expect(EpubContentRef().AllFiles, isEmpty);
+
+      // Constructed DIRECTLY, not through `ContentReader.parseContentMap` —
+      // that path re-assigns all five maps itself (dead code masking the
+      // constructor), so only a bare `EpubContentRef()` actually exercises
+      // these five initialisers.
+      final EpubContentRef bare = EpubContentRef();
+      expect(bare.Html, isEmpty);
+      expect(bare.Css, isEmpty);
+      expect(bare.Images, isEmpty);
+      expect(bare.Fonts, isEmpty);
+      expect(bare.AllFiles, isEmpty);
     });
 
     // TC-REF-8 [Scenario/use-case]: two opens produce equal content refs.
@@ -748,6 +758,87 @@ void main() {
       final EpubBookRef bookRef = await EpubReader.openBook(bytes);
 
       expect(await bookRef.getChapters(), isEmpty);
+    });
+
+    // TC-REF-25 [Error guessing]: the regression guard for the `?? [0]`
+    // fallback in `hashCode`. TC-REF-22 already shows a differing
+    // SubChapters breaks equality; nothing previously checked that two
+    // DIFFERING non-null SubChapters lists also hash differently.
+    test(
+        'TC-REF-25 [Error guessing]: differing non-null SubChapters yields a '
+        'differing hashCode', () async {
+      Future<EpubChapterRef> chapterWithSubLabel(String label) async {
+        final Uint8List bytes = buildEpubArchive(
+          opfPath: 'OEBPS/content.opf',
+          textEntries: <String, String>{
+            'OEBPS/content.opf': _opf(),
+            'OEBPS/toc.ncx': _ncx(
+              navPoints: '<navPoint id="np-1" playOrder="1">'
+                  '<navLabel><text>NGE-SEED Chapter One</text></navLabel>'
+                  '<content src="chapter1.xhtml"/>'
+                  '<navPoint id="np-1-1" playOrder="2">'
+                  '<navLabel><text>$label</text></navLabel>'
+                  '<content src="chapter1.xhtml#$label"/>'
+                  '</navPoint>'
+                  '</navPoint>',
+            ),
+            'OEBPS/chapter1.xhtml': seedXhtml('NGE-SEED-CH1'),
+            'OEBPS/style.css': 'body { color: #000; }',
+          },
+          binaryEntries: <String, List<int>>{
+            'OEBPS/cover.png': seedPngBytes(),
+            'OEBPS/body.ttf': <int>[0, 1, 0, 0],
+          },
+        );
+        final EpubBookRef bookRef = await EpubReader.openBook(bytes);
+        return (await bookRef.getChapters()).single;
+      }
+
+      final EpubChapterRef a = await chapterWithSubLabel('NGE-SEED Sub One');
+      final EpubChapterRef b = await chapterWithSubLabel('NGE-SEED Sub Two');
+
+      expect(a.hashCode, isNot(equals(b.hashCode)));
+    });
+
+    // TC-REF-26 [Error guessing]: `readHtmlContent`'s shortcut is keyed on
+    // `OtherContentFileNames.isEmpty`, NOT `otherTextContentFileRefs.isEmpty`
+    // — the two lists are meant to stay in lockstep (`_addSplitSiblings`
+    // grows them together), but nothing previously pinned which one the
+    // shortcut actually reads. Desyncing them by hand is the only way to
+    // observe that.
+    test(
+        'TC-REF-26 [Error guessing]: the concurrent-read shortcut keys on '
+        'OtherContentFileNames, not otherTextContentFileRefs', () async {
+      final EpubBookRef bookRef = await EpubReader.openBook(
+        buildEpubArchive(
+          opfPath: 'OEBPS/content.opf',
+          textEntries: <String, String>{
+            'OEBPS/content.opf': _opf(
+              manifestItems: '<item id="ncx" href="toc.ncx" '
+                  'media-type="application/x-dtbncx+xml"/>'
+                  '<item id="ch1" href="chapter1.xhtml" '
+                  'media-type="application/xhtml+xml"/>'
+                  '<item id="extra" href="extra.xhtml" '
+                  'media-type="application/xhtml+xml"/>',
+            ),
+            'OEBPS/toc.ncx': _ncx(),
+            'OEBPS/chapter1.xhtml': seedXhtml('NGE-SEED-CH1'),
+            'OEBPS/extra.xhtml': seedXhtml('NGE-SEED-EXTRA'),
+          },
+        ),
+      );
+      final EpubChapterRef chapter = (await bookRef.getChapters()).single;
+      expect(chapter.OtherContentFileNames, isEmpty);
+
+      // Not a shape `_addSplitSiblings` produces on its own — set by hand to
+      // desync the two lists and isolate which one the shortcut reads.
+      chapter.otherTextContentFileRefs
+          .add(bookRef.Content!.Html!['extra.xhtml']!);
+
+      final String html = await chapter.readHtmlContent();
+
+      expect(html, contains('NGE-SEED-CH1'));
+      expect(html, isNot(contains('NGE-SEED-EXTRA')));
     });
   });
 }

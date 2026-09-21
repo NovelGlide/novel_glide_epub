@@ -278,5 +278,24 @@ void main() {
 
       expect(await bookRef.readCoverBytes(), isNull);
     });
+
+    // TC-COV-14 [Equivalence partitioning]: the EPUB3 manifest convention
+    // requires BOTH a cover-shaped name (id/`properties` of `cover` or
+    // `cover-image`) AND an image media type — TC-COV-8 only ever tries items
+    // that satisfy both at once. Here the sole image in the book satisfies
+    // neither: it is a real image, but named nothing cover-like, so it must
+    // not be picked up as the cover.
+    test(
+        'TC-COV-14 [Equivalence partitioning]: an image not named as a '
+        'cover is not picked up as one', () async {
+      final EpubBookRef bookRef = await EpubReader.openBook(
+        _buildCoverBook(
+          coverItems: '<item id="illustration" href="cover.png" '
+              'media-type="image/png"/>',
+        ),
+      );
+
+      expect(await bookRef.readCoverBytes(), isNull);
+    });
   });
 }
