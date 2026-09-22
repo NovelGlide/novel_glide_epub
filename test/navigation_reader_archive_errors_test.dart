@@ -120,7 +120,7 @@ void main() {
       'rejected as an empty TOC ID',
       () {
         expect(
-          () => EpubReader.openBook(
+          () => const EpubReader().openBook(
             _epub2With(
               ncx: _ncxWithout(''),
               opf: _opfEpub2(spine: '<spine><itemref idref="ch1"/></spine>'),
@@ -138,7 +138,7 @@ void main() {
       'rejected',
       () {
         expect(
-          () => EpubReader.openBook(
+          () => const EpubReader().openBook(
             _epub2With(
               ncx: _ncxWithout(''),
               opf: _opfEpub2(
@@ -161,7 +161,7 @@ void main() {
       'archive is rejected',
       () {
         expect(
-          () => EpubReader.openBook(_epub2With()),
+          () => const EpubReader().openBook(_epub2With()),
           _throwsMessageContaining('not found in archive'),
         );
       },
@@ -174,7 +174,7 @@ void main() {
       'rejected',
       () {
         expect(
-          () => EpubReader.openBook(
+          () => const EpubReader().openBook(
             _epub2With(ncx: '<?xml version="1.0"?><notNcx/>'),
           ),
           _throwsMessageContaining('does not contain ncx element'),
@@ -195,8 +195,8 @@ void main() {
         'rejected',
         () {
           expect(
-            () =>
-                EpubReader.openBook(_epub2With(ncx: _ncxWithout(missing.key))),
+            () => const EpubReader()
+                .openBook(_epub2With(ncx: _ncxWithout(missing.key))),
             _throwsMessageContaining(missing.value),
           );
         },
@@ -212,7 +212,7 @@ void main() {
       'item is rejected',
       () {
         expect(
-          () => EpubReader.openBook(
+          () => const EpubReader().openBook(
             _epub3With(
               nav: '<html><head/><body><nav><ol/></nav></body></html>',
               opf: _opfEpub3(
@@ -233,7 +233,7 @@ void main() {
       'from the archive is rejected',
       () {
         expect(
-          () => EpubReader.openBook(_epub3With()),
+          () => const EpubReader().openBook(_epub3With()),
           _throwsMessageContaining('not found in archive'),
         );
       },
@@ -245,7 +245,7 @@ void main() {
       'is rejected',
       () {
         expect(
-          () => EpubReader.openBook(
+          () => const EpubReader().openBook(
             _epub3With(nav: '<html><body><nav><ol/></nav></body></html>'),
           ),
           _throwsMessageContaining('does not contain head element'),
@@ -261,7 +261,7 @@ void main() {
       'is rejected',
       () {
         expect(
-          () => EpubReader.openBook(
+          () => const EpubReader().openBook(
             _epub3With(nav: '<html><head/><body><p>NGE-SEED</p></body></html>'),
           ),
           _throwsMessageContaining('does not contain nav element'),

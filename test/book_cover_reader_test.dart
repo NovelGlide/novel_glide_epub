@@ -78,7 +78,7 @@ void main() {
     // TC-COV-1 [Scenario/use-case]: the EPUB2 `<meta name="cover">` path
     // decodes to a real image.
     test('TC-COV-1 [Scenario]: a declared cover decodes to an image', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(
+      final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildCoverBook(metaItems: _coverMeta, coverItems: _coverImageItem),
       );
 
@@ -94,7 +94,8 @@ void main() {
     test(
         'TC-COV-2 [Equivalence partitioning]: a book with no meta items has '
         'no cover', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(_buildCoverBook());
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(_buildCoverBook());
 
       expect(await bookRef.readCover(), isNull);
     });
@@ -102,7 +103,7 @@ void main() {
     test(
         'TC-COV-3 [Equivalence partitioning]: meta items without a cover '
         'entry mean no cover', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(
+      final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildCoverBook(
           metaItems: '<meta name="calibre:series" content="NGE-SEED"/>',
         ),
@@ -115,7 +116,7 @@ void main() {
     // declared-but-unusable cover, which this path refuses loudly.
     test('TC-COV-4 [Boundary]: a cover meta with empty content is rejected',
         () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(
+      final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildCoverBook(metaItems: '<meta name="cover" content=""/>'),
       );
 
@@ -130,7 +131,7 @@ void main() {
     test(
         'TC-COV-5 [Error guessing]: a cover id absent from the manifest is '
         'rejected', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(
+      final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildCoverBook(
           metaItems: '<meta name="cover" content="nge-seed-absent"/>',
         ),
@@ -143,11 +144,11 @@ void main() {
     });
 
     // TC-COV-6 [Error guessing]: the cover manifest item exists but is not an
-    // image, so it never entered the Images map.
+    // image, so it never entered the images map.
     test(
         'TC-COV-6 [Error guessing]: a cover item that is not an image is '
         'rejected', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(
+      final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildCoverBook(
           metaItems: '<meta name="cover" content="cover-page"/>',
           coverItems: '<item id="cover-page" href="cover.xhtml" '
@@ -167,7 +168,7 @@ void main() {
     // archive bytes, undecoded.
     test('TC-COV-7 [Scenario]: the EPUB2 meta path returns the raw PNG bytes',
         () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(
+      final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildCoverBook(metaItems: _coverMeta, coverItems: _coverImageItem),
       );
 
@@ -199,8 +200,8 @@ void main() {
         'TC-COV-8 [Equivalence partitioning]: the manifest convention '
         '${row[0]} resolves the cover without a cover meta',
         () async {
-          final EpubBookRef bookRef =
-              await EpubReader.openBook(_buildCoverBook(coverItems: row[1]));
+          final EpubBookRef bookRef = await const EpubReader()
+              .openBook(_buildCoverBook(coverItems: row[1]));
 
           expect(await bookRef.readCoverBytes(), seedPngBytes());
         },
@@ -212,7 +213,8 @@ void main() {
     test(
         'TC-COV-9 [Equivalence partitioning]: a book with no cover at all '
         'yields null bytes', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(_buildCoverBook());
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(_buildCoverBook());
 
       expect(await bookRef.readCoverBytes(), isNull);
     });
@@ -222,7 +224,7 @@ void main() {
     test(
         'TC-COV-10 [Boundary]: an empty cover meta yields null bytes instead '
         'of throwing', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(
+      final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildCoverBook(metaItems: '<meta name="cover" content=""/>'),
       );
 
@@ -234,7 +236,7 @@ void main() {
     test(
         'TC-COV-11 [Error guessing]: a cover id absent from the manifest '
         'yields null bytes', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(
+      final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildCoverBook(
           metaItems: '<meta name="cover" content="nge-seed-absent"/>',
         ),
@@ -244,11 +246,11 @@ void main() {
     });
 
     // TC-COV-12 [Error guessing]: a cover item that is not an image is not in
-    // the Images map, so the href lookup misses.
+    // the images map, so the href lookup misses.
     test(
         'TC-COV-12 [Error guessing]: a non-image cover item yields null '
         'bytes', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(
+      final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildCoverBook(
           metaItems: '<meta name="cover" content="cover-page"/>',
           coverItems: '<item id="cover-page" href="cover.xhtml" '
@@ -266,7 +268,7 @@ void main() {
     test(
         'TC-COV-13 [Error guessing]: a declared cover missing from the '
         'archive yields null bytes rather than throwing', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(
+      final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildCoverBook(
           metaItems: _coverMeta,
           coverItems: _coverImageItem,
@@ -286,7 +288,7 @@ void main() {
     test(
         'TC-COV-14 [Equivalence partitioning]: an image not named as a '
         'cover is not picked up as one', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(
+      final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildCoverBook(
           coverItems: '<item id="illustration" href="cover.png" '
               'media-type="image/png"/>',

@@ -9,22 +9,24 @@ import 'epub_navigation_map.dart';
 import 'epub_navigation_page_list.dart';
 
 class EpubNavigation {
-  EpubNavigationHead? Head;
-  EpubNavigationDocTitle? DocTitle;
-  List<EpubNavigationDocAuthor>? DocAuthors;
-  EpubNavigationMap? NavMap;
-  EpubNavigationPageList? PageList;
-  List<EpubNavigationList>? NavLists;
+  EpubNavigationHead? head;
+  EpubNavigationDocTitle? docTitle;
+  List<EpubNavigationDocAuthor>? docAuthors;
+  EpubNavigationMap? navMap;
+  EpubNavigationPageList? pageList;
+  List<EpubNavigationList>? navLists;
 
   @override
   int get hashCode {
     final List<int> objects = <int>[
-      Head.hashCode,
-      DocTitle.hashCode,
-      NavMap.hashCode,
-      PageList.hashCode,
-      ...DocAuthors?.map((EpubNavigationDocAuthor author) => author.hashCode) ?? <int>[0],
-      ...NavLists?.map((EpubNavigationList navList) => navList.hashCode) ?? <int>[0]
+      head.hashCode,
+      docTitle.hashCode,
+      navMap.hashCode,
+      pageList.hashCode,
+      ...docAuthors?.map((EpubNavigationDocAuthor author) => author.hashCode) ??
+          <int>[0],
+      ...navLists?.map((EpubNavigationList navList) => navList.hashCode) ??
+          <int>[0]
     ];
     return hashObjects(objects);
   }
@@ -35,16 +37,16 @@ class EpubNavigation {
       return false;
     }
 
-    if (!collections.listsEqual(DocAuthors, other.DocAuthors)) {
+    if (!collections.listsEqual(docAuthors, other.docAuthors)) {
       return false;
     }
-    if (!collections.listsEqual(NavLists, other.NavLists)) {
+    if (!collections.listsEqual(navLists, other.navLists)) {
       return false;
     }
 
-    return Head == other.Head &&
-        DocTitle == other.DocTitle &&
-        NavMap == other.NavMap &&
-        PageList == other.PageList;
+    return head == other.head &&
+        docTitle == other.docTitle &&
+        navMap == other.navMap &&
+        pageList == other.pageList;
   }
 }

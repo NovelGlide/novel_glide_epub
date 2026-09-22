@@ -15,13 +15,10 @@ class ZipPathResolver {
     }
   }
 
-  String? combine(String? directory, String? fileName) {
-    var path;
-    if (directory == null || directory == '') {
-      path = fileName;
-    } else {
-      path = directory + '/' + fileName!;
-    }
+  String combine(String? directory, String? fileName) {
+    final String name = fileName!;
+    final String path =
+        directory == null || directory == '' ? name : '$directory/$name';
     return Uri.parse(path).normalizePath().path;
   }
 }

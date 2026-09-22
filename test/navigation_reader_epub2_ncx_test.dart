@@ -86,7 +86,7 @@ Uint8List _buildEpub2Book() => buildEpubArchive(
     );
 
 /// An NCX whose `navList` carries a `navLabel`. `EpubNavigationList` leaves
-/// `NavigationLabels` null and `NavigationReader.readNavigationList` adds to
+/// `navigationLabels` null and `NavigationReader.readNavigationList` adds to
 /// it through `!` — see TC-NCX-5.
 const String _ncxWithNavList = '<?xml version="1.0" encoding="UTF-8"?>'
     '<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">'
@@ -125,22 +125,22 @@ void main() {
       'and navMap',
       () async {
         final EpubBookRef bookRef =
-            await EpubReader.openBook(_buildEpub2Book());
-        final EpubNavigation navigation = bookRef.Schema!.Navigation!;
+            await const EpubReader().openBook(_buildEpub2Book());
+        final EpubNavigation navigation = bookRef.schema!.navigation!;
 
-        final List<EpubNavigationHeadMeta> meta = navigation.Head!.Metadata!;
+        final List<EpubNavigationHeadMeta> meta = navigation.head!.metadata!;
         expect(meta, hasLength(2));
-        expect(meta[0].Name, 'dtb:uid');
-        expect(meta[0].Content, 'urn:uuid:NGE-SEED-EPUB2-NCX');
-        expect(meta[1].Scheme, 'NGE-SEED-SCHEME');
+        expect(meta[0].name, 'dtb:uid');
+        expect(meta[0].content, 'urn:uuid:NGE-SEED-EPUB2-NCX');
+        expect(meta[1].scheme, 'NGE-SEED-SCHEME');
 
-        expect(navigation.DocTitle!.Titles, <String>['NGE-SEED NCX Doc Title']);
+        expect(navigation.docTitle!.titles, <String>['NGE-SEED NCX Doc Title']);
         expect(
-          navigation.DocAuthors!
-              .map((EpubNavigationDocAuthor a) => a.Authors!.single),
+          navigation.docAuthors!
+              .map((EpubNavigationDocAuthor a) => a.authors!.single),
           <String>['NGE-SEED Author One', 'NGE-SEED Author Two'],
         );
-        expect(navigation.NavMap!.Points, hasLength(2));
+        expect(navigation.navMap!.points, hasLength(2));
       },
     );
 
@@ -152,23 +152,23 @@ void main() {
       'resolve to chapters with anchors split off',
       () async {
         final EpubBookRef bookRef =
-            await EpubReader.openBook(_buildEpub2Book());
+            await const EpubReader().openBook(_buildEpub2Book());
         final EpubNavigationPoint first =
-            bookRef.Schema!.Navigation!.NavMap!.Points!.first;
+            bookRef.schema!.navigation!.navMap!.points!.first;
 
-        expect(first.Id, 'np-1');
-        expect(first.Class, 'chapter');
-        expect(first.PlayOrder, '1');
-        expect(first.NavigationLabels!.single.Text, 'NGE-SEED Chapter One');
-        expect(first.Content!.Source, 'chapter1.xhtml');
-        expect(first.ChildNavigationPoints!.single.Content!.Id, 'c-1-1');
+        expect(first.id, 'np-1');
+        expect(first.className, 'chapter');
+        expect(first.playOrder, '1');
+        expect(first.navigationLabels!.single.text, 'NGE-SEED Chapter One');
+        expect(first.content!.source, 'chapter1.xhtml');
+        expect(first.childNavigationPoints!.single.content!.id, 'c-1-1');
 
         final List<EpubChapterRef> chapters = await bookRef.getChapters();
         expect(chapters, hasLength(2));
-        expect(chapters[0].Title, 'NGE-SEED Chapter One');
-        expect(chapters[0].Anchor, isNull);
-        expect(chapters[0].SubChapters!.single.Anchor, 'sec-1-1');
-        expect(chapters[1].ContentFileName, 'chapter2.xhtml');
+        expect(chapters[0].title, 'NGE-SEED Chapter One');
+        expect(chapters[0].anchor, isNull);
+        expect(chapters[0].subChapters!.single.anchor, 'sec-1-1');
+        expect(chapters[1].contentFileName, 'chapter2.xhtml');
       },
     );
 
@@ -179,28 +179,28 @@ void main() {
       'skips foreign children',
       () async {
         final EpubBookRef bookRef =
-            await EpubReader.openBook(_buildEpub2Book());
+            await const EpubReader().openBook(_buildEpub2Book());
         final List<EpubNavigationPageTarget> targets =
-            bookRef.Schema!.Navigation!.PageList!.Targets!;
+            bookRef.schema!.navigation!.pageList!.targets!;
 
         expect(targets, hasLength(2));
-        expect(targets[0].Id, 'pt-1');
-        expect(targets[0].Value, '1');
-        expect(targets[0].Class, 'pagenum');
-        expect(targets[0].PlayOrder, '4');
-        expect(targets[0].Type, EpubNavigationPageTargetType.NORMAL);
-        expect(targets[0].NavigationLabels!.single.Text, '1');
-        expect(targets[0].Content!.Source, 'chapter1.xhtml#page-1');
-        expect(targets[1].Type, EpubNavigationPageTargetType.FRONT);
+        expect(targets[0].id, 'pt-1');
+        expect(targets[0].value, '1');
+        expect(targets[0].className, 'pagenum');
+        expect(targets[0].playOrder, '4');
+        expect(targets[0].type, EpubNavigationPageTargetType.normal);
+        expect(targets[0].navigationLabels!.single.text, '1');
+        expect(targets[0].content!.source, 'chapter1.xhtml#page-1');
+        expect(targets[1].type, EpubNavigationPageTargetType.front);
       },
     );
 
     // TC-NCX-4 [Equivalence partitioning]: an NCX with no pageList leaves
-    // PageList null rather than an empty structure — the other side of the
+    // pageList null rather than an empty structure — the other side of the
     // optional-pageList branch covered by TC-NCX-3.
     test(
       'TC-NCX-4 [Equivalence partitioning]: NCX without a pageList leaves '
-      'PageList null and still lists NavLists empty',
+      'pageList null and still lists navLists empty',
       () async {
         final Uint8List bytes = buildEpubArchive(
           opfPath: 'OEBPS/content.opf',
@@ -215,18 +215,18 @@ void main() {
           },
         );
 
-        final EpubBookRef bookRef = await EpubReader.openBook(bytes);
+        final EpubBookRef bookRef = await const EpubReader().openBook(bytes);
 
-        expect(bookRef.Schema!.Navigation!.PageList, isNull);
-        expect(bookRef.Schema!.Navigation!.NavLists, isEmpty);
+        expect(bookRef.schema!.navigation!.pageList, isNull);
+        expect(bookRef.schema!.navigation!.navLists, isEmpty);
       },
     );
 
     // TC-NCX-6 [Boundary value]: a childless navList is the one navList shape
     // that survives the walk (TC-NCX-5 covers the other side), so it is the
-    // only way NavLists is ever populated.
+    // only way navLists is ever populated.
     test(
-      'TC-NCX-6 [Boundary]: childless navList is collected into NavLists',
+      'TC-NCX-6 [Boundary]: childless navList is collected into navLists',
       () async {
         final Uint8List bytes = buildEpubArchive(
           opfPath: 'OEBPS/content.opf',
@@ -241,27 +241,27 @@ void main() {
           },
         );
 
-        final EpubBookRef bookRef = await EpubReader.openBook(bytes);
+        final EpubBookRef bookRef = await const EpubReader().openBook(bytes);
 
         final List<EpubNavigationList> navLists =
-            bookRef.Schema!.Navigation!.NavLists!;
+            bookRef.schema!.navigation!.navLists!;
         expect(navLists, hasLength(1));
-        expect(navLists.single.Id, 'nl-1');
-        expect(navLists.single.Class, 'illustrations');
+        expect(navLists.single.id, 'nl-1');
+        expect(navLists.single.className, 'illustrations');
       },
     );
 
     // TC-NCX-5 [Error guessing]: KNOWN DEFECT, pinned rather than fixed. An
     // NCX `navList` with a `navLabel` aborts the whole open with a null-check
-    // TypeError, because `EpubNavigationList.NavigationLabels` is never
+    // TypeError, because `EpubNavigationList.navigationLabels` is never
     // initialised while `readNavigationList` appends through `!`. Reported to
     // the caller; the fix belongs in lib/, which this suite must not touch.
     test(
       'TC-NCX-5 [Error guessing]: navList with a navLabel throws TypeError '
-      'on open (uninitialised NavigationLabels)',
+      'on open (uninitialised navigationLabels)',
       () {
         expect(
-          () => EpubReader.openBook(_buildEpub2BookWithNavList()),
+          () => const EpubReader().openBook(_buildEpub2BookWithNavList()),
           throwsA(isA<TypeError>()),
         );
       },

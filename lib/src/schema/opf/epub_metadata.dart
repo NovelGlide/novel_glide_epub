@@ -8,42 +8,44 @@ import 'epub_metadata_identifier.dart';
 import 'epub_metadata_meta.dart';
 
 class EpubMetadata {
-  List<String>? Titles;
-  List<EpubMetadataCreator>? Creators;
-  List<String>? Subjects;
-  String? Description;
-  List<String>? Publishers;
-  List<EpubMetadataContributor>? Contributors;
-  List<EpubMetadataDate>? Dates;
-  List<String>? Types;
-  List<String>? Formats;
-  List<EpubMetadataIdentifier>? Identifiers;
-  List<String>? Sources;
-  List<String>? Languages;
-  List<String>? Relations;
-  List<String>? Coverages;
-  List<String>? Rights;
-  List<EpubMetadataMeta>? MetaItems;
+  List<String>? titles;
+  List<EpubMetadataCreator>? creators;
+  List<String>? subjects;
+  String? description;
+  List<String>? publishers;
+  List<EpubMetadataContributor>? contributors;
+  List<EpubMetadataDate>? dates;
+  List<String>? types;
+  List<String>? formats;
+  List<EpubMetadataIdentifier>? identifiers;
+  List<String>? sources;
+  List<String>? languages;
+  List<String>? relations;
+  List<String>? coverages;
+  List<String>? rights;
+  List<EpubMetadataMeta>? metaItems;
 
   @override
   int get hashCode {
     final List<int> objects = <int>[
-      ...Titles!.map((String title) => title.hashCode),
-      ...Creators!.map((EpubMetadataCreator creator) => creator.hashCode),
-      ...Subjects!.map((String subject) => subject.hashCode),
-      ...Publishers!.map((String publisher) => publisher.hashCode),
-      ...Contributors!.map((EpubMetadataContributor contributor) => contributor.hashCode),
-      ...Dates!.map((EpubMetadataDate date) => date.hashCode),
-      ...Types!.map((String type) => type.hashCode),
-      ...Formats!.map((String format) => format.hashCode),
-      ...Identifiers!.map((EpubMetadataIdentifier identifier) => identifier.hashCode),
-      ...Sources!.map((String source) => source.hashCode),
-      ...Languages!.map((String language) => language.hashCode),
-      ...Relations!.map((String relation) => relation.hashCode),
-      ...Coverages!.map((String coverage) => coverage.hashCode),
-      ...Rights!.map((String right) => right.hashCode),
-      ...MetaItems!.map((EpubMetadataMeta metaItem) => metaItem.hashCode),
-      Description.hashCode
+      ...titles!.map((String title) => title.hashCode),
+      ...creators!.map((EpubMetadataCreator creator) => creator.hashCode),
+      ...subjects!.map((String subject) => subject.hashCode),
+      ...publishers!.map((String publisher) => publisher.hashCode),
+      ...contributors!
+          .map((EpubMetadataContributor contributor) => contributor.hashCode),
+      ...dates!.map((EpubMetadataDate date) => date.hashCode),
+      ...types!.map((String type) => type.hashCode),
+      ...formats!.map((String format) => format.hashCode),
+      ...identifiers!
+          .map((EpubMetadataIdentifier identifier) => identifier.hashCode),
+      ...sources!.map((String source) => source.hashCode),
+      ...languages!.map((String language) => language.hashCode),
+      ...relations!.map((String relation) => relation.hashCode),
+      ...coverages!.map((String coverage) => coverage.hashCode),
+      ...rights!.map((String right) => right.hashCode),
+      ...metaItems!.map((EpubMetadataMeta metaItem) => metaItem.hashCode),
+      description.hashCode
     ];
 
     return hashObjects(objects);
@@ -54,32 +56,32 @@ class EpubMetadata {
   @override
   bool operator ==(Object other) =>
       other is EpubMetadata &&
-      Description == other.Description &&
-      collections.listsEqual(MetaItems, other.MetaItems) &&
+      description == other.description &&
+      collections.listsEqual(metaItems, other.metaItems) &&
       _attributionEqual(other) &&
       _classificationEqual(other) &&
       _provenanceEqual(other);
 
   /// Who made this and when — the elements that credit the work.
   bool _attributionEqual(EpubMetadata other) =>
-      collections.listsEqual(Titles, other.Titles) &&
-      collections.listsEqual(Creators, other.Creators) &&
-      collections.listsEqual(Contributors, other.Contributors) &&
-      collections.listsEqual(Publishers, other.Publishers) &&
-      collections.listsEqual(Dates, other.Dates);
+      collections.listsEqual(titles, other.titles) &&
+      collections.listsEqual(creators, other.creators) &&
+      collections.listsEqual(contributors, other.contributors) &&
+      collections.listsEqual(publishers, other.publishers) &&
+      collections.listsEqual(dates, other.dates);
 
   /// What kind of thing this is — the elements a catalogue files it under.
   bool _classificationEqual(EpubMetadata other) =>
-      collections.listsEqual(Subjects, other.Subjects) &&
-      collections.listsEqual(Types, other.Types) &&
-      collections.listsEqual(Formats, other.Formats) &&
-      collections.listsEqual(Languages, other.Languages) &&
-      collections.listsEqual(Coverages, other.Coverages);
+      collections.listsEqual(subjects, other.subjects) &&
+      collections.listsEqual(types, other.types) &&
+      collections.listsEqual(formats, other.formats) &&
+      collections.listsEqual(languages, other.languages) &&
+      collections.listsEqual(coverages, other.coverages);
 
   /// Where this came from and on what terms.
   bool _provenanceEqual(EpubMetadata other) =>
-      collections.listsEqual(Identifiers, other.Identifiers) &&
-      collections.listsEqual(Sources, other.Sources) &&
-      collections.listsEqual(Relations, other.Relations) &&
-      collections.listsEqual(Rights, other.Rights);
+      collections.listsEqual(identifiers, other.identifiers) &&
+      collections.listsEqual(sources, other.sources) &&
+      collections.listsEqual(relations, other.relations) &&
+      collections.listsEqual(rights, other.rights);
 }

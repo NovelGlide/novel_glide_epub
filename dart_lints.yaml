@@ -32,9 +32,6 @@ options:
 areas:
   production:
     paths: ["lib/**"]
-    # The four stock-analyzer lints this package still trips are held out in
-    # `analysis_options.yaml` — `disable:` here only takes dart_lints' own
-    # rules.
 
   test:
     paths: ["test/**"]

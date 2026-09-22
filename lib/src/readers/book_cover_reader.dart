@@ -14,41 +14,44 @@ class BookCoverReader {
   const BookCoverReader();
 
   Future<images.Image?> readBookCover(EpubBookRef bookRef) async {
-    final List<EpubMetadataMeta>? metaItems = bookRef.Schema!.Package!.Metadata!.MetaItems;
+    final List<EpubMetadataMeta>? metaItems =
+        bookRef.schema!.package!.metadata!.metaItems;
     if (metaItems == null || metaItems.isEmpty) {
       return null;
     }
 
     final EpubMetadataMeta? coverMetaItem = metaItems.firstWhereOrNull(
         (EpubMetadataMeta metaItem) =>
-            metaItem.Name != null && metaItem.Name!.toLowerCase() == 'cover');
+            metaItem.name != null && metaItem.name!.toLowerCase() == 'cover');
     if (coverMetaItem == null) {
       return null;
     }
-    if (coverMetaItem.Content == null || coverMetaItem.Content!.isEmpty) {
+    if (coverMetaItem.content == null || coverMetaItem.content!.isEmpty) {
       throw const EpubMissingValueException(
           'Incorrect EPUB metadata: cover item content is missing.');
     }
 
-    final EpubManifestItem? coverManifestItem = bookRef.Schema!.Package!.Manifest!.Items!
+    final EpubManifestItem? coverManifestItem = bookRef
+        .schema!.package!.manifest!.items!
         .firstWhereOrNull((EpubManifestItem manifestItem) =>
-            manifestItem.Id!.toLowerCase() ==
-            coverMetaItem.Content!.toLowerCase());
+            manifestItem.id!.toLowerCase() ==
+            coverMetaItem.content!.toLowerCase());
     if (coverManifestItem == null) {
       throw EpubUnresolvedReferenceException(
-          'Incorrect EPUB manifest: item with ID = "${coverMetaItem.Content}" is missing.');
+          'Incorrect EPUB manifest: item with ID = "${coverMetaItem.content}" is missing.');
     }
 
     EpubByteContentFileRef? coverImageContentFileRef;
-    if (!bookRef.Content!.Images!.containsKey(coverManifestItem.Href)) {
+    if (!bookRef.content!.images!.containsKey(coverManifestItem.href)) {
       throw EpubUnresolvedReferenceException(
-          'Incorrect EPUB manifest: item with href = "${coverManifestItem.Href}" is missing.');
+          'Incorrect EPUB manifest: item with href = "${coverManifestItem.href}" is missing.');
     }
 
-    coverImageContentFileRef = bookRef.Content!.Images![coverManifestItem.Href];
+    coverImageContentFileRef = bookRef.content!.images![coverManifestItem.href];
     final Uint8List coverImageContent =
         await coverImageContentFileRef!.readContentAsBytes();
-    final images.Image? retval = images.decodeImage(Uint8List.fromList(coverImageContent));
+    final images.Image? retval =
+        images.decodeImage(Uint8List.fromList(coverImageContent));
     return retval;
   }
 
@@ -69,7 +72,7 @@ class BookCoverReader {
       return null;
     }
 
-    final Map<String, EpubByteContentFileRef>? images = bookRef.Content?.Images;
+    final Map<String, EpubByteContentFileRef>? images = bookRef.content?.images;
     if (images == null || !images.containsKey(coverHref)) {
       return null;
     }
@@ -96,28 +99,28 @@ class BookCoverReader {
   String? _coverHrefFromMetadata(EpubBookRef bookRef) {
     final String? coverId = _metaItemsOf(bookRef)
         .firstWhereOrNull((EpubMetadataMeta metaItem) =>
-            metaItem.Name?.toLowerCase() == 'cover')
-        ?.Content;
+            metaItem.name?.toLowerCase() == 'cover')
+        ?.content;
     if (coverId == null || coverId.isEmpty) {
       return null;
     }
 
     return _manifestItemsOf(bookRef)
         .firstWhereOrNull((EpubManifestItem manifestItem) =>
-            manifestItem.Id?.toLowerCase() == coverId.toLowerCase())
-        ?.Href;
+            manifestItem.id?.toLowerCase() == coverId.toLowerCase())
+        ?.href;
   }
 
   /// EPUB3 cover href: a manifest image item flagged as the cover via
   /// `properties` (or a conventional `cover` / `cover-image` id).
   String? _coverHrefFromManifest(EpubBookRef bookRef) =>
-      _manifestItemsOf(bookRef).firstWhereOrNull(_isCoverImageItem)?.Href;
+      _manifestItemsOf(bookRef).firstWhereOrNull(_isCoverImageItem)?.href;
 
   bool _isCoverImageItem(EpubManifestItem item) =>
-      item.Href != null && _namesCover(item) && _isImage(item);
+      item.href != null && _namesCover(item) && _isImage(item);
 
   bool _namesCover(EpubManifestItem item) =>
-      _isCoverName(item.Id) || _isCoverName(item.Properties);
+      _isCoverName(item.id) || _isCoverName(item.properties);
 
   bool _isCoverName(String? value) {
     final String? name = value?.toLowerCase();
@@ -125,12 +128,12 @@ class BookCoverReader {
   }
 
   bool _isImage(EpubManifestItem item) =>
-      item.MediaType?.toLowerCase().startsWith('image/') == true;
+      item.mediaType?.toLowerCase().startsWith('image/') == true;
 
   List<EpubMetadataMeta> _metaItemsOf(EpubBookRef bookRef) =>
-      bookRef.Schema?.Package?.Metadata?.MetaItems ??
+      bookRef.schema?.package?.metadata?.metaItems ??
       const <EpubMetadataMeta>[];
 
   List<EpubManifestItem> _manifestItemsOf(EpubBookRef bookRef) =>
-      bookRef.Schema?.Package?.Manifest?.Items ?? const <EpubManifestItem>[];
+      bookRef.schema?.package?.manifest?.items ?? const <EpubManifestItem>[];
 }

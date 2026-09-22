@@ -20,24 +20,24 @@ String _write(EpubMetadata? meta, EpubVersion? version) {
   return builder.buildDocument().toXmlString();
 }
 
-/// Metadata with every list allocated but empty — the state
+/// metadata with every list allocated but empty — the state
 /// `PackageReader.readMetadata` produces for an empty `<metadata>` element.
 EpubMetadata _emptyMetadata() => EpubMetadata()
-  ..Titles = <String>[]
-  ..Creators = <EpubMetadataCreator>[]
-  ..Subjects = <String>[]
-  ..Publishers = <String>[]
-  ..Contributors = <EpubMetadataContributor>[]
-  ..Dates = <EpubMetadataDate>[]
-  ..Types = <String>[]
-  ..Formats = <String>[]
-  ..Identifiers = <EpubMetadataIdentifier>[]
-  ..Sources = <String>[]
-  ..Languages = <String>[]
-  ..Relations = <String>[]
-  ..Coverages = <String>[]
-  ..Rights = <String>[]
-  ..MetaItems = <EpubMetadataMeta>[];
+  ..titles = <String>[]
+  ..creators = <EpubMetadataCreator>[]
+  ..subjects = <String>[]
+  ..publishers = <String>[]
+  ..contributors = <EpubMetadataContributor>[]
+  ..dates = <EpubMetadataDate>[]
+  ..types = <String>[]
+  ..formats = <String>[]
+  ..identifiers = <EpubMetadataIdentifier>[]
+  ..sources = <String>[]
+  ..languages = <String>[]
+  ..relations = <String>[]
+  ..coverages = <String>[]
+  ..rights = <String>[]
+  ..metaItems = <EpubMetadataMeta>[];
 
 void main() {
   group('const EpubMetadataWriter().writeMetadata structure', () {
@@ -45,7 +45,7 @@ void main() {
     // every `?.forEach` short-circuits and the element comes out bare — but it
     // still carries the two namespace declarations the rest of the OPF needs.
     test('TC-MDW-1 [Boundary]: an all-null metadata writes a bare element', () {
-      final String xml = _write(EpubMetadata(), EpubVersion.Epub2);
+      final String xml = _write(EpubMetadata(), EpubVersion.epub2);
 
       expect(xml, contains('xmlns:dc="http://purl.org/dc/elements/1.1/"'));
       expect(xml, contains('xmlns:opf="http://www.idpf.org/2007/opf"'));
@@ -55,7 +55,7 @@ void main() {
     // TC-MDW-2 [Boundary value]: allocated-but-empty is the other zero case —
     // each `forEach` runs and contributes nothing.
     test('TC-MDW-2 [Boundary]: empty lists write no children', () {
-      final String xml = _write(_emptyMetadata(), EpubVersion.Epub2);
+      final String xml = _write(_emptyMetadata(), EpubVersion.epub2);
 
       expect(XmlDocument.parse(xml).rootElement.childElements, isEmpty);
     });
@@ -64,7 +64,7 @@ void main() {
     // with `!`. A caller with no metadata gets a TypeError, not an empty
     // element.
     test('TC-MDW-3 [Error guessing]: a null metadata is not tolerated', () {
-      expect(() => _write(null, EpubVersion.Epub2), throwsA(isA<TypeError>()));
+      expect(() => _write(null, EpubVersion.epub2), throwsA(isA<TypeError>()));
     });
   });
 
@@ -74,17 +74,17 @@ void main() {
     test('TC-MDW-4 [Equivalence]: every text-only element lands in dc', () {
       final String xml = _write(
         _emptyMetadata()
-          ..Titles = <String>['NGE-SEED Title']
-          ..Subjects = <String>['NGE-SEED Subject']
-          ..Publishers = <String>['NGE-SEED Publisher']
-          ..Types = <String>['NGE-SEED Type']
-          ..Formats = <String>['NGE-SEED Format']
-          ..Sources = <String>['NGE-SEED Source']
-          ..Languages = <String>['NGE-SEED Language']
-          ..Relations = <String>['NGE-SEED Relation']
-          ..Coverages = <String>['NGE-SEED Coverage']
-          ..Rights = <String>['NGE-SEED Rights'],
-        EpubVersion.Epub2,
+          ..titles = <String>['NGE-SEED Title']
+          ..subjects = <String>['NGE-SEED Subject']
+          ..publishers = <String>['NGE-SEED Publisher']
+          ..types = <String>['NGE-SEED Type']
+          ..formats = <String>['NGE-SEED Format']
+          ..sources = <String>['NGE-SEED Source']
+          ..languages = <String>['NGE-SEED Language']
+          ..relations = <String>['NGE-SEED Relation']
+          ..coverages = <String>['NGE-SEED Coverage']
+          ..rights = <String>['NGE-SEED Rights'],
+        EpubVersion.epub2,
       );
 
       for (final List<String> pair in <List<String>>[
@@ -109,8 +109,8 @@ void main() {
     test('TC-MDW-5 [Scenario]: a repeated element writes once per entry', () {
       final String xml = _write(
         _emptyMetadata()
-          ..Titles = <String>['NGE-SEED First', 'NGE-SEED Second'],
-        EpubVersion.Epub2,
+          ..titles = <String>['NGE-SEED First', 'NGE-SEED Second'],
+        EpubVersion.epub2,
       );
 
       expect(
@@ -130,8 +130,8 @@ void main() {
       test('TC-MDW-6 [Equivalence]: description=${row[0]} is written=${row[1]}',
           () {
         final String xml = _write(
-          _emptyMetadata()..Description = row[0] as String?,
-          EpubVersion.Epub2,
+          _emptyMetadata()..description = row[0] as String?,
+          EpubVersion.epub2,
         );
 
         expect(xml.contains('<dc:description>'), row[1]);
@@ -145,13 +145,13 @@ void main() {
     test('TC-MDW-7 [Scenario]: a creator writes role, file-as and text', () {
       final String xml = _write(
         _emptyMetadata()
-          ..Creators = <EpubMetadataCreator>[
+          ..creators = <EpubMetadataCreator>[
             EpubMetadataCreator()
-              ..Creator = 'NGE-SEED Author'
-              ..Role = 'aut'
-              ..FileAs = 'SEED, NGE',
+              ..creator = 'NGE-SEED Author'
+              ..role = 'aut'
+              ..fileAs = 'SEED, NGE',
           ],
-        EpubVersion.Epub2,
+        EpubVersion.epub2,
       );
 
       expect(
@@ -167,10 +167,10 @@ void main() {
         'its text', () {
       final String xml = _write(
         _emptyMetadata()
-          ..Creators = <EpubMetadataCreator>[
-            EpubMetadataCreator()..Creator = 'NGE-SEED Author',
+          ..creators = <EpubMetadataCreator>[
+            EpubMetadataCreator()..creator = 'NGE-SEED Author',
           ],
-        EpubVersion.Epub2,
+        EpubVersion.epub2,
       );
 
       expect(xml, contains('<dc:creator>NGE-SEED Author</dc:creator>'));
@@ -182,13 +182,13 @@ void main() {
         () {
       final String xml = _write(
         _emptyMetadata()
-          ..Contributors = <EpubMetadataContributor>[
+          ..contributors = <EpubMetadataContributor>[
             EpubMetadataContributor()
-              ..Contributor = 'NGE-SEED Editor'
-              ..Role = 'edt'
-              ..FileAs = 'SEED, Editor',
+              ..contributor = 'NGE-SEED Editor'
+              ..role = 'edt'
+              ..fileAs = 'SEED, Editor',
           ],
-        EpubVersion.Epub2,
+        EpubVersion.epub2,
       );
 
       expect(
@@ -203,10 +203,10 @@ void main() {
         'only its text', () {
       final String xml = _write(
         _emptyMetadata()
-          ..Contributors = <EpubMetadataContributor>[
-            EpubMetadataContributor()..Contributor = 'NGE-SEED Editor',
+          ..contributors = <EpubMetadataContributor>[
+            EpubMetadataContributor()..contributor = 'NGE-SEED Editor',
           ],
-        EpubVersion.Epub2,
+        EpubVersion.epub2,
       );
 
       expect(xml, contains('<dc:contributor>NGE-SEED Editor</dc:contributor>'));
@@ -221,12 +221,12 @@ void main() {
       test('TC-MDW-11 [Equivalence]: a date with event=${row[0]}', () {
         final String xml = _write(
           _emptyMetadata()
-            ..Dates = <EpubMetadataDate>[
+            ..dates = <EpubMetadataDate>[
               EpubMetadataDate()
-                ..Date = '2026-09-21'
-                ..Event = row[0] as String?,
+                ..date = '2026-09-21'
+                ..event = row[0] as String?,
             ],
-          EpubVersion.Epub2,
+          EpubVersion.epub2,
         );
 
         expect(xml, contains('${row[1]}2026-09-21</dc:date>'));
@@ -241,13 +241,13 @@ void main() {
         'scheme', () {
       final String xml = _write(
         _emptyMetadata()
-          ..Identifiers = <EpubMetadataIdentifier>[
+          ..identifiers = <EpubMetadataIdentifier>[
             EpubMetadataIdentifier()
-              ..Identifier = 'NGE-SEED-ID'
-              ..Id = 'etextno'
-              ..Scheme = 'URI',
+              ..identifier = 'NGE-SEED-ID'
+              ..id = 'etextno'
+              ..scheme = 'URI',
           ],
-        EpubVersion.Epub2,
+        EpubVersion.epub2,
       );
 
       expect(
@@ -267,13 +267,13 @@ void main() {
           () {
         final String xml = _write(
           _emptyMetadata()
-            ..Identifiers = <EpubMetadataIdentifier>[
+            ..identifiers = <EpubMetadataIdentifier>[
               EpubMetadataIdentifier()
-                ..Identifier = 'NGE-SEED-ID'
-                ..Id = row[0] as String?
-                ..Scheme = row[1] as String?,
+                ..identifier = 'NGE-SEED-ID'
+                ..id = row[0] as String?
+                ..scheme = row[1] as String?,
             ],
-          EpubVersion.Epub2,
+          EpubVersion.epub2,
         );
 
         expect(xml, contains('${row[2]}NGE-SEED-ID</dc:identifier>'));
@@ -287,12 +287,12 @@ void main() {
     test('TC-MDW-14 [Scenario]: an EPUB2 meta writes name and content', () {
       final String xml = _write(
         _emptyMetadata()
-          ..MetaItems = <EpubMetadataMeta>[
+          ..metaItems = <EpubMetadataMeta>[
             EpubMetadataMeta()
-              ..Name = 'cover'
-              ..Content = 'cover-image',
+              ..name = 'cover'
+              ..content = 'cover-image',
           ],
-        EpubVersion.Epub2,
+        EpubVersion.epub2,
       );
 
       expect(xml, contains('<meta name="cover" content="cover-image"/>'));
@@ -309,12 +309,12 @@ void main() {
           () {
         final String xml = _write(
           _emptyMetadata()
-            ..MetaItems = <EpubMetadataMeta>[
+            ..metaItems = <EpubMetadataMeta>[
               EpubMetadataMeta()
-                ..Name = row[0] as String?
-                ..Content = row[1] as String?,
+                ..name = row[0] as String?
+                ..content = row[1] as String?,
             ],
-          EpubVersion.Epub2,
+          EpubVersion.epub2,
         );
 
         expect(xml, contains(row[2] as String));
@@ -326,14 +326,14 @@ void main() {
     test('TC-MDW-16 [Scenario]: an EPUB3 meta writes its four attributes', () {
       final String xml = _write(
         _emptyMetadata()
-          ..MetaItems = <EpubMetadataMeta>[
+          ..metaItems = <EpubMetadataMeta>[
             EpubMetadataMeta()
-              ..Id = 'meta-1'
-              ..Refines = '#etextno'
-              ..Property = 'identifier-type'
-              ..Scheme = 'onix:codelist5',
+              ..id = 'meta-1'
+              ..refines = '#etextno'
+              ..property = 'identifier-type'
+              ..scheme = 'onix:codelist5',
           ],
-        EpubVersion.Epub3,
+        EpubVersion.epub3,
       );
 
       expect(
@@ -345,8 +345,8 @@ void main() {
     // TC-MDW-17 [Boundary value]: all four EPUB3 attributes are optional.
     test('TC-MDW-17 [Boundary]: an empty EPUB3 meta writes a bare element', () {
       final String xml = _write(
-        _emptyMetadata()..MetaItems = <EpubMetadataMeta>[EpubMetadataMeta()],
-        EpubVersion.Epub3,
+        _emptyMetadata()..metaItems = <EpubMetadataMeta>[EpubMetadataMeta()],
+        EpubVersion.epub3,
       );
 
       expect(xml, contains('<meta/>'));
@@ -361,11 +361,11 @@ void main() {
         'attributes', () {
       final String xml = _write(
         _emptyMetadata()
-          ..MetaItems = <EpubMetadataMeta>[
+          ..metaItems = <EpubMetadataMeta>[
             EpubMetadataMeta()
-              ..Name = 'cover'
-              ..Content = 'cover-image'
-              ..Id = 'meta-1',
+              ..name = 'cover'
+              ..content = 'cover-image'
+              ..id = 'meta-1',
           ],
         null,
       );
@@ -380,12 +380,12 @@ void main() {
         () {
       final String xml = _write(
         _emptyMetadata()
-          ..MetaItems = <EpubMetadataMeta>[
+          ..metaItems = <EpubMetadataMeta>[
             EpubMetadataMeta()
-              ..Property = 'dcterms:modified'
-              ..Content = 'NGE-SEED-2026-09-21T00:00:00Z',
+              ..property = 'dcterms:modified'
+              ..content = 'NGE-SEED-2026-09-21T00:00:00Z',
           ],
-        EpubVersion.Epub3,
+        EpubVersion.epub3,
       );
 
       expect(xml, contains('<meta property="dcterms:modified"/>'));

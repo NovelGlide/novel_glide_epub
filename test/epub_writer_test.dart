@@ -100,10 +100,10 @@ Uint8List _seedArchive({
     );
 
 Future<EpubBook> _roundTrip(EpubBook book) async =>
-    EpubReader.readBook(EpubWriter.writeBook(book)!);
+    const EpubReader().readBook(const EpubWriter().writeBook(book)!);
 
 Archive _writtenArchive(EpubBook book) =>
-    ZipDecoder().decodeBytes(EpubWriter.writeBook(book)!);
+    ZipDecoder().decodeBytes(const EpubWriter().writeBook(book)!);
 
 String _entryText(Archive archive, String name) => convert.utf8.decode(
     archive.files.firstWhere((ArchiveFile f) => f.name == name).content
@@ -121,12 +121,13 @@ void main() {
     // field-by-field subset: anything ELSE the writer drops fails here.
     test('TC-WRT-1 [Scenario]: a written book reads back equal to the original',
         () async {
-      final EpubBook original = await EpubReader.readBook(_seedArchive());
+      final EpubBook original =
+          await const EpubReader().readBook(_seedArchive());
 
       final EpubBook reread = await _roundTrip(original);
       for (final EpubSpineItemRef item
-          in reread.Schema!.Package!.Spine!.Items!) {
-        item.IsLinear = !item.IsLinear!;
+          in reread.schema!.package!.spine!.items!) {
+        item.isLinear = !item.isLinear!;
       }
 
       expect(reread, original);
@@ -136,24 +137,25 @@ void main() {
     // regression names the part it broke instead of only saying "not equal".
     test('TC-WRT-2 [Scenario]: each part of the book survives independently',
         () async {
-      final EpubBook original = await EpubReader.readBook(_seedArchive());
+      final EpubBook original =
+          await const EpubReader().readBook(_seedArchive());
 
       final EpubBook reread = await _roundTrip(original);
 
-      expect(reread.Title, original.Title);
-      expect(reread.Author, original.Author);
-      expect(reread.AuthorList, original.AuthorList);
-      expect(reread.Schema!.ContentDirectoryPath,
-          original.Schema!.ContentDirectoryPath);
+      expect(reread.title, original.title);
+      expect(reread.author, original.author);
+      expect(reread.authorList, original.authorList);
+      expect(reread.schema!.contentDirectoryPath,
+          original.schema!.contentDirectoryPath);
       expect(
-          reread.Schema!.Package!.Metadata, original.Schema!.Package!.Metadata);
+          reread.schema!.package!.metadata, original.schema!.package!.metadata);
       expect(
-          reread.Schema!.Package!.Manifest, original.Schema!.Package!.Manifest);
-      expect(reread.Schema!.Package!.Guide, original.Schema!.Package!.Guide);
-      expect(reread.Schema!.Navigation, original.Schema!.Navigation);
-      expect(reread.Content, original.Content);
-      expect(reread.Chapters, original.Chapters);
-      expect(reread.CoverImage!.getBytes(), original.CoverImage!.getBytes());
+          reread.schema!.package!.manifest, original.schema!.package!.manifest);
+      expect(reread.schema!.package!.guide, original.schema!.package!.guide);
+      expect(reread.schema!.navigation, original.schema!.navigation);
+      expect(reread.content, original.content);
+      expect(reread.chapters, original.chapters);
+      expect(reread.coverImage!.getBytes(), original.coverImage!.getBytes());
     });
 
     // TC-WRT-9 [Scenario/use-case]: the parts of the spine that DO survive —
@@ -161,15 +163,15 @@ void main() {
     // from the linearity flag that does not.
     test('TC-WRT-9 [Scenario]: the spine keeps its toc, direction and order',
         () async {
-      final EpubBook original = await EpubReader.readBook(_seedArchive(
+      final EpubBook original = await const EpubReader().readBook(_seedArchive(
           spineItemRef: '<itemref idref="ch1"/><itemref idref="css"/>'));
 
       final EpubSpine spine =
-          (await _roundTrip(original)).Schema!.Package!.Spine!;
+          (await _roundTrip(original)).schema!.package!.spine!;
 
-      expect(spine.TableOfContents, 'ncx');
+      expect(spine.tableOfContents, 'ncx');
       expect(spine.ltr, isTrue);
-      expect(spine.Items!.map((EpubSpineItemRef i) => i.IdRef),
+      expect(spine.items!.map((EpubSpineItemRef i) => i.idRef),
           <String>['ch1', 'css']);
     });
   });
@@ -178,7 +180,7 @@ void main() {
     // TC-WRT-3 [Scenario/use-case]: the four kinds of entry the writer emits.
     test('TC-WRT-3 [Scenario]: emits mimetype, container, content and the OPF',
         () async {
-      final EpubBook book = await EpubReader.readBook(_seedArchive());
+      final EpubBook book = await const EpubReader().readBook(_seedArchive());
 
       final Archive archive = _writtenArchive(book);
 
@@ -199,7 +201,7 @@ void main() {
     // TC-WRT-4 [Boundary value]: `mimetype` must be stored uncompressed for the
     // archive to be a valid EPUB container.
     test('TC-WRT-4 [Boundary]: mimetype is stored uncompressed', () async {
-      final EpubBook book = await EpubReader.readBook(_seedArchive());
+      final EpubBook book = await const EpubReader().readBook(_seedArchive());
 
       final Archive archive = _writtenArchive(book);
 
@@ -209,7 +211,7 @@ void main() {
     // TC-WRT-5 [Scenario/use-case]: binary content goes through untouched
     // rather than being utf8-encoded like the text branch.
     test('TC-WRT-5 [Scenario]: image bytes are copied verbatim', () async {
-      final EpubBook book = await EpubReader.readBook(_seedArchive());
+      final EpubBook book = await const EpubReader().readBook(_seedArchive());
 
       final Archive archive = _writtenArchive(book);
 
@@ -225,12 +227,12 @@ void main() {
   group('EpubWriter.writeBook known losses', () {
     // TC-WRT-6 [Error guessing]: the container the writer emits names
     // `OEBPS/content.opf` as a constant, while the OPF itself is written under
-    // the book's own `ContentDirectoryPath`. A book whose OPF sat anywhere
+    // the book's own `contentDirectoryPath`. A book whose OPF sat anywhere
     // else comes back pointing at an entry that does not exist.
     test(
         'TC-WRT-6 [Error guessing]: a non-OEBPS content directory writes a '
         'container that points at nothing', () async {
-      final EpubBook book = await EpubReader.readBook(buildEpubArchive(
+      final EpubBook book = await const EpubReader().readBook(buildEpubArchive(
         opfPath: 'content.opf',
         textEntries: <String, String>{
           'content.opf': _opf(),
@@ -255,17 +257,19 @@ void main() {
     // `<guide>` — which is the norm in EPUB 3. Writing such a book throws.
     test('TC-WRT-7 [Error guessing]: a book with no guide cannot be written',
         () async {
-      final EpubBook book = await EpubReader.readBook(_seedArchive(guide: ''));
+      final EpubBook book =
+          await const EpubReader().readBook(_seedArchive(guide: ''));
 
-      expect(book.Schema!.Package!.Guide, isNull);
-      expect(() => EpubWriter.writeBook(book), throwsA(isA<TypeError>()));
+      expect(book.schema!.package!.guide, isNull);
+      expect(
+          () => const EpubWriter().writeBook(book), throwsA(isA<TypeError>()));
     });
 
     // TC-WRT-8 [Equivalence partitioning]: spine linearity inverts on EVERY
     // trip, for all three ways the attribute can arrive.
     // `PackageReader.readSpine` maps an absent `linear` AND `linear="no"` to
-    // `IsLinear = true`, leaving `linear="yes"` as the only false; the writer
-    // maps `IsLinear == true` back to `linear="yes"`. The pair has no fixed
+    // `isLinear = true`, leaving `linear="yes"` as the only false; the writer
+    // maps `isLinear == true` back to `linear="yes"`. The pair has no fixed
     // point, so a book cannot be written and read without the flag flipping.
     for (final List<Object> row in <List<Object>>[
       <Object>['<itemref idref="ch1"/>', 'absent', true],
@@ -273,13 +277,13 @@ void main() {
       <Object>['<itemref idref="ch1" linear="yes"/>', 'yes', false],
     ]) {
       test('TC-WRT-8 [Equivalence]: spine linear=${row[1]} inverts', () async {
-        final EpubBook original = await EpubReader.readBook(
-            _seedArchive(spineItemRef: row[0] as String));
-        expect(original.Schema!.Package!.Spine!.Items!.single.IsLinear, row[2]);
+        final EpubBook original = await const EpubReader()
+            .readBook(_seedArchive(spineItemRef: row[0] as String));
+        expect(original.schema!.package!.spine!.items!.single.isLinear, row[2]);
 
         final EpubBook reread = await _roundTrip(original);
 
-        expect(reread.Schema!.Package!.Spine!.Items!.single.IsLinear,
+        expect(reread.schema!.package!.spine!.items!.single.isLinear,
             !(row[2] as bool));
       });
     }

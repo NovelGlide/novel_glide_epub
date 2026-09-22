@@ -22,15 +22,15 @@ class EpubPackageWriter {
     builder.processing('xml', 'version="1.0"');
 
     builder.element('package', attributes: <String, String>{
-      'version': package.Version == EpubVersion.Epub2 ? '2.0' : '3.0',
+      'version': package.version == EpubVersion.epub2 ? '2.0' : '3.0',
       'unique-identifier': 'etextno',
     }, nest: () {
       builder.namespace(_namespace);
 
-      _metadataWriter.writeMetadata(builder, package.Metadata, package.Version);
-      _manifestWriter.writeManifest(builder, package.Manifest);
-      _spineWriter.writeSpine(builder, package.Spine!);
-      _guideWriter.writeGuide(builder, package.Guide);
+      _metadataWriter.writeMetadata(builder, package.metadata, package.version);
+      _manifestWriter.writeManifest(builder, package.manifest);
+      _spineWriter.writeSpine(builder, package.spine!);
+      _guideWriter.writeGuide(builder, package.guide);
     });
 
     return builder.buildDocument().toXmlString(pretty: false);

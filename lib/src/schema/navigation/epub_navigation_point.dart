@@ -5,22 +5,23 @@ import 'epub_navigation_content.dart';
 import 'epub_navigation_label.dart';
 
 class EpubNavigationPoint {
-  String? Id;
-  String? Class;
-  String? PlayOrder;
-  List<EpubNavigationLabel>? NavigationLabels;
-  EpubNavigationContent? Content;
-  List<EpubNavigationPoint>? ChildNavigationPoints;
+  String? id;
+  String? className;
+  String? playOrder;
+  List<EpubNavigationLabel>? navigationLabels;
+  EpubNavigationContent? content;
+  List<EpubNavigationPoint>? childNavigationPoints;
 
   @override
   int get hashCode {
     final List<int> objects = <int>[
-      Id.hashCode,
-      Class.hashCode,
-      PlayOrder.hashCode,
-      Content.hashCode,
-      ...NavigationLabels!.map((EpubNavigationLabel label) => label.hashCode),
-      ...ChildNavigationPoints!.map((EpubNavigationPoint point) => point.hashCode)
+      id.hashCode,
+      className.hashCode,
+      playOrder.hashCode,
+      content.hashCode,
+      ...navigationLabels!.map((EpubNavigationLabel label) => label.hashCode),
+      ...childNavigationPoints!
+          .map((EpubNavigationPoint point) => point.hashCode)
     ];
     return hashObjects(objects);
   }
@@ -31,23 +32,23 @@ class EpubNavigationPoint {
       return false;
     }
 
-    if (!collections.listsEqual(NavigationLabels, other.NavigationLabels)) {
+    if (!collections.listsEqual(navigationLabels, other.navigationLabels)) {
       return false;
     }
 
     if (!collections.listsEqual(
-        ChildNavigationPoints, other.ChildNavigationPoints)) {
+        childNavigationPoints, other.childNavigationPoints)) {
       return false;
     }
 
-    return Id == other.Id &&
-        Class == other.Class &&
-        PlayOrder == other.PlayOrder &&
-        Content == other.Content;
+    return id == other.id &&
+        className == other.className &&
+        playOrder == other.playOrder &&
+        content == other.content;
   }
 
   @override
   String toString() {
-    return 'Id: $Id, Content.Source: ${Content!.Source}';
+    return 'Id: $id, Content.Source: ${content!.source}';
   }
 }

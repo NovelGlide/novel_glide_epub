@@ -6,34 +6,36 @@ import 'package:quiver/core.dart';
 import 'epub_text_content_file_ref.dart';
 
 class EpubChapterRef {
-
   EpubChapterRef(this.epubTextContentFileRef);
-  // Referece to Text content reader.
+  // Referece to text content reader.
   EpubTextContentFileRef? epubTextContentFileRef;
   // If the chapter is split into multiple files, this list contains the references to content readers of the other files.
-  List<EpubTextContentFileRef> otherTextContentFileRefs = <EpubTextContentFileRef>[];
+  List<EpubTextContentFileRef> otherTextContentFileRefs =
+      <EpubTextContentFileRef>[];
 
-  String? Title;
-  String? ContentFileName;
-  String? Anchor;
-  List<EpubChapterRef>? SubChapters;
+  String? title;
+  String? contentFileName;
+  String? anchor;
+  List<EpubChapterRef>? subChapters;
   // If the chapter is split into multiple files, this list contains the names of the other files.
-  List<String> OtherContentFileNames = <String>[];
+  List<String> otherContentFileNames = <String>[];
 
   @override
   int get hashCode {
     final List<int> objects = <int>[
-      Title.hashCode,
-      ContentFileName.hashCode,
+      title.hashCode,
+      contentFileName.hashCode,
       // The two split-chapter lists are hashed by ELEMENT, like
-      // `SubChapters`: every ref gets its own list instance from the field
+      // `subChapters`: every ref gets its own list instance from the field
       // initialiser, so hashing the list object would give two refs over one
       // chapter two different hash codes.
-      ...OtherContentFileNames.map((String fileName) => fileName.hashCode),
-      ...otherTextContentFileRefs.map((EpubTextContentFileRef fileRef) => fileRef.hashCode),
-      Anchor.hashCode,
+      ...otherContentFileNames.map((String fileName) => fileName.hashCode),
+      ...otherTextContentFileRefs
+          .map((EpubTextContentFileRef fileRef) => fileRef.hashCode),
+      anchor.hashCode,
       epubTextContentFileRef.hashCode,
-      ...SubChapters?.map((EpubChapterRef subChapter) => subChapter.hashCode) ?? <int>[0],
+      ...subChapters?.map((EpubChapterRef subChapter) => subChapter.hashCode) ??
+          <int>[0],
     ];
     return hashObjects(objects);
   }
@@ -41,29 +43,31 @@ class EpubChapterRef {
   @override
   bool operator ==(Object other) =>
       other is EpubChapterRef &&
-      Title == other.Title &&
-      ContentFileName == other.ContentFileName &&
+      title == other.title &&
+      contentFileName == other.contentFileName &&
       collections.listsEqual(
-          OtherContentFileNames, other.OtherContentFileNames) &&
-      Anchor == other.Anchor &&
+          otherContentFileNames, other.otherContentFileNames) &&
+      anchor == other.anchor &&
       epubTextContentFileRef == other.epubTextContentFileRef &&
       collections.listsEqual(
           otherTextContentFileRefs, other.otherTextContentFileRefs) &&
-      collections.listsEqual(SubChapters, other.SubChapters);
+      collections.listsEqual(subChapters, other.subChapters);
 
   Future<String> readHtmlContent() async {
     // Started before the other parts so all of them read concurrently.
-    final Future<String> contentFuture = epubTextContentFileRef!.readContentAsText();
+    final Future<String> contentFuture =
+        epubTextContentFileRef!.readContentAsText();
     // Skips Future.wait for the common single-file chapter. The fall-through
     // below returns the same string when there is nothing to join, so the
     // shortcut is an optimisation, not a behaviour.
-    if (OtherContentFileNames.isEmpty) {
+    if (otherContentFileNames.isEmpty) {
       return contentFuture;
     }
 
     final List<String> contents = await Future.wait(<Future<String>>[
       contentFuture,
-      for (EpubTextContentFileRef otherContentFileRef in otherTextContentFileRefs)
+      for (EpubTextContentFileRef otherContentFileRef
+          in otherTextContentFileRefs)
         otherContentFileRef.readContentAsText(),
     ]);
     return contents.join();
@@ -71,6 +75,6 @@ class EpubChapterRef {
 
   @override
   String toString() {
-    return 'Title: $Title, Subchapter count: ${SubChapters!.length}';
+    return 'Title: $title, Subchapter count: ${subChapters!.length}';
   }
 }

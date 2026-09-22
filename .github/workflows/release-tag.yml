@@ -1,0 +1,66 @@
+name: release-tag
+
+# Tag the version in pubspec.yaml when it reached `main` untagged.
+#
+# WHY A WORKFLOW
+#   Commits land on this repo's `main` directly, and the NovelGlide app pins
+#   the package by tag. A tag cut by hand is the step that gets forgotten —
+#   the app then keeps resolving the previous release, with nothing anywhere
+#   to say it is stale. Here, bumping `version:` is the whole release: the
+#   push that carries it produces the tag.
+#
+# WHY IT RUNS format + lint + tests ITSELF RATHER THAN WAITING ON `test`
+#   A tag is the statement that a version is final, and tags here are never
+#   moved, so a tag cut on a red tree cannot be taken back. Chaining on the
+#   separate `test` workflow's result would mean a `workflow_run` trigger,
+#   where the commit that triggered it and the commit this job checks out are
+#   two different things; running the gates inline keeps the ref unambiguous.
+#   The whole suite takes under a minute, so running it twice per push is
+#   cheap. (kai-packages skips this step because its suite is a Flutter
+#   matrix; that reason does not carry over.)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tag:
+    # A manual dispatch may pick any branch; a release tag comes only from main.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # creates and pushes the tag
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the existing tags to know what's missing
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - run: dart pub get
+
+      - run: dart format --output=none --set-exit-if-changed .
+
+      - run: dart run dart_lints
+
+      - run: dart test
+
+      - name: Create the missing tag
+        id: plan
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          tool/release_tag.sh --create
+
+      - name: Push it
+        if: steps.plan.outputs.tag != ''
+        env:
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: git push origin "$TAG"

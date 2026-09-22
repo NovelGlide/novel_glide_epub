@@ -7,24 +7,24 @@ import 'epub_content.dart';
 import 'epub_schema.dart';
 
 class EpubBook {
-  String? Title;
-  String? Author;
-  List<String?>? AuthorList;
-  EpubSchema? Schema;
-  EpubContent? Content;
-  Image? CoverImage;
-  List<EpubChapter>? Chapters;
+  String? title;
+  String? author;
+  List<String?>? authorList;
+  EpubSchema? schema;
+  EpubContent? content;
+  Image? coverImage;
+  List<EpubChapter>? chapters;
 
   @override
   int get hashCode {
     final List<int> objects = <int>[
-      Title.hashCode,
-      Author.hashCode,
-      Schema.hashCode,
-      Content.hashCode,
-      ...CoverImage?.getBytes().map((int byte) => byte.hashCode) ?? <int>[0],
-      ...AuthorList?.map((String? author) => author.hashCode) ?? <int>[0],
-      ...Chapters?.map((EpubChapter chapter) => chapter.hashCode) ?? <int>[0],
+      title.hashCode,
+      author.hashCode,
+      schema.hashCode,
+      content.hashCode,
+      ...coverImage?.getBytes().map((int byte) => byte.hashCode) ?? <int>[0],
+      ...authorList?.map((String? author) => author.hashCode) ?? <int>[0],
+      ...chapters?.map((EpubChapter chapter) => chapter.hashCode) ?? <int>[0],
     ];
     return hashObjects(objects);
   }
@@ -32,13 +32,13 @@ class EpubBook {
   @override
   bool operator ==(Object other) =>
       other is EpubBook &&
-      Title == other.Title &&
-      Author == other.Author &&
-      collections.listsEqual(AuthorList, other.AuthorList) &&
-      Schema == other.Schema &&
-      Content == other.Content &&
-      _coversEqual(CoverImage, other.CoverImage) &&
-      collections.listsEqual(Chapters, other.Chapters);
+      title == other.title &&
+      author == other.author &&
+      collections.listsEqual(authorList, other.authorList) &&
+      schema == other.schema &&
+      content == other.content &&
+      _coversEqual(coverImage, other.coverImage) &&
+      collections.listsEqual(chapters, other.chapters);
 
   /// Two covers match when neither book has one, or when both decode to the
   /// same bytes. A cover on one side only is a DIFFERENCE, not an error — the

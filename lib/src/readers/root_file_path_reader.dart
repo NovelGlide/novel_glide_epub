@@ -31,8 +31,8 @@ class RootFilePathReader {
           'EPUB parsing error: Invalid epub container');
     }
 
-    final xml.XmlElement rootFileElement = packageElement.descendants.firstWhereOrNull(
-        (xml.XmlNode testElem) =>
+    final xml.XmlElement rootFileElement = packageElement.descendants
+        .firstWhereOrNull((xml.XmlNode testElem) =>
             (testElem is xml.XmlElement) &&
             'rootfile' == testElem.name.local) as xml.XmlElement;
 

@@ -1,11 +1,11 @@
 import 'package:quiver/core.dart';
 
 class EpubSpineItemRef {
-  String? IdRef;
-  bool? IsLinear;
+  String? idRef;
+  bool? isLinear;
 
   @override
-  int get hashCode => hash2(IdRef.hashCode, IsLinear.hashCode);
+  int get hashCode => hash2(idRef.hashCode, isLinear.hashCode);
 
   @override
   bool operator ==(Object other) {
@@ -13,11 +13,11 @@ class EpubSpineItemRef {
       return false;
     }
 
-    return IdRef == other.IdRef && IsLinear == other.IsLinear;
+    return idRef == other.idRef && isLinear == other.isLinear;
   }
 
   @override
   String toString() {
-    return 'IdRef: $IdRef';
+    return 'IdRef: $idRef';
   }
 }

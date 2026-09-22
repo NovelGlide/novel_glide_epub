@@ -23,9 +23,9 @@ EpubMetadataCreator seedCreator({
   String? role = 'aut',
 }) =>
     EpubMetadataCreator()
-      ..Creator = creator
-      ..FileAs = fileAs
-      ..Role = role;
+      ..creator = creator
+      ..fileAs = fileAs
+      ..role = role;
 
 EpubMetadataContributor seedContributor({
   String? contributor = 'NGE-SEED Contributor',
@@ -33,17 +33,17 @@ EpubMetadataContributor seedContributor({
   String? role = 'edt',
 }) =>
     EpubMetadataContributor()
-      ..Contributor = contributor
-      ..FileAs = fileAs
-      ..Role = role;
+      ..contributor = contributor
+      ..fileAs = fileAs
+      ..role = role;
 
 EpubMetadataDate seedDate({
   String? date = '2026-09-21',
   String? event = 'publication',
 }) =>
     EpubMetadataDate()
-      ..Date = date
-      ..Event = event;
+      ..date = date
+      ..event = event;
 
 EpubMetadataIdentifier seedIdentifier({
   String? id = 'uid',
@@ -51,9 +51,9 @@ EpubMetadataIdentifier seedIdentifier({
   String? identifier = 'urn:uuid:NGE-SEED-OPF',
 }) =>
     EpubMetadataIdentifier()
-      ..Id = id
-      ..Scheme = scheme
-      ..Identifier = identifier;
+      ..id = id
+      ..scheme = scheme
+      ..identifier = identifier;
 
 EpubMetadataMeta seedMeta({
   String? name = 'cover',
@@ -65,33 +65,33 @@ EpubMetadataMeta seedMeta({
   Map<String, String>? attributes,
 }) =>
     EpubMetadataMeta()
-      ..Name = name
-      ..Content = content
-      ..Id = id
-      ..Refines = refines
-      ..Property = property
-      ..Scheme = scheme
-      ..Attributes = attributes;
+      ..name = name
+      ..content = content
+      ..id = id
+      ..refines = refines
+      ..property = property
+      ..scheme = scheme
+      ..attributes = attributes;
 
 /// Every list field assigned, which is what `EpubMetadata.hashCode` requires
 /// (TC-OPF-2).
 EpubMetadata seedMetadata() => EpubMetadata()
-  ..Titles = <String>['NGE-SEED OPF Book']
-  ..Creators = <EpubMetadataCreator>[seedCreator()]
-  ..Subjects = <String>['NGE-SEED Subject']
-  ..Description = 'NGE-SEED description'
-  ..Publishers = <String>['NGE-SEED Press']
-  ..Contributors = <EpubMetadataContributor>[seedContributor()]
-  ..Dates = <EpubMetadataDate>[seedDate()]
-  ..Types = <String>['NGE-SEED Type']
-  ..Formats = <String>['application/epub+zip']
-  ..Identifiers = <EpubMetadataIdentifier>[seedIdentifier()]
-  ..Sources = <String>['NGE-SEED Source']
-  ..Languages = <String>['en']
-  ..Relations = <String>['NGE-SEED Relation']
-  ..Coverages = <String>['NGE-SEED Coverage']
-  ..Rights = <String>['NGE-SEED Rights']
-  ..MetaItems = <EpubMetadataMeta>[seedMeta()];
+  ..titles = <String>['NGE-SEED OPF Book']
+  ..creators = <EpubMetadataCreator>[seedCreator()]
+  ..subjects = <String>['NGE-SEED Subject']
+  ..description = 'NGE-SEED description'
+  ..publishers = <String>['NGE-SEED Press']
+  ..contributors = <EpubMetadataContributor>[seedContributor()]
+  ..dates = <EpubMetadataDate>[seedDate()]
+  ..types = <String>['NGE-SEED Type']
+  ..formats = <String>['application/epub+zip']
+  ..identifiers = <EpubMetadataIdentifier>[seedIdentifier()]
+  ..sources = <String>['NGE-SEED Source']
+  ..languages = <String>['en']
+  ..relations = <String>['NGE-SEED Relation']
+  ..coverages = <String>['NGE-SEED Coverage']
+  ..rights = <String>['NGE-SEED Rights']
+  ..metaItems = <EpubMetadataMeta>[seedMeta()];
 
 EpubManifestItem seedManifestItem({
   String? id = 'ch1',
@@ -105,23 +105,23 @@ EpubManifestItem seedManifestItem({
   String? properties = 'nav',
 }) =>
     EpubManifestItem()
-      ..Id = id
-      ..Href = href
-      ..MediaType = mediaType
-      ..MediaOverlay = mediaOverlay
-      ..RequiredNamespace = requiredNamespace
-      ..RequiredModules = requiredModules
-      ..Fallback = fallback
-      ..FallbackStyle = fallbackStyle
-      ..Properties = properties;
+      ..id = id
+      ..href = href
+      ..mediaType = mediaType
+      ..mediaOverlay = mediaOverlay
+      ..requiredNamespace = requiredNamespace
+      ..requiredModules = requiredModules
+      ..fallback = fallback
+      ..fallbackStyle = fallbackStyle
+      ..properties = properties;
 
 EpubSpineItemRef seedSpineItemRef({
   String? idRef = 'ch1',
   bool? isLinear = true,
 }) =>
     EpubSpineItemRef()
-      ..IdRef = idRef
-      ..IsLinear = isLinear;
+      ..idRef = idRef
+      ..isLinear = isLinear;
 
 EpubSpine seedSpine({
   String? tableOfContents = 'ncx',
@@ -129,9 +129,9 @@ EpubSpine seedSpine({
   List<EpubSpineItemRef>? items,
 }) =>
     EpubSpine()
-      ..TableOfContents = tableOfContents
+      ..tableOfContents = tableOfContents
       ..ltr = ltr
-      ..Items = items ?? <EpubSpineItemRef>[seedSpineItemRef()];
+      ..items = items ?? <EpubSpineItemRef>[seedSpineItemRef()];
 
 EpubGuideReference seedGuideReference({
   String? type = 'cover',
@@ -139,22 +139,22 @@ EpubGuideReference seedGuideReference({
   String? href = 'cover.xhtml',
 }) =>
     EpubGuideReference()
-      ..Type = type
-      ..Title = title
-      ..Href = href;
+      ..type = type
+      ..title = title
+      ..href = href;
 
 EpubGuide seedGuide({List<EpubGuideReference>? items}) =>
-    EpubGuide()..Items = items ?? <EpubGuideReference>[seedGuideReference()];
+    EpubGuide()..items = items ?? <EpubGuideReference>[seedGuideReference()];
 
 EpubManifest seedManifest({List<EpubManifestItem>? items}) =>
-    EpubManifest()..Items = items ?? <EpubManifestItem>[seedManifestItem()];
+    EpubManifest()..items = items ?? <EpubManifestItem>[seedManifestItem()];
 
 EpubPackage seedPackage() => EpubPackage()
-  ..Version = EpubVersion.Epub2
-  ..Metadata = seedMetadata()
-  ..Manifest = seedManifest()
-  ..Spine = seedSpine()
-  ..Guide = seedGuide();
+  ..version = EpubVersion.epub2
+  ..metadata = seedMetadata()
+  ..manifest = seedManifest()
+  ..spine = seedSpine()
+  ..guide = seedGuide();
 
 /// An operand of an unrelated type, held as `Object` so each comparison below
 /// is a real runtime check. Typing it `Object` rather than inlining a literal
@@ -215,9 +215,9 @@ void main() {
     // missing constructor rather than an inherent trait of the layer.
     test('TC-OPF-3 [Boundary]: constructor-initialised classes hash when bare',
         () {
-      expect(EpubGuide().Items, isEmpty);
+      expect(EpubGuide().items, isEmpty);
       expect(EpubGuide().hashCode, isA<int>());
-      expect(EpubManifest().Items, isEmpty);
+      expect(EpubManifest().items, isEmpty);
       expect(EpubManifest().hashCode, isA<int>());
       expect(EpubPackage().hashCode, isA<int>());
       expect(EpubManifestItem().hashCode, isA<int>());
@@ -263,9 +263,9 @@ void main() {
     // identical, and each of their three fields decides equality once.
     for (final MapEntry<String, EpubMetadataCreator> row
         in <String, EpubMetadataCreator>{
-      'Creator': seedCreator(creator: 'NGE-SEED Other'),
-      'FileAs': seedCreator(fileAs: 'NGE-SEED Other'),
-      'Role': seedCreator(role: 'ill'),
+      'creator': seedCreator(creator: 'NGE-SEED Other'),
+      'fileAs': seedCreator(fileAs: 'NGE-SEED Other'),
+      'role': seedCreator(role: 'ill'),
     }.entries) {
       test(
           'TC-OPF-5 [Equivalence partitioning]: a creator with a differing '
@@ -277,9 +277,9 @@ void main() {
 
     for (final MapEntry<String, EpubMetadataContributor> row
         in <String, EpubMetadataContributor>{
-      'Contributor': seedContributor(contributor: 'NGE-SEED Other'),
-      'FileAs': seedContributor(fileAs: 'NGE-SEED Other'),
-      'Role': seedContributor(role: 'ill'),
+      'contributor': seedContributor(contributor: 'NGE-SEED Other'),
+      'fileAs': seedContributor(fileAs: 'NGE-SEED Other'),
+      'role': seedContributor(role: 'ill'),
     }.entries) {
       test(
           'TC-OPF-5 [Equivalence partitioning]: a contributor with a '
@@ -294,8 +294,8 @@ void main() {
     // TC-OPF-6 [Equivalence partitioning]: both fields of a date decide.
     for (final MapEntry<String, EpubMetadataDate> row
         in <String, EpubMetadataDate>{
-      'Date': seedDate(date: '1999-01-01'),
-      'Event': seedDate(event: 'modification'),
+      'date': seedDate(date: '1999-01-01'),
+      'event': seedDate(event: 'modification'),
     }.entries) {
       test(
           'TC-OPF-6 [Equivalence partitioning]: a date with a differing '
@@ -307,9 +307,9 @@ void main() {
     // TC-OPF-7 [Equivalence partitioning]: all three fields of an identifier.
     for (final MapEntry<String, EpubMetadataIdentifier> row
         in <String, EpubMetadataIdentifier>{
-      'Id': seedIdentifier(id: 'other-uid'),
-      'Scheme': seedIdentifier(scheme: 'ISBN'),
-      'Identifier': seedIdentifier(identifier: 'urn:uuid:NGE-SEED-OTHER'),
+      'id': seedIdentifier(id: 'other-uid'),
+      'scheme': seedIdentifier(scheme: 'ISBN'),
+      'identifier': seedIdentifier(identifier: 'urn:uuid:NGE-SEED-OTHER'),
     }.entries) {
       test(
           'TC-OPF-7 [Equivalence partitioning]: an identifier with a '
@@ -330,12 +330,12 @@ void main() {
     // TC-OPF-9 [Equivalence partitioning]: the six string fields each decide.
     for (final MapEntry<String, EpubMetadataMeta> row
         in <String, EpubMetadataMeta>{
-      'Name': seedMeta(name: 'NGE-SEED-other'),
-      'Content': seedMeta(content: 'NGE-SEED-other'),
-      'Id': seedMeta(id: 'meta-2'),
-      'Refines': seedMeta(refines: '#other'),
-      'Property': seedMeta(property: 'dcterms:created'),
-      'Scheme': seedMeta(scheme: 'onix:codelist17'),
+      'name': seedMeta(name: 'NGE-SEED-other'),
+      'content': seedMeta(content: 'NGE-SEED-other'),
+      'id': seedMeta(id: 'meta-2'),
+      'refines': seedMeta(refines: '#other'),
+      'property': seedMeta(property: 'dcterms:created'),
+      'scheme': seedMeta(scheme: 'onix:codelist17'),
     }.entries) {
       test(
           'TC-OPF-9 [Equivalence partitioning]: a meta with a differing '
@@ -345,22 +345,22 @@ void main() {
       });
     }
 
-    // TC-OPF-10 [Error guessing]: `Attributes` is declared on the class but
+    // TC-OPF-10 [Error guessing]: `attributes` is declared on the class but
     // appears in neither `==` nor `hashCode`, so two metas that differ only in
     // their attribute bag compare EQUAL. That is deliberate enough to rely on
     // — the EPUB3 `<meta>` reader stores the raw attribute bag there for
     // callers, not for identity — but it is invisible from the class body, so
     // it is pinned here.
     test(
-        'TC-OPF-10 [Error guessing]: Attributes takes no part in equality or '
+        'TC-OPF-10 [Error guessing]: attributes takes no part in equality or '
         'hashCode', () {
       final EpubMetadataMeta withAttributes = seedMeta(
         attributes: <String, String>{'data-nge-seed': 'yes'},
       );
       final EpubMetadataMeta withoutAttributes = seedMeta();
 
-      expect(withAttributes.Attributes, isNotNull);
-      expect(withoutAttributes.Attributes, isNull);
+      expect(withAttributes.attributes, isNotNull);
+      expect(withoutAttributes.attributes, isNull);
       expect(withAttributes, equals(withoutAttributes));
       expect(withAttributes.hashCode, equals(withoutAttributes.hashCode));
     });
@@ -368,46 +368,46 @@ void main() {
 
   group('EpubMetadata', () {
     // TC-OPF-11 [Equivalence partitioning]: fifteen list fields plus
-    // `Description`, each decisive on its own. `Description` is checked before
+    // `description`, each decisive on its own. `description` is checked before
     // the lists, so it gets its own row at the head.
     test(
-        'TC-OPF-11 [Equivalence partitioning]: a differing Description is '
+        'TC-OPF-11 [Equivalence partitioning]: a differing description is '
         'unequal', () {
       final EpubMetadata other = seedMetadata()
-        ..Description = 'NGE-SEED other description';
+        ..description = 'NGE-SEED other description';
 
       expect(seedMetadata(), isNot(equals(other)));
     });
 
     for (final MapEntry<String, EpubMetadata Function(EpubMetadata)> row
         in <String, EpubMetadata Function(EpubMetadata)>{
-      'Titles': (EpubMetadata m) => m..Titles = <String>['NGE-SEED Other'],
-      'Creators': (EpubMetadata m) =>
-          m..Creators = <EpubMetadataCreator>[seedCreator(creator: 'Other')],
-      'Subjects': (EpubMetadata m) => m..Subjects = <String>['NGE-SEED Other'],
-      'Publishers': (EpubMetadata m) =>
-          m..Publishers = <String>['NGE-SEED Other'],
-      'Contributors': (EpubMetadata m) => m
-        ..Contributors = <EpubMetadataContributor>[
+      'titles': (EpubMetadata m) => m..titles = <String>['NGE-SEED Other'],
+      'creators': (EpubMetadata m) =>
+          m..creators = <EpubMetadataCreator>[seedCreator(creator: 'Other')],
+      'subjects': (EpubMetadata m) => m..subjects = <String>['NGE-SEED Other'],
+      'publishers': (EpubMetadata m) =>
+          m..publishers = <String>['NGE-SEED Other'],
+      'contributors': (EpubMetadata m) => m
+        ..contributors = <EpubMetadataContributor>[
           seedContributor(contributor: 'Other'),
         ],
-      'Dates': (EpubMetadata m) =>
-          m..Dates = <EpubMetadataDate>[seedDate(date: '1999-01-01')],
-      'Types': (EpubMetadata m) => m..Types = <String>['NGE-SEED Other'],
-      'Formats': (EpubMetadata m) => m..Formats = <String>['NGE-SEED Other'],
-      'Identifiers': (EpubMetadata m) => m
-        ..Identifiers = <EpubMetadataIdentifier>[
+      'dates': (EpubMetadata m) =>
+          m..dates = <EpubMetadataDate>[seedDate(date: '1999-01-01')],
+      'types': (EpubMetadata m) => m..types = <String>['NGE-SEED Other'],
+      'formats': (EpubMetadata m) => m..formats = <String>['NGE-SEED Other'],
+      'identifiers': (EpubMetadata m) => m
+        ..identifiers = <EpubMetadataIdentifier>[
           seedIdentifier(identifier: 'urn:uuid:NGE-SEED-OTHER'),
         ],
-      'Sources': (EpubMetadata m) => m..Sources = <String>['NGE-SEED Other'],
-      'Languages': (EpubMetadata m) => m..Languages = <String>['ja'],
-      'Relations': (EpubMetadata m) =>
-          m..Relations = <String>['NGE-SEED Other'],
-      'Coverages': (EpubMetadata m) =>
-          m..Coverages = <String>['NGE-SEED Other'],
-      'Rights': (EpubMetadata m) => m..Rights = <String>['NGE-SEED Other'],
-      'MetaItems': (EpubMetadata m) =>
-          m..MetaItems = <EpubMetadataMeta>[seedMeta(name: 'other')],
+      'sources': (EpubMetadata m) => m..sources = <String>['NGE-SEED Other'],
+      'languages': (EpubMetadata m) => m..languages = <String>['ja'],
+      'relations': (EpubMetadata m) =>
+          m..relations = <String>['NGE-SEED Other'],
+      'coverages': (EpubMetadata m) =>
+          m..coverages = <String>['NGE-SEED Other'],
+      'rights': (EpubMetadata m) => m..rights = <String>['NGE-SEED Other'],
+      'metaItems': (EpubMetadata m) =>
+          m..metaItems = <EpubMetadataMeta>[seedMeta(name: 'other')],
     }.entries) {
       test(
           'TC-OPF-11 [Equivalence partitioning]: a differing ${row.key} is '
@@ -423,21 +423,21 @@ void main() {
     // reader produces for an OPF carrying only a title, and they hash.
     test('TC-OPF-12 [Boundary]: fully empty lists still hash and compare', () {
       EpubMetadata empty() => EpubMetadata()
-        ..Titles = <String>[]
-        ..Creators = <EpubMetadataCreator>[]
-        ..Subjects = <String>[]
-        ..Publishers = <String>[]
-        ..Contributors = <EpubMetadataContributor>[]
-        ..Dates = <EpubMetadataDate>[]
-        ..Types = <String>[]
-        ..Formats = <String>[]
-        ..Identifiers = <EpubMetadataIdentifier>[]
-        ..Sources = <String>[]
-        ..Languages = <String>[]
-        ..Relations = <String>[]
-        ..Coverages = <String>[]
-        ..Rights = <String>[]
-        ..MetaItems = <EpubMetadataMeta>[];
+        ..titles = <String>[]
+        ..creators = <EpubMetadataCreator>[]
+        ..subjects = <String>[]
+        ..publishers = <String>[]
+        ..contributors = <EpubMetadataContributor>[]
+        ..dates = <EpubMetadataDate>[]
+        ..types = <String>[]
+        ..formats = <String>[]
+        ..identifiers = <EpubMetadataIdentifier>[]
+        ..sources = <String>[]
+        ..languages = <String>[]
+        ..relations = <String>[]
+        ..coverages = <String>[]
+        ..rights = <String>[]
+        ..metaItems = <EpubMetadataMeta>[];
 
       expect(empty(), equals(empty()));
       expect(empty().hashCode, equals(empty().hashCode));
@@ -449,15 +449,15 @@ void main() {
     // TC-OPF-13 [Equivalence partitioning]: all nine manifest-item fields.
     for (final MapEntry<String, EpubManifestItem> row
         in <String, EpubManifestItem>{
-      'Id': seedManifestItem(id: 'ch2'),
-      'Href': seedManifestItem(href: 'chapter2.xhtml'),
-      'MediaType': seedManifestItem(mediaType: 'text/css'),
-      'MediaOverlay': seedManifestItem(mediaOverlay: 'overlay-2'),
-      'RequiredNamespace': seedManifestItem(requiredNamespace: 'urn:other'),
-      'RequiredModules': seedManifestItem(requiredModules: 'other-module'),
-      'Fallback': seedManifestItem(fallback: 'fallback-2'),
-      'FallbackStyle': seedManifestItem(fallbackStyle: 'fallback-style-2'),
-      'Properties': seedManifestItem(properties: 'cover-image'),
+      'id': seedManifestItem(id: 'ch2'),
+      'href': seedManifestItem(href: 'chapter2.xhtml'),
+      'mediaType': seedManifestItem(mediaType: 'text/css'),
+      'mediaOverlay': seedManifestItem(mediaOverlay: 'overlay-2'),
+      'requiredNamespace': seedManifestItem(requiredNamespace: 'urn:other'),
+      'requiredModules': seedManifestItem(requiredModules: 'other-module'),
+      'fallback': seedManifestItem(fallback: 'fallback-2'),
+      'fallbackStyle': seedManifestItem(fallbackStyle: 'fallback-style-2'),
+      'properties': seedManifestItem(properties: 'cover-image'),
     }.entries) {
       test(
           'TC-OPF-13 [Equivalence partitioning]: an item with a differing '
@@ -509,8 +509,8 @@ void main() {
     // TC-OPF-16 [Equivalence partitioning]: both item-ref fields decide.
     for (final MapEntry<String, EpubSpineItemRef> row
         in <String, EpubSpineItemRef>{
-      'IdRef': seedSpineItemRef(idRef: 'ch2'),
-      'IsLinear': seedSpineItemRef(isLinear: false),
+      'idRef': seedSpineItemRef(idRef: 'ch2'),
+      'isLinear': seedSpineItemRef(isLinear: false),
     }.entries) {
       test(
           'TC-OPF-16 [Equivalence partitioning]: a spine item with a '
@@ -526,11 +526,11 @@ void main() {
       expect(EpubSpineItemRef().toString(), 'IdRef: null');
     });
 
-    // TC-OPF-18 [Equivalence partitioning]: the spine's three fields. `Items`
+    // TC-OPF-18 [Equivalence partitioning]: the spine's three fields. `items`
     // is checked first and short-circuits, so it is exercised on its own.
     for (final MapEntry<String, EpubSpine> row in <String, EpubSpine>{
-      'Items': seedSpine(items: <EpubSpineItemRef>[]),
-      'TableOfContents': seedSpine(tableOfContents: 'nav'),
+      'items': seedSpine(items: <EpubSpineItemRef>[]),
+      'tableOfContents': seedSpine(tableOfContents: 'nav'),
       'ltr': seedSpine(ltr: false),
     }.entries) {
       test(
@@ -557,9 +557,9 @@ void main() {
     // TC-OPF-20 [Equivalence partitioning]: all three reference fields.
     for (final MapEntry<String, EpubGuideReference> row
         in <String, EpubGuideReference>{
-      'Type': seedGuideReference(type: 'toc'),
-      'Title': seedGuideReference(title: 'NGE-SEED Other'),
-      'Href': seedGuideReference(href: 'toc.xhtml'),
+      'type': seedGuideReference(type: 'toc'),
+      'title': seedGuideReference(title: 'NGE-SEED Other'),
+      'href': seedGuideReference(href: 'toc.xhtml'),
     }.entries) {
       test(
           'TC-OPF-20 [Equivalence partitioning]: a guide reference with a '
@@ -589,12 +589,12 @@ void main() {
     // TC-OPF-23 [Equivalence partitioning]: all five fields decide.
     for (final MapEntry<String, EpubPackage Function(EpubPackage)> row
         in <String, EpubPackage Function(EpubPackage)>{
-      'Version': (EpubPackage p) => p..Version = EpubVersion.Epub3,
-      'Metadata': (EpubPackage p) =>
-          p..Metadata = (seedMetadata()..Titles = <String>['NGE-SEED Other']),
-      'Manifest': (EpubPackage p) => p..Manifest = EpubManifest(),
-      'Spine': (EpubPackage p) => p..Spine = seedSpine(ltr: false),
-      'Guide': (EpubPackage p) => p..Guide = EpubGuide(),
+      'version': (EpubPackage p) => p..version = EpubVersion.epub3,
+      'metadata': (EpubPackage p) =>
+          p..metadata = (seedMetadata()..titles = <String>['NGE-SEED Other']),
+      'manifest': (EpubPackage p) => p..manifest = EpubManifest(),
+      'spine': (EpubPackage p) => p..spine = seedSpine(ltr: false),
+      'guide': (EpubPackage p) => p..guide = EpubGuide(),
     }.entries) {
       test(
           'TC-OPF-23 [Equivalence partitioning]: a package with a differing '
@@ -615,10 +615,10 @@ void main() {
     });
 
     // TC-OPF-25 [Boundary value]: the two enum values are distinguished.
-    test('TC-OPF-25 [Boundary]: Epub2 and Epub3 packages are unequal', () {
+    test('TC-OPF-25 [Boundary]: epub2 and epub3 packages are unequal', () {
       expect(
-        EpubPackage()..Version = EpubVersion.Epub2,
-        isNot(equals(EpubPackage()..Version = EpubVersion.Epub3)),
+        EpubPackage()..version = EpubVersion.epub2,
+        isNot(equals(EpubPackage()..version = EpubVersion.epub3)),
       );
       expect(EpubVersion.values, hasLength(2));
     });

@@ -23,15 +23,17 @@ class SchemaReader {
 
     final String rootFilePath =
         (await _rootFilePathReader.getRootFilePath(epubArchive))!;
-    final String contentDirectoryPath = _pathResolver.getDirectoryPath(rootFilePath);
-    result.ContentDirectoryPath = contentDirectoryPath;
+    final String contentDirectoryPath =
+        _pathResolver.getDirectoryPath(rootFilePath);
+    result.contentDirectoryPath = contentDirectoryPath;
 
-    final EpubPackage package = await _packageReader.readPackage(epubArchive, rootFilePath);
-    result.Package = package;
+    final EpubPackage package =
+        await _packageReader.readPackage(epubArchive, rootFilePath);
+    result.package = package;
 
     final EpubNavigation navigation = await _navigationReader.readNavigation(
         epubArchive, contentDirectoryPath, package);
-    result.Navigation = navigation;
+    result.navigation = navigation;
 
     return result;
   }

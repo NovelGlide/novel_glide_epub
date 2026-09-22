@@ -10,13 +10,13 @@
 // instead sits at the ZIP root and content lives under a named subfolder,
 // that assumption eats the real content folder from the base, so every
 // nav-internal relative link resolves one folder too shallow.
-// `ContentReader.parseContentMap` keys `Content.Html` by the RAW manifest
-// href (not the resolved base), so the mis-resolved `ContentFileName` misses
+// `ContentReader.parseContentMap` keys `content.html` by the RAW manifest
+// href (not the resolved base), so the mis-resolved `contentFileName` misses
 // the lookup and `ChapterReader.getChaptersImpl` throws
 // `Exception('Incorrect EPUB manifest: item with href = "..." is missing.')`
 // for every navPoint — the whole TOC fails, not a single entry.
 //
-// Fixed shape: `navDirectory = ZipPathResolver().getDirectoryPath(tocManifestItem.Href!)`
+// Fixed shape: `navDirectory = ZipPathResolver().getDirectoryPath(tocManifestItem.href!)`
 // — the nav item's own href directory, independent of where the OPF sits.
 //
 // Fixtures are minimal synthetic EPUBs assembled in-memory with
@@ -287,24 +287,24 @@ void main() {
   group('NavigationReader EPUB3 nav base-path resolution', () {
     // TC-NAV-1 [Scenario/use-case]: OPF at the ZIP root with content under a
     // named subfolder — the regressing layout. Both chapters resolve, and
-    // their ContentFileName matches the raw manifest href exactly (proving
+    // their contentFileName matches the raw manifest href exactly (proving
     // the 'sub' folder segment survived nav-internal link resolution rather
     // than being dropped as an assumed OPF-container folder).
     test(
       'TC-NAV-1 [Scenario]: OPF at root + subfolder content resolves every '
-      'chapter with ContentFileName matching its manifest href',
+      'chapter with contentFileName matching its manifest href',
       () async {
-        final EpubBookRef bookRef = await EpubReader.openBook(
+        final EpubBookRef bookRef = await const EpubReader().openBook(
           _buildRootOpfSubfolderContentEpub(),
         );
 
         final List<EpubChapterRef> chapters = await bookRef.getChapters();
 
         expect(chapters, hasLength(2));
-        expect(chapters[0].ContentFileName, 'sub/xhtml/chapter1.xhtml');
-        expect(chapters[1].ContentFileName, 'sub/xhtml/chapter2.xhtml');
-        expect(chapters[0].Title, 'Chapter 1');
-        expect(chapters[1].Title, 'Chapter 2');
+        expect(chapters[0].contentFileName, 'sub/xhtml/chapter1.xhtml');
+        expect(chapters[1].contentFileName, 'sub/xhtml/chapter2.xhtml');
+        expect(chapters[0].title, 'Chapter 1');
+        expect(chapters[1].title, 'Chapter 2');
         expect(
           await chapters[0].readHtmlContent(),
           '<html><body><p>Root layout chapter 1</p></body></html>',
@@ -321,17 +321,17 @@ void main() {
     // for the layout that accidentally masked this bug before the fix.
     test(
       'TC-NAV-2 [Scenario]: classic OEBPS layout still resolves every '
-      'chapter with ContentFileName matching its manifest href',
+      'chapter with contentFileName matching its manifest href',
       () async {
-        final EpubBookRef bookRef = await EpubReader.openBook(
+        final EpubBookRef bookRef = await const EpubReader().openBook(
           _buildClassicOebpsEpub(),
         );
 
         final List<EpubChapterRef> chapters = await bookRef.getChapters();
 
         expect(chapters, hasLength(2));
-        expect(chapters[0].ContentFileName, 'chapter1.xhtml');
-        expect(chapters[1].ContentFileName, 'chapter2.xhtml');
+        expect(chapters[0].contentFileName, 'chapter1.xhtml');
+        expect(chapters[1].contentFileName, 'chapter2.xhtml');
         expect(
           await chapters[0].readHtmlContent(),
           '<html><body><p>Classic layout chapter 1</p></body></html>',
@@ -345,18 +345,18 @@ void main() {
     // TC-NAV-2 (nav alongside the OPF).
     test(
       'TC-NAV-3 [Equivalence partitioning]: nav one level deeper than a '
-      'non-root OPF still resolves every chapter with ContentFileName '
+      'non-root OPF still resolves every chapter with contentFileName '
       'matching its manifest href',
       () async {
-        final EpubBookRef bookRef = await EpubReader.openBook(
+        final EpubBookRef bookRef = await const EpubReader().openBook(
           _buildNestedOpfDeeperNavEpub(),
         );
 
         final List<EpubChapterRef> chapters = await bookRef.getChapters();
 
         expect(chapters, hasLength(2));
-        expect(chapters[0].ContentFileName, 'xhtml/chapter1.xhtml');
-        expect(chapters[1].ContentFileName, 'xhtml/chapter2.xhtml');
+        expect(chapters[0].contentFileName, 'xhtml/chapter1.xhtml');
+        expect(chapters[1].contentFileName, 'xhtml/chapter2.xhtml');
         expect(
           await chapters[0].readHtmlContent(),
           '<html><body><p>Nested layout chapter 1</p></body></html>',

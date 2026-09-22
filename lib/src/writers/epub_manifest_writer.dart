@@ -8,12 +8,12 @@ class EpubManifestWriter {
 
   void writeManifest(XmlBuilder builder, EpubManifest? manifest) {
     builder.element('manifest', nest: () {
-      for (EpubManifestItem item in manifest!.Items!) {
+      for (EpubManifestItem item in manifest!.items!) {
         builder.element('item', nest: () {
           builder
-            ..attribute('id', item.Id!)
-            ..attribute('href', item.Href!)
-            ..attribute('media-type', item.MediaType!);
+            ..attribute('id', item.id!)
+            ..attribute('href', item.href!)
+            ..attribute('media-type', item.mediaType!);
         });
       }
     });

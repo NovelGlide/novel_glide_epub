@@ -6,24 +6,25 @@ import 'epub_navigation_label.dart';
 import 'epub_navigation_page_target_type.dart';
 
 class EpubNavigationPageTarget {
-  String? Id;
-  String? Value;
-  EpubNavigationPageTargetType? Type;
-  String? Class;
-  String? PlayOrder;
-  List<EpubNavigationLabel>? NavigationLabels;
-  EpubNavigationContent? Content;
+  String? id;
+  String? value;
+  EpubNavigationPageTargetType? type;
+  String? className;
+  String? playOrder;
+  List<EpubNavigationLabel>? navigationLabels;
+  EpubNavigationContent? content;
 
   @override
   int get hashCode {
     final List<int> objects = <int>[
-      Id.hashCode,
-      Value.hashCode,
-      Type.hashCode,
-      Class.hashCode,
-      PlayOrder.hashCode,
-      Content.hashCode,
-      ...NavigationLabels?.map((EpubNavigationLabel label) => label.hashCode) ?? <int>[0]
+      id.hashCode,
+      value.hashCode,
+      type.hashCode,
+      className.hashCode,
+      playOrder.hashCode,
+      content.hashCode,
+      ...navigationLabels?.map((EpubNavigationLabel label) => label.hashCode) ??
+          <int>[0]
     ];
     return hashObjects(objects);
   }
@@ -34,15 +35,15 @@ class EpubNavigationPageTarget {
       return false;
     }
 
-    if (!(Id == other.Id &&
-        Value == other.Value &&
-        Type == other.Type &&
-        Class == other.Class &&
-        PlayOrder == other.PlayOrder &&
-        Content == other.Content)) {
+    if (!(id == other.id &&
+        value == other.value &&
+        type == other.type &&
+        className == other.className &&
+        playOrder == other.playOrder &&
+        content == other.content)) {
       return false;
     }
 
-    return collections.listsEqual(NavigationLabels, other.NavigationLabels);
+    return collections.listsEqual(navigationLabels, other.navigationLabels);
   }
 }

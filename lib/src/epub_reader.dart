@@ -22,19 +22,20 @@ import 'schema/opf/epub_metadata_creator.dart';
 ///
 /// [openBook] loads the structure and text metadata only, leaving each content
 /// file to be read on demand; [readBook] loads the whole book into memory.
-/// Both are static on purpose: they are this package's entry point, and the
-/// NovelGlide app calls them by name.
+/// This package's entry point, called by name from the NovelGlide app.
 ///
 /// ```dart
 /// // Read the basic metadata.
-/// EpubBookRef epub = await EpubReader.openBook(epubFileBytes);
+/// EpubBookRef epub = await const EpubReader().openBook(epubFileBytes);
 /// // Extract values of interest.
-/// String title = epub.Title;
-/// String author = epub.Author;
-/// var metadata = epub.Schema.Package.Metadata;
-/// String genres = metadata.Subjects.join(', ');
+/// String title = epub.title;
+/// String author = epub.author;
+/// EpubMetadata metadata = epub.schema.package.metadata;
+/// String genres = metadata.subjects.join(', ');
 /// ```
 class EpubReader {
+  const EpubReader();
+
   /// Loads basics metadata.
   ///
   /// Opens the book asynchronously without reading its main content.
@@ -45,10 +46,10 @@ class EpubReader {
   /// [readAsBytes()].
   ///
   /// This is a fast and convenient way to get the most important information
-  /// about the book, notably the [Title], [Author] and [AuthorList].
-  /// Additional information is loaded in the [Schema] property such as the
-  /// Epub version, Publishers, Languages and more.
-  static Future<EpubBookRef> openBook(FutureOr<List<int>> bytes) async {
+  /// about the book, notably the [title], [author] and [authorList].
+  /// Additional information is loaded in the [schema] property such as the
+  /// Epub version, publishers, languages and more.
+  Future<EpubBookRef> openBook(FutureOr<List<int>> bytes) async {
     List<int> loadedBytes;
     if (bytes is Future) {
       loadedBytes = await bytes;
@@ -59,19 +60,19 @@ class EpubReader {
     final Archive epubArchive = ZipDecoder().decodeBytes(loadedBytes);
 
     final EpubBookRef bookRef = EpubBookRef(epubArchive);
-    bookRef.Schema = await const SchemaReader().readSchema(epubArchive);
-    bookRef.Title = bookRef.Schema!.Package!.Metadata!.Titles!
+    bookRef.schema = await const SchemaReader().readSchema(epubArchive);
+    bookRef.title = bookRef.schema!.package!.metadata!.titles!
         .firstWhere((String name) => true, orElse: () => '');
-    bookRef.AuthorList = bookRef.Schema!.Package!.Metadata!.Creators!
-        .map((EpubMetadataCreator creator) => creator.Creator)
+    bookRef.authorList = bookRef.schema!.package!.metadata!.creators!
+        .map((EpubMetadataCreator creator) => creator.creator)
         .toList();
-    bookRef.Author = bookRef.AuthorList!.join(', ');
-    bookRef.Content = const ContentReader().parseContentMap(bookRef);
+    bookRef.author = bookRef.authorList!.join(', ');
+    bookRef.content = const ContentReader().parseContentMap(bookRef);
     return bookRef;
   }
 
   /// Opens the book asynchronously and reads all of its content into the memory. Does not hold the handle to the EPUB file.
-  static Future<EpubBook> readBook(FutureOr<List<int>> bytes) async {
+  Future<EpubBook> readBook(FutureOr<List<int>> bytes) async {
     final EpubBook result = EpubBook();
     List<int> loadedBytes;
     if (bytes is Future) {
@@ -81,98 +82,100 @@ class EpubReader {
     }
 
     final EpubBookRef epubBookRef = await openBook(loadedBytes);
-    result.Schema = epubBookRef.Schema;
-    result.Title = epubBookRef.Title;
-    result.AuthorList = epubBookRef.AuthorList;
-    result.Author = epubBookRef.Author;
-    result.Content = await readContent(epubBookRef.Content!);
-    result.CoverImage = await epubBookRef.readCover();
+    result.schema = epubBookRef.schema;
+    result.title = epubBookRef.title;
+    result.authorList = epubBookRef.authorList;
+    result.author = epubBookRef.author;
+    result.content = await readContent(epubBookRef.content!);
+    result.coverImage = await epubBookRef.readCover();
     final List<EpubChapterRef> chapterRefs = await epubBookRef.getChapters();
-    result.Chapters = await readChapters(chapterRefs);
+    result.chapters = await readChapters(chapterRefs);
 
     return result;
   }
 
-  static Future<EpubContent> readContent(EpubContentRef contentRef) async {
+  Future<EpubContent> readContent(EpubContentRef contentRef) async {
     final EpubContent result = EpubContent();
-    result.Html = await readTextContentFiles(contentRef.Html!);
-    result.Css = await readTextContentFiles(contentRef.Css!);
-    result.Images = await readByteContentFiles(contentRef.Images!);
-    result.Fonts = await readByteContentFiles(contentRef.Fonts!);
-    result.AllFiles = <String, EpubContentFile>{};
+    result.html = await readTextContentFiles(contentRef.html!);
+    result.css = await readTextContentFiles(contentRef.css!);
+    result.images = await readByteContentFiles(contentRef.images!);
+    result.fonts = await readByteContentFiles(contentRef.fonts!);
+    result.allFiles = <String, EpubContentFile>{};
 
-    result.Html!.forEach((String? key, EpubTextContentFile value) {
-      result.AllFiles![key!] = value;
+    result.html!.forEach((String? key, EpubTextContentFile value) {
+      result.allFiles![key!] = value;
     });
-    result.Css!.forEach((String? key, EpubTextContentFile value) {
-      result.AllFiles![key!] = value;
-    });
-
-    result.Images!.forEach((String? key, EpubByteContentFile value) {
-      result.AllFiles![key!] = value;
-    });
-    result.Fonts!.forEach((String? key, EpubByteContentFile value) {
-      result.AllFiles![key!] = value;
+    result.css!.forEach((String? key, EpubTextContentFile value) {
+      result.allFiles![key!] = value;
     });
 
-    await Future.forEach(contentRef.AllFiles!.keys, (dynamic key) async {
-      if (!result.AllFiles!.containsKey(key)) {
-        result.AllFiles![key] =
-            await readByteContentFile(contentRef.AllFiles![key]!);
+    result.images!.forEach((String? key, EpubByteContentFile value) {
+      result.allFiles![key!] = value;
+    });
+    result.fonts!.forEach((String? key, EpubByteContentFile value) {
+      result.allFiles![key!] = value;
+    });
+
+    await Future.forEach(contentRef.allFiles!.keys, (String key) async {
+      if (!result.allFiles!.containsKey(key)) {
+        result.allFiles![key] =
+            await readByteContentFile(contentRef.allFiles![key]!);
       }
     });
 
     return result;
   }
 
-  static Future<Map<String, EpubTextContentFile>> readTextContentFiles(
+  Future<Map<String, EpubTextContentFile>> readTextContentFiles(
       Map<String, EpubTextContentFileRef> textContentFileRefs) async {
-    final Map<String, EpubTextContentFile> result = <String, EpubTextContentFile>{};
+    final Map<String, EpubTextContentFile> result =
+        <String, EpubTextContentFile>{};
 
-    await Future.forEach(textContentFileRefs.keys, (dynamic key) async {
+    await Future.forEach(textContentFileRefs.keys, (String key) async {
       final EpubContentFileRef value = textContentFileRefs[key]!;
       final EpubTextContentFile textContentFile = EpubTextContentFile();
-      textContentFile.FileName = value.FileName;
-      textContentFile.ContentType = value.ContentType;
-      textContentFile.ContentMimeType = value.ContentMimeType;
-      textContentFile.Content = await value.readContentAsText();
+      textContentFile.fileName = value.fileName;
+      textContentFile.contentType = value.contentType;
+      textContentFile.contentMimeType = value.contentMimeType;
+      textContentFile.content = await value.readContentAsText();
       result[key] = textContentFile;
     });
     return result;
   }
 
-  static Future<Map<String, EpubByteContentFile>> readByteContentFiles(
+  Future<Map<String, EpubByteContentFile>> readByteContentFiles(
       Map<String, EpubByteContentFileRef> byteContentFileRefs) async {
-    final Map<String, EpubByteContentFile> result = <String, EpubByteContentFile>{};
-    await Future.forEach(byteContentFileRefs.keys, (dynamic key) async {
+    final Map<String, EpubByteContentFile> result =
+        <String, EpubByteContentFile>{};
+    await Future.forEach(byteContentFileRefs.keys, (String key) async {
       result[key] = await readByteContentFile(byteContentFileRefs[key]!);
     });
     return result;
   }
 
-  static Future<EpubByteContentFile> readByteContentFile(
+  Future<EpubByteContentFile> readByteContentFile(
       EpubContentFileRef contentFileRef) async {
     final EpubByteContentFile result = EpubByteContentFile();
 
-    result.FileName = contentFileRef.FileName;
-    result.ContentType = contentFileRef.ContentType;
-    result.ContentMimeType = contentFileRef.ContentMimeType;
-    result.Content = await contentFileRef.readContentAsBytes();
+    result.fileName = contentFileRef.fileName;
+    result.contentType = contentFileRef.contentType;
+    result.contentMimeType = contentFileRef.contentMimeType;
+    result.content = await contentFileRef.readContentAsBytes();
 
     return result;
   }
 
-  static Future<List<EpubChapter>> readChapters(
+  Future<List<EpubChapter>> readChapters(
       List<EpubChapterRef> chapterRefs) async {
     final List<EpubChapter> result = <EpubChapter>[];
     await Future.forEach(chapterRefs, (EpubChapterRef chapterRef) async {
       final EpubChapter chapter = EpubChapter();
 
-      chapter.Title = chapterRef.Title;
-      chapter.ContentFileName = chapterRef.ContentFileName;
-      chapter.Anchor = chapterRef.Anchor;
-      chapter.HtmlContent = await chapterRef.readHtmlContent();
-      chapter.SubChapters = await readChapters(chapterRef.SubChapters!);
+      chapter.title = chapterRef.title;
+      chapter.contentFileName = chapterRef.contentFileName;
+      chapter.anchor = chapterRef.anchor;
+      chapter.htmlContent = await chapterRef.readHtmlContent();
+      chapter.subChapters = await readChapters(chapterRef.subChapters!);
 
       result.add(chapter);
     });

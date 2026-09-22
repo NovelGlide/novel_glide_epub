@@ -4,15 +4,14 @@ import 'package:quiver/core.dart';
 import 'epub_manifest_item.dart';
 
 class EpubManifest {
-
   EpubManifest() {
-    Items = <EpubManifestItem>[];
+    items = <EpubManifestItem>[];
   }
-  List<EpubManifestItem>? Items;
+  List<EpubManifestItem>? items;
 
   @override
   int get hashCode {
-    return hashObjects(Items!.map((EpubManifestItem item) => item.hashCode));
+    return hashObjects(items!.map((EpubManifestItem item) => item.hashCode));
   }
 
   @override
@@ -20,6 +19,6 @@ class EpubManifest {
     if (other is! EpubManifest) {
       return false;
     }
-    return collections.listsEqual(Items, other.Items);
+    return collections.listsEqual(items, other.items);
   }
 }

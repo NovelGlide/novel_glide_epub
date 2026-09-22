@@ -7,11 +7,11 @@ class ChapterReader {
   const ChapterReader();
 
   List<EpubChapterRef> getChapters(EpubBookRef bookRef) {
-    if (bookRef.Schema!.Navigation == null) {
+    if (bookRef.schema!.navigation == null) {
       return <EpubChapterRef>[];
     }
     return getChaptersImpl(
-        bookRef, bookRef.Schema!.Navigation!.NavMap!.Points!);
+        bookRef, bookRef.schema!.navigation!.navMap!.points!);
   }
 
   List<EpubChapterRef> getChaptersImpl(
@@ -20,7 +20,7 @@ class ChapterReader {
     for (EpubNavigationPoint navigationPoint in navigationPoints) {
       // A navigation point with no content source points nowhere, so it is
       // skipped rather than refused.
-      final String? source = navigationPoint.Content?.Source;
+      final String? source = navigationPoint.content?.source;
       if (source == null) {
         continue;
       }
@@ -39,17 +39,18 @@ class ChapterReader {
         ? null
         : contentSource.substring(anchorCharIndex + 1);
 
-    if (!bookRef.Content!.Html!.containsKey(contentFileName)) {
+    if (!bookRef.content!.html!.containsKey(contentFileName)) {
       throw EpubUnresolvedReferenceException(
           'Incorrect EPUB manifest: item with href = "$contentFileName" is missing.');
     }
 
-    final EpubChapterRef chapterRef = EpubChapterRef(bookRef.Content!.Html![contentFileName])
-      ..ContentFileName = contentFileName
-      ..Anchor = anchor
-      ..Title = navigationPoint.NavigationLabels!.first.Text
-      ..SubChapters =
-          getChaptersImpl(bookRef, navigationPoint.ChildNavigationPoints!);
+    final EpubChapterRef chapterRef =
+        EpubChapterRef(bookRef.content!.html![contentFileName])
+          ..contentFileName = contentFileName
+          ..anchor = anchor
+          ..title = navigationPoint.navigationLabels!.first.text
+          ..subChapters =
+              getChaptersImpl(bookRef, navigationPoint.childNavigationPoints!);
     _addSplitSiblings(bookRef, chapterRef, contentFileName);
     return chapterRef;
   }
@@ -59,15 +60,15 @@ class ChapterReader {
   /// the family with it.
   void _addSplitSiblings(
       EpubBookRef bookRef, EpubChapterRef chapterRef, String contentFileName) {
-    if (!chapterRef.ContentFileName!.contains('_split_')) {
+    if (!chapterRef.contentFileName!.contains('_split_')) {
       return;
     }
-    final String fileNamePart = chapterRef.ContentFileName!.split('_split_')[0];
-    for (String fileName in bookRef.Content!.Html!.keys) {
+    final String fileNamePart = chapterRef.contentFileName!.split('_split_')[0];
+    for (String fileName in bookRef.content!.html!.keys) {
       if (fileName.contains(fileNamePart) && fileName != contentFileName) {
         chapterRef.otherTextContentFileRefs
-            .add(bookRef.Content!.Html![fileName]!);
-        chapterRef.OtherContentFileNames.add(fileName);
+            .add(bookRef.content!.html![fileName]!);
+        chapterRef.otherContentFileNames.add(fileName);
       }
     }
   }

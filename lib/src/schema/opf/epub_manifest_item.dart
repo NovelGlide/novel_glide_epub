@@ -1,27 +1,27 @@
 import 'package:quiver/core.dart';
 
 class EpubManifestItem {
-  String? Id;
-  String? Href;
-  String? MediaType;
-  String? MediaOverlay;
-  String? RequiredNamespace;
-  String? RequiredModules;
-  String? Fallback;
-  String? FallbackStyle;
-  String? Properties;
+  String? id;
+  String? href;
+  String? mediaType;
+  String? mediaOverlay;
+  String? requiredNamespace;
+  String? requiredModules;
+  String? fallback;
+  String? fallbackStyle;
+  String? properties;
 
   @override
-  int get hashCode => hashObjects(<dynamic>[
-        Id.hashCode,
-        Href.hashCode,
-        MediaType.hashCode,
-        MediaOverlay.hashCode,
-        RequiredNamespace.hashCode,
-        RequiredModules.hashCode,
-        Fallback.hashCode,
-        FallbackStyle.hashCode,
-        Properties.hashCode
+  int get hashCode => hashObjects(<Object?>[
+        id.hashCode,
+        href.hashCode,
+        mediaType.hashCode,
+        mediaOverlay.hashCode,
+        requiredNamespace.hashCode,
+        requiredModules.hashCode,
+        fallback.hashCode,
+        fallbackStyle.hashCode,
+        properties.hashCode
       ]);
 
   @override
@@ -33,22 +33,22 @@ class EpubManifestItem {
   /// The half of the item that says WHAT it is: the resource it points at and
   /// how a reading system is meant to treat it.
   bool _describesSameResource(EpubManifestItem other) =>
-      Id == other.Id &&
-      Href == other.Href &&
-      MediaType == other.MediaType &&
-      MediaOverlay == other.MediaOverlay &&
-      Properties == other.Properties;
+      id == other.id &&
+      href == other.href &&
+      mediaType == other.mediaType &&
+      mediaOverlay == other.mediaOverlay &&
+      properties == other.properties;
 
   /// The half that says what to do when the resource CANNOT be used: the
   /// EPUB2 fallback and required-module attributes.
   bool _hasSameFallbackChain(EpubManifestItem other) =>
-      Fallback == other.Fallback &&
-      FallbackStyle == other.FallbackStyle &&
-      RequiredNamespace == other.RequiredNamespace &&
-      RequiredModules == other.RequiredModules;
+      fallback == other.fallback &&
+      fallbackStyle == other.fallbackStyle &&
+      requiredNamespace == other.requiredNamespace &&
+      requiredModules == other.requiredModules;
 
   @override
   String toString() {
-    return 'Id: $Id, Href = $Href, MediaType = $MediaType, Properties = $Properties, MediaOverlay = $MediaOverlay';
+    return 'Id: $id, Href = $href, MediaType = $mediaType, Properties = $properties, MediaOverlay = $mediaOverlay';
   }
 }

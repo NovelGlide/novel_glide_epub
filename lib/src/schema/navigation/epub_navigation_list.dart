@@ -5,18 +5,21 @@ import 'epub_navigation_label.dart';
 import 'epub_navigation_target.dart';
 
 class EpubNavigationList {
-  String? Id;
-  String? Class;
-  List<EpubNavigationLabel>? NavigationLabels;
-  List<EpubNavigationTarget>? NavigationTargets;
+  String? id;
+  String? className;
+  List<EpubNavigationLabel>? navigationLabels;
+  List<EpubNavigationTarget>? navigationTargets;
 
   @override
   int get hashCode {
     final List<int> objects = <int>[
-      Id.hashCode,
-      Class.hashCode,
-      ...NavigationLabels?.map((EpubNavigationLabel label) => label.hashCode) ?? <int>[0],
-      ...NavigationTargets?.map((EpubNavigationTarget target) => target.hashCode) ?? <int>[0]
+      id.hashCode,
+      className.hashCode,
+      ...navigationLabels?.map((EpubNavigationLabel label) => label.hashCode) ??
+          <int>[0],
+      ...navigationTargets
+              ?.map((EpubNavigationTarget target) => target.hashCode) ??
+          <int>[0]
     ];
     return hashObjects(objects);
   }
@@ -27,14 +30,14 @@ class EpubNavigationList {
       return false;
     }
 
-    if (!(Id == other.Id && Class == other.Class)) {
+    if (!(id == other.id && className == other.className)) {
       return false;
     }
 
-    if (!collections.listsEqual(NavigationLabels, other.NavigationLabels)) {
+    if (!collections.listsEqual(navigationLabels, other.navigationLabels)) {
       return false;
     }
-    if (!collections.listsEqual(NavigationTargets, other.NavigationTargets)) {
+    if (!collections.listsEqual(navigationTargets, other.navigationTargets)) {
       return false;
     }
     return true;

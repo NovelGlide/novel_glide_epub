@@ -23,24 +23,24 @@ EpubNavigationPoint _point(
   List<EpubNavigationPoint>? children,
 }) =>
     EpubNavigationPoint()
-      ..Id = id
-      ..PlayOrder = playOrder
-      ..NavigationLabels = <EpubNavigationLabel>[
-        EpubNavigationLabel()..Text = label,
+      ..id = id
+      ..playOrder = playOrder
+      ..navigationLabels = <EpubNavigationLabel>[
+        EpubNavigationLabel()..text = label,
       ]
-      ..Content = (EpubNavigationContent()..Source = source)
-      ..ChildNavigationPoints = children ?? <EpubNavigationPoint>[];
+      ..content = (EpubNavigationContent()..source = source)
+      ..childNavigationPoints = children ?? <EpubNavigationPoint>[];
 
 EpubNavigation _navigation(List<EpubNavigationPoint> points) => EpubNavigation()
-  ..Head = (EpubNavigationHead()
-    ..Metadata = <EpubNavigationHeadMeta>[
+  ..head = (EpubNavigationHead()
+    ..metadata = <EpubNavigationHeadMeta>[
       EpubNavigationHeadMeta()
-        ..Name = 'dtb:uid'
-        ..Content = 'NGE-SEED-ID',
+        ..name = 'dtb:uid'
+        ..content = 'NGE-SEED-ID',
     ])
-  ..DocTitle =
-      (EpubNavigationDocTitle()..Titles = <String>['NGE-SEED Navigation'])
-  ..NavMap = (EpubNavigationMap()..Points = points);
+  ..docTitle =
+      (EpubNavigationDocTitle()..titles = <String>['NGE-SEED Navigation'])
+  ..navMap = (EpubNavigationMap()..points = points);
 
 /// Wraps [ncx] in an EPUB2 archive whose spine points at it, so
 /// `EpubReader.readBook` parses it through the production navigation path.
@@ -129,8 +129,8 @@ void main() {
     // both written as empty elements rather than being skipped.
     test('TC-NVW-4 [Boundary]: an empty navigation writes empty sections', () {
       final EpubNavigation navigation = _navigation(<EpubNavigationPoint>[])
-        ..DocTitle = (EpubNavigationDocTitle()..Titles = <String>[])
-        ..Head = (EpubNavigationHead()..Metadata = <EpubNavigationHeadMeta>[]);
+        ..docTitle = (EpubNavigationDocTitle()..titles = <String>[])
+        ..head = (EpubNavigationHead()..metadata = <EpubNavigationHeadMeta>[]);
 
       final String ncx =
           const EpubNavigationWriter().writeNavigation(navigation);
@@ -153,13 +153,13 @@ void main() {
         _point('np-1', '1', 'NGE-SEED Chapter One', 'chapter1.xhtml'),
       ]);
 
-      final EpubBook book = await EpubReader.readBook(_archiveAround(
+      final EpubBook book = await const EpubReader().readBook(_archiveAround(
           const EpubNavigationWriter().writeNavigation(original)));
 
-      expect(book.Schema!.Navigation!.Head!.Metadata, original.Head!.Metadata);
-      expect(book.Schema!.Navigation!.NavMap!.Points, original.NavMap!.Points);
-      expect(book.Chapters!.single.Title, 'NGE-SEED Chapter One');
-      expect(book.Chapters!.single.ContentFileName, 'chapter1.xhtml');
+      expect(book.schema!.navigation!.head!.metadata, original.head!.metadata);
+      expect(book.schema!.navigation!.navMap!.points, original.navMap!.points);
+      expect(book.chapters!.single.title, 'NGE-SEED Chapter One');
+      expect(book.chapters!.single.contentFileName, 'chapter1.xhtml');
     });
 
     // TC-NVW-6 [Error guessing]: `writeNavigationDocTitle` puts the titles
@@ -171,18 +171,19 @@ void main() {
         'TC-NVW-6 [Error guessing]: docTitle is written without its text '
         'wrapper and reads back empty', () async {
       final EpubNavigation original = _navigation(<EpubNavigationPoint>[])
-        ..DocTitle = (EpubNavigationDocTitle()
-          ..Titles = <String>['NGE-SEED One', 'NGE-SEED Two']);
+        ..docTitle = (EpubNavigationDocTitle()
+          ..titles = <String>['NGE-SEED One', 'NGE-SEED Two']);
 
       final String ncx = const EpubNavigationWriter().writeNavigation(original);
 
       expect(ncx, contains('<docTitle>NGE-SEED OneNGE-SEED Two</docTitle>'));
-      final EpubBook book = await EpubReader.readBook(_archiveAround(ncx));
-      expect(book.Schema!.Navigation!.DocTitle!.Titles, isEmpty);
+      final EpubBook book =
+          await const EpubReader().readBook(_archiveAround(ncx));
+      expect(book.schema!.navigation!.docTitle!.titles, isEmpty);
     });
 
     // TC-NVW-7 [Error guessing]: `writeNavigationPoint` does not recurse into
-    // `ChildNavigationPoints`, so a nested table of contents is flattened to
+    // `childNavigationPoints`, so a nested table of contents is flattened to
     // its top level — the sub-chapters are simply gone.
     test('TC-NVW-7 [Error guessing]: nested navPoints are dropped', () async {
       final EpubNavigation original = _navigation(<EpubNavigationPoint>[
@@ -195,8 +196,9 @@ void main() {
       final String ncx = const EpubNavigationWriter().writeNavigation(original);
 
       expect(ncx, isNot(contains('np-1-1')));
-      final EpubBook book = await EpubReader.readBook(_archiveAround(ncx));
-      expect(book.Chapters!.single.SubChapters, isEmpty);
+      final EpubBook book =
+          await const EpubReader().readBook(_archiveAround(ncx));
+      expect(book.chapters!.single.subChapters, isEmpty);
     });
   });
 }

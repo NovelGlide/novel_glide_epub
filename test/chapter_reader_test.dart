@@ -43,30 +43,29 @@ Matcher _throwsMessageContaining(String fragment) => throwsA(
 
 void main() {
   group('ChapterReader.getChapters', () {
-    // TC-CHR-1 [Boundary value]: `getChapters` defends against a Navigation
+    // TC-CHR-1 [Boundary value]: `getChapters` defends against a navigation
     // that is null — unreachable through `EpubReader.openBook`, since
     // `SchemaReader`/`NavigationReader` always produce a non-null
     // `EpubNavigation` for either EPUB version, but a caller can hand
     // `ChapterReader` a hand-built `EpubBookRef` directly (as this test
     // does), and the guard is what keeps that call from a null check
-    // failure on `NavMap!`.
+    // failure on `navMap!`.
     test(
-        'TC-CHR-1 [Boundary]: a Schema with no Navigation yields no '
+        'TC-CHR-1 [Boundary]: a schema with no navigation yields no '
         'chapters', () {
-      final EpubBookRef bookRef = EpubBookRef(Archive())
-        ..Schema = EpubSchema();
+      final EpubBookRef bookRef = EpubBookRef(Archive())..schema = EpubSchema();
 
       expect(const ChapterReader().getChapters(bookRef), isEmpty);
     });
 
     // TC-CHR-2 [Error guessing]: a navPoint's content source names a file the
     // manifest never declared as (x)html, so it never entered
-    // `bookRef.Content!.Html!`. Every reader up to this point is agnostic to
+    // `bookRef.content!.html!`. Every reader up to this point is agnostic to
     // that mismatch — only `ChapterReader` cross-checks navigation against
     // content.
     test(
         'TC-CHR-2 [Error guessing]: a navPoint pointing at a file missing '
-        'from Content.Html is rejected', () async {
+        'from content.html is rejected', () async {
       final Uint8List bytes = buildEpubArchive(
         opfPath: 'OEBPS/content.opf',
         textEntries: <String, String>{
@@ -79,14 +78,14 @@ void main() {
           ),
           'OEBPS/toc.ncx': _ncx(
             '<navPoint id="np-1" playOrder="1">'
-                '<navLabel><text>NGE-SEED Ghost Chapter</text></navLabel>'
-                '<content src="ghost.xhtml"/>'
-                '</navPoint>',
+            '<navLabel><text>NGE-SEED Ghost Chapter</text></navLabel>'
+            '<content src="ghost.xhtml"/>'
+            '</navPoint>',
           ),
           'OEBPS/chapter1.xhtml': seedXhtml('NGE-SEED-CH1'),
         },
       );
-      final EpubBookRef bookRef = await EpubReader.openBook(bytes);
+      final EpubBookRef bookRef = await const EpubReader().openBook(bytes);
 
       expect(
         bookRef.getChapters,
@@ -96,7 +95,7 @@ void main() {
 
     // TC-CHR-3 [Equivalence partitioning]: the COMMON case — a chapter whose
     // file name does not carry the `_split_` marker — must skip the
-    // split-siblings merge entirely, even when another Html file's name
+    // split-siblings merge entirely, even when another html file's name
     // happens to contain this chapter's file name as a substring. Without
     // the guard, the sibling search (keyed on a `_split_`-free "part") would
     // match that unrelated file and wrongly pull it in.
@@ -117,18 +116,18 @@ void main() {
           ),
           'OEBPS/toc.ncx': _ncx(
             '<navPoint id="np-1" playOrder="1">'
-                '<navLabel><text>NGE-SEED Chapter One</text></navLabel>'
-                '<content src="chapter1.xhtml"/>'
-                '</navPoint>',
+            '<navLabel><text>NGE-SEED Chapter One</text></navLabel>'
+            '<content src="chapter1.xhtml"/>'
+            '</navPoint>',
           ),
           'OEBPS/chapter1.xhtml': seedXhtml('NGE-SEED-CH1'),
           'OEBPS/archived_chapter1.xhtml': seedXhtml('NGE-SEED-ARCHIVED'),
         },
       );
-      final EpubBookRef bookRef = await EpubReader.openBook(bytes);
+      final EpubBookRef bookRef = await const EpubReader().openBook(bytes);
       final EpubChapterRef chapter = (await bookRef.getChapters()).single;
 
-      expect(chapter.OtherContentFileNames, isEmpty);
+      expect(chapter.otherContentFileNames, isEmpty);
       expect(chapter.otherTextContentFileRefs, isEmpty);
     });
   });

@@ -11,14 +11,16 @@ import 'writers/epub_package_writer.dart';
 
 /// Serialises an [EpubBook] back into an EPUB container.
 ///
-/// [writeBook] is static on purpose, mirroring [EpubReader]: it is this
-/// package's write-side entry point and is called by name from outside. The
-/// assembly it delegates to is an ordinary instance method, so the type is a
-/// unit with a static convenience entry rather than a namespace.
+/// This package's write-side entry point, called by name from outside,
+/// mirroring [EpubReader].
+///
+/// ```dart
+/// List<int>? bytes = const EpubWriter().writeBook(book);
+/// ```
 class EpubWriter {
   const EpubWriter();
 
-  static const String _container_file =
+  static const String _containerFile =
       '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>';
 
   ZipPathResolver get _pathResolver => const ZipPathResolver();
@@ -33,31 +35,31 @@ class EpubWriter {
         'mimetype', 20, convert.utf8.encode('application/epub+zip')));
 
     // Add Container file
-    arch.addFile(ArchiveFile('META-INF/container.xml', _container_file.length,
-        convert.utf8.encode(_container_file)));
+    arch.addFile(ArchiveFile('META-INF/container.xml', _containerFile.length,
+        convert.utf8.encode(_containerFile)));
 
     // Add all content to the archive
-    book.Content!.AllFiles!.forEach((String name, EpubContentFile file) {
+    book.content!.allFiles!.forEach((String name, EpubContentFile file) {
       List<int>? content;
 
       if (file is EpubByteContentFile) {
-        content = file.Content;
+        content = file.content;
       } else if (file is EpubTextContentFile) {
-        content = convert.utf8.encode(file.Content!);
+        content = convert.utf8.encode(file.content!);
       }
 
       arch.addFile(ArchiveFile(
-          _pathResolver.combine(book.Schema!.ContentDirectoryPath, name)!,
+          _pathResolver.combine(book.schema!.contentDirectoryPath, name),
           content!.length,
           content));
     });
 
     // Generate the content.opf file and add it to the Archive
-    final String contentopf = _packageWriter.writeContent(book.Schema!.Package!);
+    final String contentopf =
+        _packageWriter.writeContent(book.schema!.package!);
 
     arch.addFile(ArchiveFile(
-        _pathResolver.combine(
-            book.Schema!.ContentDirectoryPath, 'content.opf')!,
+        _pathResolver.combine(book.schema!.contentDirectoryPath, 'content.opf'),
         contentopf.length,
         convert.utf8.encode(contentopf)));
 
@@ -65,6 +67,6 @@ class EpubWriter {
   }
 
   // Serializes the EpubBook into a byte array
-  static List<int>? writeBook(EpubBook book) =>
-      ZipEncoder().encode(const EpubWriter()._createArchive(book));
+  List<int>? writeBook(EpubBook book) =>
+      ZipEncoder().encode(_createArchive(book));
 }

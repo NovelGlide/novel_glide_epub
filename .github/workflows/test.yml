@@ -19,12 +19,14 @@ jobs:
       - name: Install dependencies
         run: dart pub get
 
-      # Errors only, not `--fatal-infos`: the source is still upstream's style
-      # and the mild lint set still has plenty to say about it (README
-      # §Status). Tightening this to infos is part of the style pass, once the
-      # test suite exists to catch what the cleanup breaks.
-      - name: Analyze
-        run: dart analyze
+      # The same entry point as local development and the release-tag
+      # workflow: dart_lints runs `dart analyze --fatal-infos` itself (the
+      # flags live in dart_lints.yaml) and then the shared custom rules, so the
+      # stock analyzer and those rules cannot disagree about scope. Without
+      # --fatal-infos, lint findings are INFO severity and the step would print
+      # them and still exit 0.
+      - name: Lint
+        run: dart run dart_lints
 
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed .
@@ -32,9 +34,7 @@ jobs:
       - name: Run tests with coverage
         run: dart test --coverage=coverage
 
-      # Printed, not gated — the suite does not cover the package yet, and a
-      # threshold set before the tests exist would either pass at any number
-      # or block every PR. The gate lands with the coverage work.
+      # Printed, not gated.
       - name: Report coverage
         run: |
           dart pub global activate coverage

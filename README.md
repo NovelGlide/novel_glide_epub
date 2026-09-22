@@ -5,16 +5,19 @@ cross-platform EPUB reader.
 
 Pure Dart — no Flutter dependency. It reads an EPUB's package document,
 navigation and content out of the ZIP container, either eagerly
-(`EpubReader.readBook`) or lazily by reference (`EpubReader.openBook`).
+(`EpubReader.readBook`) or lazily by reference (`EpubReader.openBook`); both
+are instance methods on `const EpubReader()`.
 
 ```dart
 import 'package:novel_glide_epub/novel_glide_epub.dart';
 
+const EpubReader reader = EpubReader();
+
 // Whole book, content included.
-final EpubBook book = await EpubReader.readBook(bytes);
+final EpubBook book = await reader.readBook(bytes);
 
 // Just the structure; each content file is read on demand.
-final EpubBookRef bookRef = await EpubReader.openBook(bytes);
+final EpubBookRef bookRef = await reader.openBook(bytes);
 ```
 
 ## Origin
@@ -41,11 +44,11 @@ Not published to pub.dev; consumed by git reference.
 
 ## Status
 
-**Coverage: 99.4%** (1504 / 1513 lines), up from 21% at extraction, when the
+**Coverage: 99.9%** (1535 / 1536 lines, 492 tests), up from 21% at extraction, when the
 suite was seven test cases written to pin two specific bugs and forty of the
-fifty-five files had never been executed at all. The nine remaining lines are
-in `root_file_path_reader.dart`, `chapter_reader.dart`, `package_reader.dart`
-and `navigation_reader.dart`.
+fifty-five files had never been executed at all. The one remaining line is
+`navigation_reader.dart`'s `navigationTargets` branch — an EPUB2 NCX
+`navList`'s `navTarget` children, which no book seen in production carries.
 
 **The writing side is covered, and lossy in named ways.** `epub_writer.dart`
 and `writers/` serialise an EPUB back out. Nothing in NovelGlide writes EPUBs,
@@ -61,7 +64,7 @@ than hidden:
 - The container is written with a constant `OEBPS/content.opf` root path, so a
   book whose OPF sat anywhere else is written unreadable.
 - Spine linearity inverts on every trip: `readSpine` maps both an absent
-  `linear` and `linear="no"` to `IsLinear = true`, and the writer maps `true`
+  `linear` and `linear="no"` to `isLinear = true`, and the writer maps `true`
   back to `"yes"`. The pair has no fixed point.
 - A book with no `<guide>`, and a spine with no `toc`, cannot be written at
   all — both writers dereference what the reader leaves null.
@@ -78,16 +81,13 @@ a conventional EPUB2 container, and not yet as a general EPUB serialiser.
 
 **The lint is this org's set** — `dart_lints`, run with `dart run dart_lints`;
 `dart_lints.yaml` holds this package's half and `analysis_options.yaml` the
-stock-analyzer lints it does not take. One finding is left on purpose, and it
-is named in the code: `EpubReader` is a static-only class because `readBook`
-and `openBook` are the entry points the NovelGlide app calls by name, and
-making them instance calls would be a breaking change across two repositories.
-
-Four stock lints are held out with their reasons in `analysis_options.yaml` —
-the PascalCase public members and the SCREAMING_CASE enum values carried over
-from upstream, the `xml` package's deprecated `.text` (where `value` versus
-`innerText` is a parsing decision, not a substitution), and two findings inside
-`ZipPathResolver.combine`, which a pending fix rewrites.
+stock-analyzer lints it does not take. `dart run dart_lints` reports **0
+issues**, including infos, and there is no `errors: ignore` entry or
+`// ignore:` comment anywhere in the package. The one place this package's
+selection differs from the app's is imports: the app enables
+`always_use_package_imports`, this package does not (the reason is recorded
+beside it in `analysis_options.yaml`) and enables `prefer_relative_imports`
+instead.
 
 ## Development
 
@@ -95,7 +95,13 @@ from upstream, the `xml` package's deprecated `.text` (where `value` versus
 dart pub get
 dart test
 dart test --coverage=coverage
+dart run dart_lints
 ```
+
+**Releasing** is bumping `version:` in `pubspec.yaml`. The push to `main` that
+carries the bump is tagged `v<version>` by `.github/workflows/release-tag.yml`,
+once format, lint and the test suite pass on that commit. Tags are only ever
+added, never moved, so a version number always means one tree.
 
 ## Licence
 

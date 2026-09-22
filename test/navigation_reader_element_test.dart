@@ -37,12 +37,12 @@ void main() {
           .readNavigationContent(
               _element('<content id="c-1" src="chapter1.xhtml#a"/>'));
 
-      expect(content.Id, 'c-1');
-      expect(content.Source, 'chapter1.xhtml#a');
+      expect(content.id, 'c-1');
+      expect(content.source, 'chapter1.xhtml#a');
     });
 
     // TC-NAVU-2 [Boundary value]: src absent and src empty are both rejected
-    // — the two sides of the `Source == null || Source.isEmpty` guard.
+    // — the two sides of the `source == null || source.isEmpty` guard.
     for (final String node in <String>[
       '<content id="c-1"/>',
       '<content id="c-1" src=""/>',
@@ -72,10 +72,10 @@ void main() {
             '</head>'),
       );
 
-      expect(head.Metadata, hasLength(1));
-      expect(head.Metadata!.single.Name, 'dtb:uid');
-      expect(head.Metadata!.single.Content, 'NGE-SEED-UID');
-      expect(head.Metadata!.single.Scheme, 'uuid');
+      expect(head.metadata, hasLength(1));
+      expect(head.metadata!.single.name, 'dtb:uid');
+      expect(head.metadata!.single.content, 'NGE-SEED-UID');
+      expect(head.metadata!.single.scheme, 'uuid');
     });
 
     // TC-NAVU-4 [Error guessing]: a meta must carry a non-empty name and a
@@ -106,7 +106,7 @@ void main() {
         _element('<head><meta name="dtb:depth" content=""/></head>'),
       );
 
-      expect(head.Metadata!.single.Content, isEmpty);
+      expect(head.metadata!.single.content, isEmpty);
     });
   });
 
@@ -120,7 +120,7 @@ void main() {
             '<text>NGE-SEED B</text></docTitle>'),
       );
 
-      expect(title.Titles, <String>['NGE-SEED A', 'NGE-SEED B']);
+      expect(title.titles, <String>['NGE-SEED A', 'NGE-SEED B']);
     });
 
     test('TC-NAVU-8 [Scenario]: docAuthor collects text children only', () {
@@ -130,19 +130,19 @@ void main() {
             '</docAuthor>'),
       );
 
-      expect(author.Authors, <String>['NGE-SEED Author']);
+      expect(author.authors, <String>['NGE-SEED Author']);
     });
   });
 
   group('NavigationReader.readNavigationLabel', () {
-    // TC-NAVU-9 [Scenario/use-case]: the label's text element supplies Text.
+    // TC-NAVU-9 [Scenario/use-case]: the label's text element supplies text.
     test('TC-NAVU-9 [Scenario]: reads the label text element', () {
       final EpubNavigationLabel label =
           const NavigationReader().readNavigationLabel(
         _element('<navLabel><text>NGE-SEED Label</text></navLabel>'),
       );
 
-      expect(label.Text, 'NGE-SEED Label');
+      expect(label.text, 'NGE-SEED Label');
     });
 
     // TC-NAVU-10 [Error guessing]: a label with no text element is rejected.
@@ -165,7 +165,7 @@ void main() {
         _element('<a href="chapter1.xhtml">  NGE-SEED V3 Label  </a>'),
       );
 
-      expect(label.Text, 'NGE-SEED V3 Label');
+      expect(label.text, 'NGE-SEED V3 Label');
     });
   });
 
@@ -229,8 +229,8 @@ void main() {
             '</navMap>'),
       );
 
-      expect(map.Points, hasLength(1));
-      expect(map.Points!.single.Id, 'np-1');
+      expect(map.points, hasLength(1));
+      expect(map.points!.single.id, 'np-1');
     });
   });
 
@@ -241,9 +241,9 @@ void main() {
     // string resolves to its enum value.
     for (final MapEntry<String, EpubNavigationPageTargetType> pair
         in <String, EpubNavigationPageTargetType>{
-      'front': EpubNavigationPageTargetType.FRONT,
-      'normal': EpubNavigationPageTargetType.NORMAL,
-      'special': EpubNavigationPageTargetType.SPECIAL,
+      'front': EpubNavigationPageTargetType.front,
+      'normal': EpubNavigationPageTargetType.normal,
+      'special': EpubNavigationPageTargetType.special,
     }.entries) {
       test(
         'TC-NAVU-17 [Equivalence partitioning]: page target type '
@@ -255,17 +255,17 @@ void main() {
                 'class="pagenum" playOrder="2">$label</pageTarget>'),
           );
 
-          expect(target.Type, pair.value);
-          expect(target.Id, 'pt-1');
-          expect(target.Value, '1');
-          expect(target.Class, 'pagenum');
-          expect(target.PlayOrder, '2');
+          expect(target.type, pair.value);
+          expect(target.id, 'pt-1');
+          expect(target.value, '1');
+          expect(target.className, 'pagenum');
+          expect(target.playOrder, '2');
         },
       );
     }
 
     // TC-NAVU-18 [Error guessing]: `type="undefined"` is the one value the
-    // guard rejects — an unrecognised string leaves Type null and passes,
+    // guard rejects — an unrecognised string leaves type null and passes,
     // which TC-NAVU-19 pins.
     test(
         'TC-NAVU-18 [Error guessing]: page target typed "undefined" is '
@@ -280,17 +280,17 @@ void main() {
     });
 
     // TC-NAVU-19 [Error guessing]: an unrecognised type string is accepted
-    // with a null Type — pinning current behaviour, not endorsing it.
+    // with a null type — pinning current behaviour, not endorsing it.
     test(
         'TC-NAVU-19 [Error guessing]: unrecognised page target type leaves '
-        'Type null instead of throwing', () {
+        'type null instead of throwing', () {
       final EpubNavigationPageTarget target =
           const NavigationReader().readNavigationPageTarget(
         _element('<pageTarget id="pt-1" type="nge-seed-unknown">$label'
             '</pageTarget>'),
       );
 
-      expect(target.Type, isNull);
+      expect(target.type, isNull);
     });
 
     // TC-NAVU-20 [Error guessing]: a page target needs at least one navLabel.
@@ -325,8 +325,8 @@ void main() {
             '</pageList>'),
       );
 
-      expect(list.Targets, hasLength(1));
-      expect(list.Targets!.single.Id, 'pt-1');
+      expect(list.targets, hasLength(1));
+      expect(list.targets!.single.id, 'pt-1');
     });
   });
 
@@ -334,13 +334,13 @@ void main() {
     const String label = '<navLabel><text>NGE-SEED Target</text></navLabel>';
 
     // TC-NAVU-22 [Error guessing]: KNOWN DEFECT, pinned not fixed. Every
-    // well-formed navTarget throws: `EpubNavigationTarget.NavigationLabels`
+    // well-formed navTarget throws: `EpubNavigationTarget.navigationLabels`
     // is never initialised, and the child walk appends to it through `!`.
     // The reader therefore has no success path at all — reported to the
     // caller; the fix belongs in lib/.
     test(
         'TC-NAVU-22 [Error guessing]: navTarget with a navLabel throws '
-        'TypeError (uninitialised NavigationLabels)', () {
+        'TypeError (uninitialised navigationLabels)', () {
       expect(
         () => const NavigationReader().readNavigationTarget(
           _element('<navTarget id="nt-1" value="v" class="c" playOrder="3">'
@@ -378,7 +378,7 @@ void main() {
     });
 
     // TC-NAVU-24 [Error guessing]: with no children at all the same null list
-    // trips the `NavigationLabels!.isEmpty` guard itself, so the intended
+    // trips the `navigationLabels!.isEmpty` guard itself, so the intended
     // 'at least one navLabel' Exception is unreachable.
     test(
         'TC-NAVU-24 [Error guessing]: childless navTarget throws TypeError '
@@ -402,12 +402,12 @@ void main() {
         _element('<navList id="nl-1" class="illustrations"/>'),
       );
 
-      expect(list.Id, 'nl-1');
-      expect(list.Class, 'illustrations');
+      expect(list.id, 'nl-1');
+      expect(list.className, 'illustrations');
     });
 
     // TC-NAVU-26 [Error guessing]: KNOWN DEFECT, pinned not fixed —
-    // `EpubNavigationList` leaves NavigationLabels/NavigationTargets null and
+    // `EpubNavigationList` leaves navigationLabels/navigationTargets null and
     // this reader appends through `!`, so either child shape is a TypeError.
     // Reported to the caller; the fix belongs in lib/.
     for (final String child in <String>[
@@ -445,7 +445,7 @@ void main() {
         'OEBPS/',
       );
 
-      expect(content.Source, 'OEBPS/chapter1.xhtml');
+      expect(content.source, 'OEBPS/chapter1.xhtml');
     });
   });
 

@@ -3,38 +3,6 @@
 # the stock-analyzer lints, which `dart_lints.yaml`'s `disable:` does not take.
 include: package:lints/recommended.yaml
 
-analyzer:
-  errors:
-    # The public API keeps upstream's PascalCase members (`Schema`, `Content`,
-    # `FileName`, `Chapters`). Unlike the enum below, these ARE referenced from
-    # outside — renaming them changes every call site in the NovelGlide app, so
-    # it is a coordinated change across two repos, not a lint cleanup.
-    non_constant_identifier_names: ignore
-
-    # 24 findings, all of them `EpubContentType`'s SCREAMING_CASE values
-    # (`XHTML_1_1`, `IMAGE_GIF`, …) carried over from upstream. Renaming them
-    # is safe — nothing outside this package references the enum, and the test
-    # suite would catch a slip — but it is a public API change and did not
-    # belong inside the change that added the tests. Drop this line in the
-    # rename.
-    constant_identifier_names: ignore
-
-    # 10 findings, all `XmlNode.text`, which the `xml` package deprecated in
-    # favour of `value` (this node's own text) or `innerText` (its
-    # descendants'). Which one each site wants is a parsing decision, not a
-    # substitution — pick wrong and the reader silently returns a different
-    # string. Now that the readers have tests, that change can be made
-    # safely; it is its own change.
-    deprecated_member_use: ignore
-
-    # Both findings are inside `ZipPathResolver.combine`, which the
-    # percent-encoding fix rewrites. `dart fix` tried to type its `var path;`
-    # and produced a compile error (`String?` passed to `Uri.parse`) — the
-    # tell that what is wrong there is the function's nullability, not its
-    # annotation.
-    prefer_typing_uninitialized_variables: ignore
-    prefer_interpolation_to_compose_strings: ignore
-
 # The stock-lint selection below is copied verbatim from the NovelGlide
 # app's own analysis_options.yaml, so the two stay one selection rather
 # than two that drift. Extracting this package out of `packages/` was

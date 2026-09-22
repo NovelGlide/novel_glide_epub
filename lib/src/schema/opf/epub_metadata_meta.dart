@@ -1,22 +1,22 @@
 import 'package:quiver/core.dart';
 
 class EpubMetadataMeta {
-  String? Name;
-  String? Content;
-  String? Id;
-  String? Refines;
-  String? Property;
-  String? Scheme;
-  Map<String, String>? Attributes;
+  String? name;
+  String? content;
+  String? id;
+  String? refines;
+  String? property;
+  String? scheme;
+  Map<String, String>? attributes;
 
   @override
-  int get hashCode => hashObjects(<dynamic>[
-        Name.hashCode,
-        Content.hashCode,
-        Id.hashCode,
-        Refines.hashCode,
-        Property.hashCode,
-        Scheme.hashCode
+  int get hashCode => hashObjects(<Object?>[
+        name.hashCode,
+        content.hashCode,
+        id.hashCode,
+        refines.hashCode,
+        property.hashCode,
+        scheme.hashCode
       ]);
 
   @override
@@ -24,11 +24,11 @@ class EpubMetadataMeta {
     if (other is! EpubMetadataMeta) {
       return false;
     }
-    return Name == other.Name &&
-        Content == other.Content &&
-        Id == other.Id &&
-        Refines == other.Refines &&
-        Property == other.Property &&
-        Scheme == other.Scheme;
+    return name == other.name &&
+        content == other.content &&
+        id == other.id &&
+        refines == other.refines &&
+        property == other.property &&
+        scheme == other.scheme;
   }
 }

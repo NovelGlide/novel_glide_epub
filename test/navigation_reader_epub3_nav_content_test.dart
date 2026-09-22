@@ -49,12 +49,12 @@ Uint8List _epub3With(String listItems) => buildEpubArchive(
 void main() {
   group('NavigationReader EPUB3 nav document contents', () {
     // TC-NAV3-1 [Scenario/use-case]: a nested `<ol>` becomes child navigation
-    // points, and the DocTitle is taken from the package metadata rather than
+    // points, and the docTitle is taken from the package metadata rather than
     // the nav document.
     test(
       'TC-NAV3-1 [Scenario]: a nested ol becomes child navigation points',
       () async {
-        final EpubBookRef bookRef = await EpubReader.openBook(
+        final EpubBookRef bookRef = await const EpubReader().openBook(
           _epub3With(
             '<li><a href="chapter1.xhtml">NGE-SEED Chapter One</a>'
             '<ol><li><a href="chapter1.xhtml#sec-1">NGE-SEED Section 1</a>'
@@ -63,22 +63,22 @@ void main() {
           ),
         );
 
-        final EpubNavigation navigation = bookRef.Schema!.Navigation!;
-        expect(navigation.DocTitle!.Titles, <String>['NGE-SEED Nav3 Content']);
-        expect(navigation.DocAuthors, isEmpty);
-        expect(navigation.NavMap!.Points, hasLength(2));
+        final EpubNavigation navigation = bookRef.schema!.navigation!;
+        expect(navigation.docTitle!.titles, <String>['NGE-SEED Nav3 Content']);
+        expect(navigation.docAuthors, isEmpty);
+        expect(navigation.navMap!.points, hasLength(2));
 
-        final EpubNavigationPoint first = navigation.NavMap!.Points!.first;
-        expect(first.NavigationLabels!.single.Text, 'NGE-SEED Chapter One');
-        expect(first.ChildNavigationPoints, hasLength(1));
+        final EpubNavigationPoint first = navigation.navMap!.points!.first;
+        expect(first.navigationLabels!.single.text, 'NGE-SEED Chapter One');
+        expect(first.childNavigationPoints, hasLength(1));
         expect(
-          first.ChildNavigationPoints!.single.Content!.Source,
+          first.childNavigationPoints!.single.content!.source,
           'chapter1.xhtml#sec-1',
         );
 
         final List<EpubChapterRef> chapters = await bookRef.getChapters();
         expect(chapters, hasLength(2));
-        expect(chapters.first.SubChapters!.single.Anchor, 'sec-1');
+        expect(chapters.first.subChapters!.single.anchor, 'sec-1');
       },
     );
 
@@ -89,7 +89,7 @@ void main() {
       'TC-NAV3-2 [Equivalence partitioning]: a span entry yields a sourceless '
       'navigation point that produces no chapter',
       () async {
-        final EpubBookRef bookRef = await EpubReader.openBook(
+        final EpubBookRef bookRef = await const EpubReader().openBook(
           _epub3With(
             '<li><span>NGE-SEED Part One</span>'
             '<ol><li><a href="chapter1.xhtml">NGE-SEED Chapter One</a></li>'
@@ -99,14 +99,14 @@ void main() {
         );
 
         final EpubNavigationPoint span =
-            bookRef.Schema!.Navigation!.NavMap!.Points!.first;
-        expect(span.NavigationLabels!.single.Text, 'NGE-SEED Part One');
-        expect(span.Content, isNotNull);
-        expect(span.Content!.Source, isNull);
+            bookRef.schema!.navigation!.navMap!.points!.first;
+        expect(span.navigationLabels!.single.text, 'NGE-SEED Part One');
+        expect(span.content, isNotNull);
+        expect(span.content!.source, isNull);
 
         final List<EpubChapterRef> chapters = await bookRef.getChapters();
         expect(chapters, hasLength(1));
-        expect(chapters.single.ContentFileName, 'chapter2.xhtml');
+        expect(chapters.single.contentFileName, 'chapter2.xhtml');
       },
     );
 
@@ -116,7 +116,7 @@ void main() {
       'TC-NAV3-3 [Error guessing]: an li with no anchor or span is rejected',
       () {
         expect(
-          () => EpubReader.openBook(
+          () => const EpubReader().openBook(
             _epub3With('<li><p>NGE-SEED orphan text</p></li>'),
           ),
           throwsA(
@@ -136,14 +136,14 @@ void main() {
       'TC-NAV3-4 [Equivalence partitioning]: non-li children of the nav ol '
       'are skipped',
       () async {
-        final EpubBookRef bookRef = await EpubReader.openBook(
+        final EpubBookRef bookRef = await const EpubReader().openBook(
           _epub3With(
             '<div>NGE-SEED stray</div>'
             '<li><a href="chapter1.xhtml">NGE-SEED Chapter One</a></li>',
           ),
         );
 
-        expect(bookRef.Schema!.Navigation!.NavMap!.Points, hasLength(1));
+        expect(bookRef.schema!.navigation!.navMap!.points, hasLength(1));
       },
     );
 
@@ -153,7 +153,7 @@ void main() {
       'TC-NAV3-5 [Scenario]: the anchor id is read into the navigation '
       'content',
       () async {
-        final EpubBookRef bookRef = await EpubReader.openBook(
+        final EpubBookRef bookRef = await const EpubReader().openBook(
           _epub3With(
             '<li><a id="toc-1" href="chapter1.xhtml">NGE-SEED Chapter One</a>'
             '</li>',
@@ -161,9 +161,9 @@ void main() {
         );
 
         final EpubNavigationPoint point =
-            bookRef.Schema!.Navigation!.NavMap!.Points!.single;
-        expect(point.Content!.Id, 'toc-1');
-        expect(point.Content!.Source, 'chapter1.xhtml');
+            bookRef.schema!.navigation!.navMap!.points!.single;
+        expect(point.content!.id, 'toc-1');
+        expect(point.content!.source, 'chapter1.xhtml');
       },
     );
   });

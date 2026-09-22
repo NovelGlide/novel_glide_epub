@@ -110,16 +110,17 @@ void main() {
     test(
         'TC-REF-1 [Scenario]: an opened book exposes title, authors and its '
         'archive', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(seedArchive());
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(seedArchive());
 
-      expect(bookRef.Title, 'NGE-SEED Ref Book');
-      expect(bookRef.AuthorList,
+      expect(bookRef.title, 'NGE-SEED Ref Book');
+      expect(bookRef.authorList,
           <String>['NGE-SEED Author One', 'NGE-SEED Author Two']);
-      expect(bookRef.Author, 'NGE-SEED Author One, NGE-SEED Author Two');
-      expect(bookRef.Schema!.ContentDirectoryPath, 'OEBPS');
-      expect(bookRef.EpubArchive(), isA<Archive>());
+      expect(bookRef.author, 'NGE-SEED Author One, NGE-SEED Author Two');
+      expect(bookRef.schema!.contentDirectoryPath, 'OEBPS');
+      expect(bookRef.epubArchive(), isA<Archive>());
       expect(
-        bookRef.EpubArchive()!.files.map((ArchiveFile f) => f.name),
+        bookRef.epubArchive()!.files.map((ArchiveFile f) => f.name),
         contains('OEBPS/chapter1.xhtml'),
       );
     });
@@ -129,64 +130,74 @@ void main() {
     // field the ref compares is reader-populated.
     test('TC-REF-2 [Scenario]: two opens of one archive are equal', () async {
       final Uint8List bytes = seedArchive();
-      final EpubBookRef first = await EpubReader.openBook(bytes);
-      final EpubBookRef second = await EpubReader.openBook(bytes);
+      final EpubBookRef first = await const EpubReader().openBook(bytes);
+      final EpubBookRef second = await const EpubReader().openBook(bytes);
 
       expect(first, equals(second));
       expect(first.hashCode, equals(second.hashCode));
     });
 
     // TC-REF-3 [Equivalence partitioning]: each compared field decides once.
-    // `Title`, `Author` and `AuthorList` are all derived from the OPF, so they
+    // `title`, `author` and `authorList` are all derived from the OPF, so they
     // are varied through the metadata rather than by mutating the ref; the
     // remaining two are set directly, since no fixture varies them alone.
     test(
-        'TC-REF-3 [Equivalence partitioning]: a differing Title breaks '
+        'TC-REF-3 [Equivalence partitioning]: a differing title breaks '
         'equality', () async {
-      final EpubBookRef first = await EpubReader.openBook(seedArchive());
-      final EpubBookRef second = await EpubReader.openBook(seedArchive());
-      second.Title = 'NGE-SEED Other';
+      final EpubBookRef first =
+          await const EpubReader().openBook(seedArchive());
+      final EpubBookRef second =
+          await const EpubReader().openBook(seedArchive());
+      second.title = 'NGE-SEED Other';
 
       expect(first, isNot(equals(second)));
     });
 
     test(
-        'TC-REF-3 [Equivalence partitioning]: a differing Author breaks '
+        'TC-REF-3 [Equivalence partitioning]: a differing author breaks '
         'equality', () async {
-      final EpubBookRef first = await EpubReader.openBook(seedArchive());
-      final EpubBookRef second = await EpubReader.openBook(seedArchive());
-      second.Author = 'NGE-SEED Other';
+      final EpubBookRef first =
+          await const EpubReader().openBook(seedArchive());
+      final EpubBookRef second =
+          await const EpubReader().openBook(seedArchive());
+      second.author = 'NGE-SEED Other';
 
       expect(first, isNot(equals(second)));
     });
 
     test(
-        'TC-REF-3 [Equivalence partitioning]: a differing AuthorList breaks '
+        'TC-REF-3 [Equivalence partitioning]: a differing authorList breaks '
         'equality', () async {
-      final EpubBookRef first = await EpubReader.openBook(seedArchive());
-      final EpubBookRef second = await EpubReader.openBook(seedArchive());
-      second.AuthorList = <String?>['NGE-SEED Author One'];
+      final EpubBookRef first =
+          await const EpubReader().openBook(seedArchive());
+      final EpubBookRef second =
+          await const EpubReader().openBook(seedArchive());
+      second.authorList = <String?>['NGE-SEED Author One'];
 
       expect(first, isNot(equals(second)));
       expect(first.hashCode, isNot(equals(second.hashCode)));
     });
 
     test(
-        'TC-REF-3 [Equivalence partitioning]: a differing Schema breaks '
+        'TC-REF-3 [Equivalence partitioning]: a differing schema breaks '
         'equality', () async {
-      final EpubBookRef first = await EpubReader.openBook(seedArchive());
-      final EpubBookRef second = await EpubReader.openBook(seedArchive());
-      second.Schema!.ContentDirectoryPath = 'NGE-SEED-OTHER';
+      final EpubBookRef first =
+          await const EpubReader().openBook(seedArchive());
+      final EpubBookRef second =
+          await const EpubReader().openBook(seedArchive());
+      second.schema!.contentDirectoryPath = 'NGE-SEED-OTHER';
 
       expect(first, isNot(equals(second)));
     });
 
     test(
-        'TC-REF-3 [Equivalence partitioning]: a differing Content breaks '
+        'TC-REF-3 [Equivalence partitioning]: a differing content breaks '
         'equality', () async {
-      final EpubBookRef first = await EpubReader.openBook(seedArchive());
-      final EpubBookRef second = await EpubReader.openBook(seedArchive());
-      second.Content!.Html!.remove('chapter1.xhtml');
+      final EpubBookRef first =
+          await const EpubReader().openBook(seedArchive());
+      final EpubBookRef second =
+          await const EpubReader().openBook(seedArchive());
+      second.content!.html!.remove('chapter1.xhtml');
 
       expect(first, isNot(equals(second)));
     });
@@ -196,7 +207,8 @@ void main() {
     // schema classes had to be fixed to match (TC-OPF-1, TC-NSC-1).
     test('TC-REF-4 [Error guessing]: an unrelated operand is not equal',
         () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(seedArchive());
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(seedArchive());
 
       expect(bookRef == unrelatedOperand, isFalse);
       expect(bookRef == nullOperand, isFalse);
@@ -223,11 +235,11 @@ void main() {
           'OEBPS/body.ttf': <int>[0, 1, 0, 0],
         },
       );
-      final EpubBookRef bookRef = await EpubReader.openBook(bytes);
+      final EpubBookRef bookRef = await const EpubReader().openBook(bytes);
 
       final List<EpubChapterRef> chapters = await bookRef.getChapters();
       expect(chapters, hasLength(1));
-      expect(chapters.single.Title, 'NGE-SEED Chapter One');
+      expect(chapters.single.title, 'NGE-SEED Chapter One');
 
       final Image? cover = await bookRef.readCover();
       expect(cover, isNotNull);
@@ -260,7 +272,7 @@ void main() {
           'OEBPS/chapter1.xhtml': seedXhtml('NGE-SEED-CH1'),
         },
       );
-      final EpubBookRef bookRef = await EpubReader.openBook(bytes);
+      final EpubBookRef bookRef = await const EpubReader().openBook(bytes);
 
       expect(await bookRef.readCover(), isNull);
       expect(await bookRef.readCoverBytes(), isNull);
@@ -272,31 +284,34 @@ void main() {
     // maps, and `parseContentMap` sorts every manifest item into them.
     test('TC-REF-7 [Scenario]: content is bucketed into the five maps',
         () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(seedArchive());
-      final EpubContentRef content = bookRef.Content!;
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(seedArchive());
+      final EpubContentRef content = bookRef.content!;
 
-      expect(content.Html!.keys, <String>['chapter1.xhtml']);
-      expect(content.Css!.keys, <String>['style.css']);
-      expect(content.Images!.keys, <String>['cover.png']);
-      expect(content.Fonts!.keys, <String>['body.ttf']);
-      expect(content.AllFiles, hasLength(5));
-      expect(content.AllFiles!.keys, contains('toc.ncx'));
+      expect(content.html!.keys, <String>['chapter1.xhtml']);
+      expect(content.css!.keys, <String>['style.css']);
+      expect(content.images!.keys, <String>['cover.png']);
+      expect(content.fonts!.keys, <String>['body.ttf']);
+      expect(content.allFiles, hasLength(5));
+      expect(content.allFiles!.keys, contains('toc.ncx'));
 
       // A bare `EpubContentRef()` starts with all five buckets empty.
       final EpubContentRef bare = EpubContentRef();
-      expect(bare.Html, isEmpty);
-      expect(bare.Css, isEmpty);
-      expect(bare.Images, isEmpty);
-      expect(bare.Fonts, isEmpty);
-      expect(bare.AllFiles, isEmpty);
+      expect(bare.html, isEmpty);
+      expect(bare.css, isEmpty);
+      expect(bare.images, isEmpty);
+      expect(bare.fonts, isEmpty);
+      expect(bare.allFiles, isEmpty);
     });
 
     // TC-REF-8 [Scenario/use-case]: two opens produce equal content refs.
     test('TC-REF-8 [Scenario]: content refs from two opens are equal',
         () async {
       final Uint8List bytes = seedArchive();
-      final EpubContentRef first = (await EpubReader.openBook(bytes)).Content!;
-      final EpubContentRef second = (await EpubReader.openBook(bytes)).Content!;
+      final EpubContentRef first =
+          (await const EpubReader().openBook(bytes)).content!;
+      final EpubContentRef second =
+          (await const EpubReader().openBook(bytes)).content!;
 
       expect(first, equals(second));
       expect(first.hashCode, equals(second.hashCode));
@@ -306,32 +321,32 @@ void main() {
     // TC-REF-9 [Equivalence partitioning]: each of the five maps decides
     // equality on its own.
     for (final String bucket in <String>[
-      'Html',
-      'Css',
-      'Images',
-      'Fonts',
-      'AllFiles',
+      'html',
+      'css',
+      'images',
+      'fonts',
+      'allFiles',
     ]) {
       test(
           'TC-REF-9 [Equivalence partitioning]: a changed $bucket breaks '
           'equality', () async {
         final Uint8List bytes = seedArchive();
         final EpubContentRef first =
-            (await EpubReader.openBook(bytes)).Content!;
+            (await const EpubReader().openBook(bytes)).content!;
         final EpubContentRef second =
-            (await EpubReader.openBook(bytes)).Content!;
+            (await const EpubReader().openBook(bytes)).content!;
 
         switch (bucket) {
-          case 'Html':
-            second.Html!.clear();
-          case 'Css':
-            second.Css!.clear();
-          case 'Images':
-            second.Images!.clear();
-          case 'Fonts':
-            second.Fonts!.clear();
-          case 'AllFiles':
-            second.AllFiles!.clear();
+          case 'html':
+            second.html!.clear();
+          case 'css':
+            second.css!.clear();
+          case 'images':
+            second.images!.clear();
+          case 'fonts':
+            second.fonts!.clear();
+          case 'allFiles':
+            second.allFiles!.clear();
         }
 
         expect(first, isNot(equals(second)));
@@ -353,13 +368,14 @@ void main() {
     test(
         'TC-REF-11 [Scenario]: a content file ref resolves and reads its '
         'entry', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(seedArchive());
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(seedArchive());
       final EpubTextContentFileRef chapter =
-          bookRef.Content!.Html!['chapter1.xhtml']!;
+          bookRef.content!.html!['chapter1.xhtml']!;
 
-      expect(chapter.FileName, 'chapter1.xhtml');
-      expect(chapter.ContentMimeType, 'application/xhtml+xml');
-      expect(chapter.ContentType, EpubContentType.XHTML_1_1);
+      expect(chapter.fileName, 'chapter1.xhtml');
+      expect(chapter.contentMimeType, 'application/xhtml+xml');
+      expect(chapter.contentType, EpubContentType.xhtml11);
       expect(chapter.epubBookRef, same(bookRef));
 
       final ArchiveFile entry = chapter.getContentFileEntry();
@@ -382,15 +398,16 @@ void main() {
 
     // TC-REF-12 [Error guessing]: a manifest href with no matching archive
     // entry is rejected as a typed `EpubMissingArchiveEntryException`, with
-    // the archive path in the message. The ref's `FileName` is reassigned
+    // the archive path in the message. The ref's `fileName` is reassigned
     // because a manifest the reader accepted is by construction resolvable —
     // this is the state a hand-edited EPUB reaches.
     test('TC-REF-12 [Error guessing]: an unresolvable file name throws',
         () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(seedArchive());
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(seedArchive());
       final EpubTextContentFileRef chapter =
-          bookRef.Content!.Html!['chapter1.xhtml']!;
-      chapter.FileName = 'NGE-SEED-missing.xhtml';
+          bookRef.content!.html!['chapter1.xhtml']!;
+      chapter.fileName = 'NGE-SEED-missing.xhtml';
 
       expect(
         chapter.getContentFileEntry,
@@ -418,9 +435,13 @@ void main() {
         'equal', () async {
       final Uint8List bytes = seedArchive();
       final EpubTextContentFileRef first =
-          (await EpubReader.openBook(bytes)).Content!.Html!['chapter1.xhtml']!;
+          (await const EpubReader().openBook(bytes))
+              .content!
+              .html!['chapter1.xhtml']!;
       final EpubTextContentFileRef second =
-          (await EpubReader.openBook(bytes)).Content!.Html!['chapter1.xhtml']!;
+          (await const EpubReader().openBook(bytes))
+              .content!
+              .html!['chapter1.xhtml']!;
 
       expect(first.epubBookRef, isNot(same(second.epubBookRef)));
       expect(first, equals(second));
@@ -430,28 +451,30 @@ void main() {
     // TC-REF-14 [Equivalence partitioning]: each of the three compared fields
     // decides once.
     for (final String field in <String>[
-      'FileName',
-      'ContentMimeType',
-      'ContentType',
+      'fileName',
+      'contentMimeType',
+      'contentType',
     ]) {
       test(
           'TC-REF-14 [Equivalence partitioning]: a differing $field breaks '
           'equality', () async {
         final Uint8List bytes = seedArchive();
-        final EpubTextContentFileRef first = (await EpubReader.openBook(bytes))
-            .Content!
-            .Html!['chapter1.xhtml']!;
-        final EpubTextContentFileRef second = (await EpubReader.openBook(bytes))
-            .Content!
-            .Html!['chapter1.xhtml']!;
+        final EpubTextContentFileRef first =
+            (await const EpubReader().openBook(bytes))
+                .content!
+                .html!['chapter1.xhtml']!;
+        final EpubTextContentFileRef second =
+            (await const EpubReader().openBook(bytes))
+                .content!
+                .html!['chapter1.xhtml']!;
 
         switch (field) {
-          case 'FileName':
-            second.FileName = 'NGE-SEED-other.xhtml';
-          case 'ContentMimeType':
-            second.ContentMimeType = 'text/html';
-          case 'ContentType':
-            second.ContentType = EpubContentType.XML;
+          case 'fileName':
+            second.fileName = 'NGE-SEED-other.xhtml';
+          case 'contentMimeType':
+            second.contentMimeType = 'text/html';
+          case 'contentType':
+            second.contentType = EpubContentType.xml;
         }
 
         expect(first, isNot(equals(second)));
@@ -467,18 +490,19 @@ void main() {
     test(
         'TC-REF-15 [Error guessing]: the base comparison ignores the '
         'subclass', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(seedArchive());
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(seedArchive());
       final EpubTextContentFileRef text =
-          bookRef.Content!.Html!['chapter1.xhtml']!;
+          bookRef.content!.html!['chapter1.xhtml']!;
       final EpubByteContentFileRef bytes =
-          bookRef.Content!.Images!['cover.png']!;
+          bookRef.content!.images!['cover.png']!;
 
       expect(text, isNot(equals(bytes)));
 
       bytes
-        ..FileName = text.FileName
-        ..ContentMimeType = text.ContentMimeType
-        ..ContentType = text.ContentType;
+        ..fileName = text.fileName
+        ..contentMimeType = text.contentMimeType
+        ..contentType = text.contentType;
       expect(text, equals(bytes));
       expect(bytes, equals(text));
 
@@ -487,23 +511,24 @@ void main() {
     });
 
     // TC-REF-16 [Scenario/use-case]: the two subclass convenience methods.
-    // `EpubTextContentFileRef.ReadContentAsync` and
+    // `EpubTextContentFileRef.readContentAsync` and
     // `EpubByteContentFileRef.readContent` are thin aliases, and the app calls
     // them rather than the base methods.
     test(
         'TC-REF-16 [Scenario]: the subclass read aliases match the base '
         'methods', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(seedArchive());
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(seedArchive());
       final EpubTextContentFileRef text =
-          bookRef.Content!.Html!['chapter1.xhtml']!;
+          bookRef.content!.html!['chapter1.xhtml']!;
       final EpubByteContentFileRef image =
-          bookRef.Content!.Images!['cover.png']!;
+          bookRef.content!.images!['cover.png']!;
 
       expect(
-        await text.ReadContentAsync(),
+        await text.readContentAsync(),
         equals(await text.readContentAsText()),
       );
-      expect(await text.ReadContentAsync(), contains('NGE-SEED-CH1'));
+      expect(await text.readContentAsync(), contains('NGE-SEED-CH1'));
 
       expect(
         await image.readContent(),
@@ -533,8 +558,8 @@ void main() {
           'OEBPS/style.css': '',
         },
       );
-      final EpubBookRef bookRef = await EpubReader.openBook(bytes);
-      final EpubTextContentFileRef css = bookRef.Content!.Css!['style.css']!;
+      final EpubBookRef bookRef = await const EpubReader().openBook(bytes);
+      final EpubTextContentFileRef css = bookRef.content!.css!['style.css']!;
 
       expect(css.getContentStream(), isEmpty);
       expect(await css.readContentAsText(), isEmpty);
@@ -552,9 +577,10 @@ void main() {
     test(
         'TC-REF-25 [Error guessing]: an entry with no content at all is '
         'rejected', () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(seedArchive());
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(seedArchive());
       final EpubTextContentFileRef chapter =
-          bookRef.Content!.Html!['chapter1.xhtml']!;
+          bookRef.content!.html!['chapter1.xhtml']!;
 
       final ArchiveFile empty = ArchiveFile('OEBPS/chapter1.xhtml', 0, null);
       expect(empty.content, isNull);
@@ -578,14 +604,15 @@ void main() {
     // ref, its title and its content file name, and reads its html directly.
     test('TC-REF-18 [Scenario]: a single-file chapter reads its html',
         () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(seedArchive());
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(seedArchive());
       final EpubChapterRef chapter = (await bookRef.getChapters()).single;
 
-      expect(chapter.Title, 'NGE-SEED Chapter One');
-      expect(chapter.ContentFileName, 'chapter1.xhtml');
-      expect(chapter.Anchor, isNull);
-      expect(chapter.SubChapters, isEmpty);
-      expect(chapter.OtherContentFileNames, isEmpty);
+      expect(chapter.title, 'NGE-SEED Chapter One');
+      expect(chapter.contentFileName, 'chapter1.xhtml');
+      expect(chapter.anchor, isNull);
+      expect(chapter.subChapters, isEmpty);
+      expect(chapter.otherContentFileNames, isEmpty);
       expect(chapter.otherTextContentFileRefs, isEmpty);
       expect(chapter.epubTextContentFileRef, isNotNull);
       expect(await chapter.readHtmlContent(), contains('NGE-SEED-CH1'));
@@ -598,12 +625,12 @@ void main() {
     test('TC-REF-19 [Scenario]: a split chapter concatenates all its parts',
         () async {
       final EpubBookRef bookRef =
-          await EpubReader.openBook(seedSplitChapterArchive());
+          await const EpubReader().openBook(seedSplitChapterArchive());
       final EpubChapterRef chapter = (await bookRef.getChapters()).single;
 
-      expect(chapter.ContentFileName, 'part_split_000.xhtml');
+      expect(chapter.contentFileName, 'part_split_000.xhtml');
       expect(
-        chapter.OtherContentFileNames,
+        chapter.otherContentFileNames,
         <String>['part_split_001.xhtml'],
       );
       expect(chapter.otherTextContentFileRefs, hasLength(1));
@@ -639,23 +666,23 @@ void main() {
           'OEBPS/body.ttf': <int>[0, 1, 0, 0],
         },
       );
-      final EpubBookRef bookRef = await EpubReader.openBook(bytes);
+      final EpubBookRef bookRef = await const EpubReader().openBook(bytes);
       final EpubChapterRef chapter = (await bookRef.getChapters()).single;
 
-      expect(chapter.SubChapters, hasLength(1));
-      final EpubChapterRef sub = chapter.SubChapters!.single;
-      expect(sub.Title, 'NGE-SEED Section One');
-      expect(sub.ContentFileName, 'chapter1.xhtml');
-      expect(sub.Anchor, 'NGE-SEED-s1');
+      expect(chapter.subChapters, hasLength(1));
+      final EpubChapterRef sub = chapter.subChapters!.single;
+      expect(sub.title, 'NGE-SEED Section One');
+      expect(sub.contentFileName, 'chapter1.xhtml');
+      expect(sub.anchor, 'NGE-SEED-s1');
       expect(chapter.toString(),
           'Title: NGE-SEED Chapter One, Subchapter count: 1');
     });
 
     // TC-REF-21 [Error guessing]: the regression guard for the identity
     // comparison this class carried alongside `EpubChapter` (TC-ENT-22). The
-    // two split-chapter lists — `OtherContentFileNames` and
+    // two split-chapter lists — `otherContentFileNames` and
     // `otherTextContentFileRefs` — were compared with `==` on the list
-    // OBJECTS while `SubChapters` went through `listsEqual`, and every ref
+    // OBJECTS while `subChapters` went through `listsEqual`, and every ref
     // gets its own fresh list from the field initialiser, so two refs over one
     // archive were never equal and never shared a `hashCode`. Both are now
     // compared and hashed by element.
@@ -664,53 +691,56 @@ void main() {
         'archive are equal', () async {
       final Uint8List bytes = seedArchive();
       final EpubChapterRef first =
-          (await (await EpubReader.openBook(bytes)).getChapters()).single;
+          (await (await const EpubReader().openBook(bytes)).getChapters())
+              .single;
       final EpubChapterRef second =
-          (await (await EpubReader.openBook(bytes)).getChapters()).single;
+          (await (await const EpubReader().openBook(bytes)).getChapters())
+              .single;
 
-      expect(first.Title, equals(second.Title));
-      expect(first.OtherContentFileNames, equals(second.OtherContentFileNames));
+      expect(first.title, equals(second.title));
+      expect(first.otherContentFileNames, equals(second.otherContentFileNames));
       expect(
-        identical(first.OtherContentFileNames, second.OtherContentFileNames),
+        identical(first.otherContentFileNames, second.otherContentFileNames),
         isFalse,
       );
       expect(first, equals(second));
       expect(first.hashCode, equals(second.hashCode));
 
       // The split-chapter list still decides equality when it differs.
-      second.OtherContentFileNames = <String>['NGE-SEED-part2.xhtml'];
+      second.otherContentFileNames = <String>['NGE-SEED-part2.xhtml'];
       expect(first, isNot(equals(second)));
     });
 
     // TC-REF-22 [Equivalence partitioning]: each remaining field decides
     // equality once.
     for (final String field in <String>[
-      'Title',
-      'ContentFileName',
-      'Anchor',
+      'title',
+      'contentFileName',
+      'anchor',
       'epubTextContentFileRef',
-      'SubChapters',
+      'subChapters',
     ]) {
       test(
           'TC-REF-22 [Equivalence partitioning]: a differing $field breaks '
           'equality', () async {
         final Uint8List bytes = seedArchive();
-        final EpubBookRef bookRef = await EpubReader.openBook(bytes);
+        final EpubBookRef bookRef = await const EpubReader().openBook(bytes);
         final EpubChapterRef first = (await bookRef.getChapters()).single;
         final EpubChapterRef second =
-            (await (await EpubReader.openBook(bytes)).getChapters()).single;
+            (await (await const EpubReader().openBook(bytes)).getChapters())
+                .single;
 
         switch (field) {
-          case 'Title':
-            second.Title = 'NGE-SEED Other';
-          case 'ContentFileName':
-            second.ContentFileName = 'NGE-SEED-other.xhtml';
-          case 'Anchor':
-            second.Anchor = 'NGE-SEED-anchor';
+          case 'title':
+            second.title = 'NGE-SEED Other';
+          case 'contentFileName':
+            second.contentFileName = 'NGE-SEED-other.xhtml';
+          case 'anchor':
+            second.anchor = 'NGE-SEED-anchor';
           case 'epubTextContentFileRef':
             second.epubTextContentFileRef = null;
-          case 'SubChapters':
-            second.SubChapters = null;
+          case 'subChapters':
+            second.subChapters = null;
         }
 
         expect(first, isNot(equals(second)));
@@ -721,7 +751,8 @@ void main() {
     // rejected without throwing.
     test('TC-REF-23 [Error guessing]: an unrelated operand is not equal',
         () async {
-      final EpubBookRef bookRef = await EpubReader.openBook(seedArchive());
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(seedArchive());
       final EpubChapterRef chapter = (await bookRef.getChapters()).single;
 
       expect(chapter == unrelatedOperand, isFalse);
@@ -752,17 +783,17 @@ void main() {
           'OEBPS/chapter1.xhtml': seedXhtml('NGE-SEED-CH1'),
         },
       );
-      final EpubBookRef bookRef = await EpubReader.openBook(bytes);
+      final EpubBookRef bookRef = await const EpubReader().openBook(bytes);
 
       expect(await bookRef.getChapters(), isEmpty);
     });
 
     // TC-REF-25 [Error guessing]: the regression guard for the `?? [0]`
     // fallback in `hashCode`. TC-REF-22 already shows a differing
-    // SubChapters breaks equality; nothing previously checked that two
-    // DIFFERING non-null SubChapters lists also hash differently.
+    // subChapters breaks equality; nothing previously checked that two
+    // DIFFERING non-null subChapters lists also hash differently.
     test(
-        'TC-REF-25 [Error guessing]: differing non-null SubChapters yields a '
+        'TC-REF-25 [Error guessing]: differing non-null subChapters yields a '
         'differing hashCode', () async {
       Future<EpubChapterRef> chapterWithSubLabel(String label) async {
         final Uint8List bytes = buildEpubArchive(
@@ -787,7 +818,7 @@ void main() {
             'OEBPS/body.ttf': <int>[0, 1, 0, 0],
           },
         );
-        final EpubBookRef bookRef = await EpubReader.openBook(bytes);
+        final EpubBookRef bookRef = await const EpubReader().openBook(bytes);
         return (await bookRef.getChapters()).single;
       }
 
@@ -795,6 +826,26 @@ void main() {
       final EpubChapterRef b = await chapterWithSubLabel('NGE-SEED Sub Two');
 
       expect(a.hashCode, isNot(equals(b.hashCode)));
+    });
+
+    // TC-REF-26 [Boundary value]: the null half of the same fallback. A
+    // chapter whose `subChapters` is nulled still hashes, and differently
+    // from its twin that keeps the (empty) list — the two are unequal, so a
+    // `?? []` fallback, which hashes like the empty list, would collide.
+    test(
+        'TC-REF-26 [Boundary]: null subChapters hashes, and differently from '
+        'an empty list', () async {
+      Future<EpubChapterRef> chapter() async =>
+          (await (await const EpubReader().openBook(seedArchive()))
+                  .getChapters())
+              .single;
+      final EpubChapterRef withList = await chapter();
+      final EpubChapterRef withNull = await chapter()
+        ..subChapters = null;
+
+      expect(withList.subChapters, isEmpty);
+      expect(withNull.hashCode, isA<int>());
+      expect(withNull.hashCode, isNot(equals(withList.hashCode)));
     });
   });
 }

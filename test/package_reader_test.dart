@@ -41,10 +41,10 @@ void main() {
             '</guide>'),
       );
 
-      expect(guide.Items, hasLength(1));
-      expect(guide.Items!.single.Type, 'cover');
-      expect(guide.Items!.single.Title, 'NGE-SEED Cover');
-      expect(guide.Items!.single.Href, 'cover.xhtml');
+      expect(guide.items, hasLength(1));
+      expect(guide.items!.single.type, 'cover');
+      expect(guide.items!.single.title, 'NGE-SEED Cover');
+      expect(guide.items!.single.href, 'cover.xhtml');
     });
 
     // TC-PKG-2 [Boundary value]: type and href are each required, absent or
@@ -82,17 +82,17 @@ void main() {
             '</manifest>'),
       );
 
-      expect(manifest.Items, hasLength(1));
-      final EpubManifestItem item = manifest.Items!.single;
-      expect(item.Id, 'ch1');
-      expect(item.Href, 'chapter1.xhtml');
-      expect(item.MediaType, 'application/xhtml+xml');
-      expect(item.MediaOverlay, 'ov1');
-      expect(item.RequiredNamespace, 'ns');
-      expect(item.RequiredModules, 'mods');
-      expect(item.Fallback, 'ch2');
-      expect(item.FallbackStyle, 'style1');
-      expect(item.Properties, 'nav');
+      expect(manifest.items, hasLength(1));
+      final EpubManifestItem item = manifest.items!.single;
+      expect(item.id, 'ch1');
+      expect(item.href, 'chapter1.xhtml');
+      expect(item.mediaType, 'application/xhtml+xml');
+      expect(item.mediaOverlay, 'ov1');
+      expect(item.requiredNamespace, 'ns');
+      expect(item.requiredModules, 'mods');
+      expect(item.fallback, 'ch2');
+      expect(item.fallbackStyle, 'style1');
+      expect(item.properties, 'nav');
     });
 
     // TC-PKG-4 [Boundary value]: id, href and media-type are each required,
@@ -159,20 +159,20 @@ void main() {
         () {
       final EpubMetadata metadata = const PackageReader().readMetadata(
         _element(everyDublinCoreElement),
-        EpubVersion.Epub2,
+        EpubVersion.epub2,
       );
 
-      expect(metadata.Titles, <String>['NGE-SEED Title']);
-      expect(metadata.Subjects, <String>['NGE-SEED Subject']);
-      expect(metadata.Description, 'NGE-SEED Description');
-      expect(metadata.Publishers, <String>['NGE-SEED Publisher']);
-      expect(metadata.Types, <String>['NGE-SEED Type']);
-      expect(metadata.Formats, <String>['application/epub+zip']);
-      expect(metadata.Sources, <String>['NGE-SEED Source']);
-      expect(metadata.Languages, <String>['en']);
-      expect(metadata.Relations, <String>['NGE-SEED Relation']);
-      expect(metadata.Coverages, <String>['NGE-SEED Coverage']);
-      expect(metadata.Rights, <String>['NGE-SEED Rights']);
+      expect(metadata.titles, <String>['NGE-SEED Title']);
+      expect(metadata.subjects, <String>['NGE-SEED Subject']);
+      expect(metadata.description, 'NGE-SEED Description');
+      expect(metadata.publishers, <String>['NGE-SEED Publisher']);
+      expect(metadata.types, <String>['NGE-SEED Type']);
+      expect(metadata.formats, <String>['application/epub+zip']);
+      expect(metadata.sources, <String>['NGE-SEED Source']);
+      expect(metadata.languages, <String>['en']);
+      expect(metadata.relations, <String>['NGE-SEED Relation']);
+      expect(metadata.coverages, <String>['NGE-SEED Coverage']);
+      expect(metadata.rights, <String>['NGE-SEED Rights']);
     });
 
     // TC-PKG-6 [Scenario/use-case]: the structured elements keep their
@@ -182,24 +182,24 @@ void main() {
         'their attributes', () {
       final EpubMetadata metadata = const PackageReader().readMetadata(
         _element(everyDublinCoreElement),
-        EpubVersion.Epub2,
+        EpubVersion.epub2,
       );
 
-      expect(metadata.Creators!.single.Creator, 'NGE-SEED Creator');
-      expect(metadata.Creators!.single.Role, 'aut');
-      expect(metadata.Creators!.single.FileAs, 'Seed, A');
-      expect(metadata.Contributors!.single.Contributor, 'NGE-SEED Contributor');
-      expect(metadata.Contributors!.single.Role, 'trl');
-      expect(metadata.Contributors!.single.FileAs, 'Seed, B');
-      expect(metadata.Dates!.single.Date, '2026-09-21');
-      expect(metadata.Dates!.single.Event, 'publication');
-      expect(metadata.Identifiers!.single.Identifier, 'urn:uuid:NGE-SEED');
-      expect(metadata.Identifiers!.single.Id, 'uid');
-      expect(metadata.Identifiers!.single.Scheme, 'URN');
+      expect(metadata.creators!.single.creator, 'NGE-SEED Creator');
+      expect(metadata.creators!.single.role, 'aut');
+      expect(metadata.creators!.single.fileAs, 'Seed, A');
+      expect(metadata.contributors!.single.contributor, 'NGE-SEED Contributor');
+      expect(metadata.contributors!.single.role, 'trl');
+      expect(metadata.contributors!.single.fileAs, 'Seed, B');
+      expect(metadata.dates!.single.date, '2026-09-21');
+      expect(metadata.dates!.single.event, 'publication');
+      expect(metadata.identifiers!.single.identifier, 'urn:uuid:NGE-SEED');
+      expect(metadata.identifiers!.single.id, 'uid');
+      expect(metadata.identifiers!.single.scheme, 'URN');
     });
 
     // TC-PKG-7 [Boundary value]: a date with an empty event attribute leaves
-    // Event null — the other side of the non-empty check.
+    // event null — the other side of the non-empty check.
     test(
         'TC-PKG-7 [Boundary]: a date with an empty event attribute leaves '
         'Event null', () {
@@ -207,8 +207,8 @@ void main() {
         _element('<date event="">2026-09-21</date>'),
       );
 
-      expect(date.Event, isNull);
-      expect(date.Date, '2026-09-21');
+      expect(date.event, isNull);
+      expect(date.date, '2026-09-21');
     });
 
     // TC-PKG-8 [Equivalence partitioning]: `<meta>` is version-dependent —
@@ -220,11 +220,11 @@ void main() {
       final EpubMetadata metadata = const PackageReader().readMetadata(
         _element('<metadata><meta name="cover" content="cover-img"/>'
             '</metadata>'),
-        EpubVersion.Epub2,
+        EpubVersion.epub2,
       );
 
-      expect(metadata.MetaItems!.single.Name, 'cover');
-      expect(metadata.MetaItems!.single.Content, 'cover-img');
+      expect(metadata.metaItems!.single.name, 'cover');
+      expect(metadata.metaItems!.single.content, 'cover-img');
     });
 
     test(
@@ -235,16 +235,16 @@ void main() {
             '<meta id="m1" refines="#uid" property="identifier-type" '
             'scheme="onix:codelist5">15</meta>'
             '</metadata>'),
-        EpubVersion.Epub3,
+        EpubVersion.epub3,
       );
 
-      final EpubMetadataMeta meta = metadata.MetaItems!.single;
-      expect(meta.Id, 'm1');
-      expect(meta.Refines, '#uid');
-      expect(meta.Property, 'identifier-type');
-      expect(meta.Scheme, 'onix:codelist5');
-      expect(meta.Content, '15');
-      expect(meta.Attributes, <String, String>{
+      final EpubMetadataMeta meta = metadata.metaItems!.single;
+      expect(meta.id, 'm1');
+      expect(meta.refines, '#uid');
+      expect(meta.property, 'identifier-type');
+      expect(meta.scheme, 'onix:codelist5');
+      expect(meta.content, '15');
+      expect(meta.attributes, <String, String>{
         'id': 'm1',
         'refines': '#uid',
         'property': 'identifier-type',
@@ -261,7 +261,7 @@ void main() {
         null,
       );
 
-      expect(metadata.MetaItems, isEmpty);
+      expect(metadata.metaItems, isEmpty);
     });
   });
 
@@ -279,16 +279,16 @@ void main() {
             '</spine>'),
       );
 
-      expect(spine.TableOfContents, 'ncx');
-      expect(spine.Items, hasLength(2));
-      expect(spine.Items![0].IdRef, 'ch1');
-      expect(spine.Items![1].IdRef, 'ch2');
-      // Pinned, not endorsed: `IsLinear` is `linear == null || linear == 'no'`,
+      expect(spine.tableOfContents, 'ncx');
+      expect(spine.items, hasLength(2));
+      expect(spine.items![0].idRef, 'ch1');
+      expect(spine.items![1].idRef, 'ch2');
+      // Pinned, not endorsed: `isLinear` is `linear == null || linear == 'no'`,
       // so BOTH an absent attribute and an explicit `linear="no"` report true.
       // Reported to the caller as a suspected inversion; lib/ is not this
       // suite's to change.
-      expect(spine.Items![0].IsLinear, isTrue);
-      expect(spine.Items![1].IsLinear, isTrue);
+      expect(spine.items![0].isLinear, isTrue);
+      expect(spine.items![1].isLinear, isTrue);
     });
 
     // TC-PKG-12 [Boundary value]: an itemref must carry a non-empty idref.
@@ -347,36 +347,36 @@ void main() {
         'content.opf',
       );
 
-      expect(package.Version, EpubVersion.Epub2);
-      expect(package.Metadata!.Titles, <String>['NGE-SEED Package']);
-      expect(package.Manifest!.Items!.single.Id, 'ncx');
-      expect(package.Spine!.TableOfContents, 'ncx');
-      expect(package.Guide!.Items!.single.Href, 'cover.xhtml');
+      expect(package.version, EpubVersion.epub2);
+      expect(package.metadata!.titles, <String>['NGE-SEED Package']);
+      expect(package.manifest!.items!.single.id, 'ncx');
+      expect(package.spine!.tableOfContents, 'ncx');
+      expect(package.guide!.items!.single.href, 'cover.xhtml');
     });
 
     // TC-PKG-14 [Equivalence partitioning]: a package with no guide leaves
-    // Guide null instead of an empty guide.
+    // guide null instead of an empty guide.
     test(
         'TC-PKG-14 [Equivalence partitioning]: a package without a guide '
-        'leaves Guide null', () async {
+        'leaves guide null', () async {
       final EpubPackage package = await const PackageReader().readPackage(
         ZipDecoder().decodeBytes(archiveWith(opf())),
         'content.opf',
       );
 
-      expect(package.Guide, isNull);
+      expect(package.guide, isNull);
     });
 
     // TC-PKG-15 [Equivalence partitioning]: only 2.0 and 3.0 are accepted;
     // anything else — including an absent version — is refused by name.
-    test('TC-PKG-15 [Equivalence partitioning]: version 3.0 maps to Epub3',
+    test('TC-PKG-15 [Equivalence partitioning]: version 3.0 maps to epub3',
         () async {
       final EpubPackage package = await const PackageReader().readPackage(
         ZipDecoder().decodeBytes(archiveWith(opf(version: '3.0'))),
         'content.opf',
       );
 
-      expect(package.Version, EpubVersion.Epub3);
+      expect(package.version, EpubVersion.epub3);
     });
 
     test(
