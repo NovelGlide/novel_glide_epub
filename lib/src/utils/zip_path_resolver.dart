@@ -21,11 +21,11 @@ class ZipPathResolver {
   /// other character kept as written.
   ///
   /// An `href` is a URL, so it may escape characters, but real EPUBs just as
-  /// often write non-ASCII names raw. `Uri.decodeFull` throws on a raw
-  /// non-ASCII character, which made every book with an unescaped `第一章.xhtml`
-  /// fail to open; it also throws on a `%` not followed by two hex digits,
-  /// which a literal file name such as `100%.xhtml` contains. Both are kept
-  /// as written here.
+  /// often write non-ASCII names raw. That rules out `Uri.decodeFull`: it
+  /// throws on a raw non-ASCII character, so a book with an unescaped
+  /// `第一章.xhtml` could not be opened, and it throws on a `%` not followed
+  /// by two hex digits, which a literal file name such as `100%.xhtml`
+  /// contains. Both are kept as written here.
   ///
   /// When the escapes decode to bytes that are not valid UTF-8 (`%FF`, or a
   /// multi-byte character cut short), the [href] is returned unchanged

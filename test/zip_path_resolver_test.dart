@@ -1,18 +1,14 @@
 // `ZipPathResolver.combine` — the one place a path an EPUB names is turned
 // into the name of a ZIP entry.
 //
-// The regression this file exists for: `combine` used to resolve `.` and `..`
-// with `Uri.normalizePath`, which percent-encodes every non-ASCII character.
-// ZIP entry names are raw UTF-8, so every book whose files are named in
-// Chinese or Japanese looked up `%E7%AC%AC…` instead of `第…` and failed to
-// open — reported in production as `getContentFileEntry` "not found in
-// archive", on every release since 1.2.8. Behind it sat a second defect that
-// fires first: the readers decoded each href with `Uri.decodeFull`, which
-// throws on a raw non-ASCII character — so a book that writes its hrefs
-// unescaped (most do) failed before it ever reached `combine`, reported as
-// `ChapterReader.getChaptersImpl` since 1.3.0. The unit cases pin the resolver;
-// the end-to-end cases pin that each reader that reaches it (content files,
-// the EPUB2 NCX, the EPUB3 nav document) actually finds a non-ASCII entry.
+// The constraint this file pins: a file named in Chinese or Japanese must be
+// found. ZIP entry names are raw UTF-8, so neither half of the lookup may
+// percent-encode: `combine` must not (which rules out `Uri.normalizePath`),
+// and decoding an href must not throw on a raw non-ASCII character (which
+// rules out `Uri.decodeFull`, and most CJK books write their hrefs raw). The
+// unit cases pin the resolver; the end-to-end cases pin that each reader that
+// reaches it (content files, the EPUB2 NCX, the EPUB3 nav document) actually
+// finds a non-ASCII entry.
 //
 // Techniques: boundary value (`..` above the root, empty directory, `.` and
 // empty segments), regression (non-ASCII names), scenario (whole books whose
@@ -117,8 +113,8 @@ Uint8List _buildEpub3EncodedNavBook() => buildEpubArchive(
 
 void main() {
   group('ZipPathResolver.combine', () {
-    // TC-ZPR-1 [Regression]: the defect itself. A non-ASCII name comes back
-    // byte-for-byte as it went in — no percent-encoding.
+    // TC-ZPR-1 [Regression]: a non-ASCII name comes back byte-for-byte as it
+    // went in — no percent-encoding.
     test('TC-ZPR-1 [Regression]: non-ASCII names are not percent-encoded', () {
       expect(_resolver.combine('OEBPS', '第一章.xhtml'), 'OEBPS/第一章.xhtml');
       expect(_resolver.combine('本文', 'ページ.xhtml'), '本文/ページ.xhtml');
@@ -144,9 +140,9 @@ void main() {
       expect(_resolver.combine('', 'a/../第一章.xhtml'), '第一章.xhtml');
     });
 
-    // TC-ZPR-5 [Equivalence]: an ASCII name with a space is kept literal. It
-    // was percent-encoded to `ch%20one.xhtml` before, which never matched
-    // the archive entry either; callers decode before they combine.
+    // TC-ZPR-5 [Equivalence]: an ASCII name with a space is kept literal —
+    // the archive entry is `ch one.xhtml`, not `ch%20one.xhtml`; callers
+    // decode before they combine.
     test('TC-ZPR-5 [Equivalence]: a space is kept literal', () {
       expect(_resolver.combine('OEBPS', 'ch one.xhtml'), 'OEBPS/ch one.xhtml');
     });
@@ -160,8 +156,8 @@ void main() {
   });
 
   group('ZipPathResolver.decodeHref', () {
-    // TC-ZPR-9 [Regression]: the second defect. A raw non-ASCII href made
-    // `Uri.decodeFull` throw; it now comes back unchanged.
+    // TC-ZPR-9 [Regression]: a raw non-ASCII href — the shape most CJK books
+    // write — comes back unchanged instead of throwing.
     test('TC-ZPR-9 [Regression]: a raw non-ASCII href is kept as written', () {
       expect(_resolver.decodeHref('文字/第一章.xhtml'), '文字/第一章.xhtml');
     });
@@ -229,7 +225,7 @@ void main() {
     });
 
     // TC-ZPR-7 [Scenario]: the lazy path — `openBook` then read one content
-    // file through its ref, which is where production reported the failure.
+    // file through its ref, the path NovelGlide's reader takes.
     test('TC-ZPR-7 [Scenario]: a content ref with a CJK name reads its entry',
         () async {
       final EpubBookRef bookRef =
@@ -242,8 +238,7 @@ void main() {
     });
 
     // TC-ZPR-8 [Regression]: an EPUB3 nav document whose manifest href is
-    // percent-encoded is decoded before it is looked up; the nav reader used
-    // to hand the raw href to `combine`.
+    // percent-encoded is decoded before it is looked up.
     test(
         'TC-ZPR-8 [Regression]: a percent-encoded EPUB3 nav href resolves to '
         'its CJK entry', () async {
