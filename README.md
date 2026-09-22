@@ -103,6 +103,20 @@ carries the bump is tagged `v<version>` by `.github/workflows/release-tag.yml`,
 once format, lint and the test suite pass on that commit. Tags are only ever
 added, never moved, so a version number always means one tree.
 
+Because a tag cannot be taken back, **bumping the version is the last step,
+not the first**:
+
+1. Land the change on `main` without touching `version:`. Pushes that do not
+   bump the version are never tagged.
+2. In the NovelGlide app, point the dependency at that commit (`ref: <sha>`)
+   and get the app's full suite, coverage and review green against it. A
+   problem found here is fixed in this package, still unreleased.
+3. Only then bump `version:`; the workflow tags it, and the app PR switches
+   its `ref:` from the sha to the tag.
+
+A package change the app has never compiled against is not ready to be a
+version, however green this repo's own suite is.
+
 ## Licence
 
 MIT, Copyright (c) 2017 Colin Nelson. The original notice is preserved verbatim
