@@ -49,7 +49,8 @@ class EpubWriter {
       }
 
       arch.addFile(ArchiveFile(
-          _pathResolver.combine(book.schema!.contentDirectoryPath, name),
+          _pathResolver.combine(book.schema!.contentDirectoryPath,
+              _pathResolver.decodeHref(name)),
           content!.length,
           content));
     });

@@ -100,8 +100,10 @@ class NavigationReader {
           'EPUB parsing error: TOC item $tocId not found in EPUB manifest.');
     }
 
-    final ArchiveFile tocFileEntry = _readTocFileEntry(epubArchive,
-        _pathResolver.combine(contentDirectoryPath, tocManifestItem.href));
+    final ArchiveFile tocFileEntry = _readTocFileEntry(
+        epubArchive,
+        _pathResolver.combine(contentDirectoryPath,
+            _pathResolver.decodeHref(tocManifestItem.href!)));
     final xml.XmlDocument containerDocument =
         xml.XmlDocument.parse(convert.utf8.decode(tocFileEntry.content));
     return _requireElement(
@@ -121,8 +123,10 @@ class NavigationReader {
           'EPUB parsing error: TOC item, not found in EPUB manifest.');
     }
 
-    final ArchiveFile tocFileEntry = _readTocFileEntry(epubArchive,
-        _pathResolver.combine(contentDirectoryPath, tocManifestItem.href));
+    final ArchiveFile tocFileEntry = _readTocFileEntry(
+        epubArchive,
+        _pathResolver.combine(contentDirectoryPath,
+            _pathResolver.decodeHref(tocManifestItem.href!)));
     final String navBase = _navBaseOf(tocManifestItem.href!);
     final xml.XmlDocument containerDocument =
         xml.XmlDocument.parse(convert.utf8.decode(tocFileEntry.content));

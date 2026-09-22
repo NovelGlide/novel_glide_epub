@@ -2,6 +2,7 @@ import '../epub_exception.dart';
 import '../ref_entities/epub_book_ref.dart';
 import '../ref_entities/epub_chapter_ref.dart';
 import '../schema/navigation/epub_navigation_point.dart';
+import '../utils/zip_path_resolver.dart';
 
 class ChapterReader {
   const ChapterReader();
@@ -32,9 +33,15 @@ class ChapterReader {
   EpubChapterRef _readChapterRef(EpubBookRef bookRef,
       EpubNavigationPoint navigationPoint, String contentSource) {
     final int anchorCharIndex = contentSource.indexOf('#');
-    final String contentFileName = Uri.decodeFull(anchorCharIndex == -1
+    final String source = anchorCharIndex == -1
         ? contentSource
-        : contentSource.substring(0, anchorCharIndex));
+        : contentSource.substring(0, anchorCharIndex);
+    // The content maps are keyed by the href as the manifest wrote it, so the
+    // navigation's own spelling is tried first; its decoded form covers a
+    // navigation that escapes what the manifest writes raw.
+    final String contentFileName = bookRef.content!.html!.containsKey(source)
+        ? source
+        : const ZipPathResolver().decodeHref(source);
     final String? anchor = anchorCharIndex == -1
         ? null
         : contentSource.substring(anchorCharIndex + 1);

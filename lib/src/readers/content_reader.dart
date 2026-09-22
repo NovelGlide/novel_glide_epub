@@ -4,6 +4,7 @@ import '../ref_entities/epub_byte_content_file_ref.dart';
 import '../ref_entities/epub_content_ref.dart';
 import '../ref_entities/epub_text_content_file_ref.dart';
 import '../schema/opf/epub_manifest_item.dart';
+import '../utils/zip_path_resolver.dart';
 
 class ContentReader {
   const ContentReader();
@@ -22,8 +23,9 @@ class ContentReader {
   /// `allFiles`.
   ///
   /// The bucket keys stay as the manifest wrote them while `fileName` is
-  /// percent-decoded, which is the mismatch a manifest with escaped hrefs
-  /// runs into downstream.
+  /// percent-decoded. A navigation that links a file by the manifest's own
+  /// spelling, or escapes what the manifest writes raw, finds it; one that
+  /// writes raw what the manifest escapes does not.
   void _addManifestItem(EpubContentRef result, EpubBookRef bookRef,
       EpubManifestItem manifestItem) {
     final String fileName = manifestItem.href!;
@@ -33,14 +35,14 @@ class ContentReader {
 
     if (_isTextContentType(contentType)) {
       final EpubTextContentFileRef contentFile = EpubTextContentFileRef(bookRef)
-        ..fileName = Uri.decodeFull(fileName)
+        ..fileName = const ZipPathResolver().decodeHref(fileName)
         ..contentMimeType = contentMimeType
         ..contentType = contentType;
       _textBucketOf(result, contentType)?[fileName] = contentFile;
       result.allFiles![fileName] = contentFile;
     } else {
       final EpubByteContentFileRef contentFile = EpubByteContentFileRef(bookRef)
-        ..fileName = Uri.decodeFull(fileName)
+        ..fileName = const ZipPathResolver().decodeHref(fileName)
         ..contentMimeType = contentMimeType
         ..contentType = contentType;
       _byteBucketOf(result, contentType)?[fileName] = contentFile;

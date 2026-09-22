@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased
+
+**Fixed: books whose files have non-ASCII names could not be opened.** There
+were two defects, and the first one fired before the second could:
+
+- Every href was decoded with `Uri.decodeFull`, which throws on a raw
+  non-ASCII character. Most CJK books write their hrefs unescaped, so they
+  failed while the chapter list was being built. Hrefs are now decoded by
+  `ZipPathResolver.decodeHref`:
+  - `%XX` escapes are decoded; every other character is kept as written.
+  - A `%` that does not start an escape (`100%.xhtml`) is kept literally.
+  - Escapes that decode to bytes that are not UTF-8 leave the href
+    unchanged.
+- `ZipPathResolver.combine` resolved `.` and `..` with `Uri.normalizePath`,
+  which percent-encodes non-ASCII characters. ZIP entry names are raw UTF-8,
+  so every lookup of such a file missed. It now resolves the segments as
+  plain strings.
+
+The two were the "file not found in archive" and chapter-list failures that
+NovelGlide 1.2.8 and 1.3.0 report for these books.
+
+Related changes that came with the fix:
+
+- The NCX and EPUB3 nav documents are now found when their manifest href is
+  escaped. Their href used to reach `combine` still undecoded.
+- A chapter is now looked up by the navigation's own spelling of the href
+  first, then by its decoded form. A book that escapes a chapter's href the
+  same way in the manifest and in the navigation now finds it.
+- `combine` reads `\` as `/`, as it did before.
+- A `..` with nothing left to climb is now dropped. Before, it was kept as a
+  literal `..` segment.
+- `EpubWriter` now names archive entries by their decoded file name, not by
+  the manifest's escaped href.
+
+**Still open:** a navigation that writes raw a name the manifest escapes
+still misses the chapter. The content maps are keyed by the manifest's
+spelling, and changing that key changes what consumers look up.
+
 ## 0.2.0
 
 **Breaking.**
