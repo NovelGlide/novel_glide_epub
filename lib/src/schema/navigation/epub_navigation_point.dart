@@ -5,12 +5,25 @@ import 'epub_navigation_content.dart';
 import 'epub_navigation_label.dart';
 
 class EpubNavigationPoint {
-  String? id;
-  String? className;
-  String? playOrder;
-  List<EpubNavigationLabel>? navigationLabels;
-  EpubNavigationContent? content;
-  List<EpubNavigationPoint>? childNavigationPoints;
+  const EpubNavigationPoint({
+    required this.id,
+    required this.playOrder,
+    required this.navigationLabels,
+    required this.content,
+    this.className,
+    this.childNavigationPoints = const <EpubNavigationPoint>[],
+  });
+
+  /// Empty for an EPUB 3 nav entry, which has no NCX id.
+  final String id;
+  final String? className;
+
+  /// Empty when the `<navPoint>` has no `playOrder`, although NCX requires
+  /// one, and for an EPUB 3 nav entry, which has none.
+  final String playOrder;
+  final List<EpubNavigationLabel> navigationLabels;
+  final EpubNavigationContent content;
+  final List<EpubNavigationPoint> childNavigationPoints;
 
   @override
   int get hashCode {
@@ -19,8 +32,8 @@ class EpubNavigationPoint {
       className.hashCode,
       playOrder.hashCode,
       content.hashCode,
-      ...navigationLabels!.map((EpubNavigationLabel label) => label.hashCode),
-      ...childNavigationPoints!
+      ...navigationLabels.map((EpubNavigationLabel label) => label.hashCode),
+      ...childNavigationPoints
           .map((EpubNavigationPoint point) => point.hashCode)
     ];
     return hashObjects(objects);
@@ -49,6 +62,6 @@ class EpubNavigationPoint {
 
   @override
   String toString() {
-    return 'Id: $id, Content.Source: ${content!.source}';
+    return 'Id: $id, Content.Source: ${content.source}';
   }
 }

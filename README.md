@@ -44,11 +44,9 @@ Not published to pub.dev; consumed by git reference.
 
 ## Status
 
-**Coverage: 99.9%** (1535 / 1536 lines, 492 tests), up from 21% at extraction, when the
-suite was seven test cases written to pin two specific bugs and forty of the
-fifty-five files had never been executed at all. The one remaining line is
-`navigation_reader.dart`'s `navigationTargets` branch — an EPUB2 NCX
-`navList`'s `navTarget` children, which no book seen in production carries.
+**Coverage: 100%** (1364 / 1364 lines, 634 tests), up from 21% at extraction,
+when the suite was seven test cases written to pin two specific bugs and forty
+of the fifty-five files had never been executed at all.
 
 **The writing side is covered, and lossy in named ways.** `epub_writer.dart`
 and `writers/` serialise an EPUB back out. Nothing in NovelGlide writes EPUBs,
@@ -66,15 +64,14 @@ than hidden:
 - Spine linearity inverts on every trip: `readSpine` maps both an absent
   `linear` and `linear="no"` to `isLinear = true`, and the writer maps `true`
   back to `"yes"`. The pair has no fixed point.
-- A book with no `<guide>`, and a spine with no `toc`, cannot be written at
-  all — both writers dereference what the reader leaves null.
 - `page-progression-direction` and the manifest's `properties` and fallback
   attributes have no writer, so a right-to-left book and an EPUB3 nav
   declaration do not survive.
 - `EpubNavigationWriter` has no caller at all — `EpubWriter` carries the NCX
   through as a raw content file — and what it writes is not quite NCX: the
   `docTitle` lacks the `<text>` wrapper the reader requires, so it reads back
-  empty, and nested `navPoint`s are not written.
+  empty; nested `navPoint`s are not written; and an EPUB3 heading entry,
+  which links nowhere, is left out because an NCX `navPoint` must link.
 
 Treat the writer as able to round-trip a book this parser has just read out of
 a conventional EPUB2 container, and not yet as a general EPUB serialiser.

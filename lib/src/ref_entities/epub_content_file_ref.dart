@@ -9,16 +9,28 @@ import 'package:quiver/core.dart';
 import '../entities/epub_content_type.dart';
 import '../epub_exception.dart';
 import '../utils/zip_path_resolver.dart';
-import 'epub_book_ref.dart';
 
+/// One manifest file, read from the archive on demand.
 abstract class EpubContentFileRef {
-  EpubContentFileRef(this.epubBookRef);
-  late EpubBookRef epubBookRef;
+  const EpubContentFileRef({
+    required Archive epubArchive,
+    required String contentDirectoryPath,
+    required this.fileName,
+    required this.contentType,
+    required this.contentMimeType,
+  })  : _epubArchive = epubArchive,
+        _contentDirectoryPath = contentDirectoryPath;
 
-  String? fileName;
+  final Archive _epubArchive;
 
-  EpubContentType? contentType;
-  String? contentMimeType;
+  /// The package document's directory, which [fileName] is relative to.
+  final String _contentDirectoryPath;
+
+  /// The manifest href with its percent-escapes decoded, relative to the
+  /// package document's directory.
+  final String fileName;
+  final EpubContentType contentType;
+  final String contentMimeType;
 
   @override
   int get hashCode =>
@@ -36,11 +48,9 @@ abstract class EpubContentFileRef {
   }
 
   ArchiveFile getContentFileEntry() {
-    final String contentFilePath = const ZipPathResolver()
-        .combine(epubBookRef.schema!.contentDirectoryPath, fileName);
-    final ArchiveFile? contentFileEntry = epubBookRef
-        .epubArchive()!
-        .files
+    final String contentFilePath =
+        const ZipPathResolver().combine(_contentDirectoryPath, fileName);
+    final ArchiveFile? contentFileEntry = _epubArchive.files
         .firstWhereOrNull((ArchiveFile x) => x.name == contentFilePath);
     if (contentFileEntry == null) {
       throw EpubMissingArchiveEntryException(

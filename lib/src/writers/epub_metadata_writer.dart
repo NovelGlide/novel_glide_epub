@@ -23,133 +23,120 @@ class EpubMetadataWriter {
   /// `<metadata>` children no significant order, and `PackageReader` dispatches
   /// on element name, so the order is free to follow the meaning.
   void writeMetadata(
-      XmlBuilder builder, EpubMetadata? meta, EpubVersion? version) {
+      XmlBuilder builder, EpubMetadata meta, EpubVersion version) {
     builder.element('metadata',
         namespaces: <String, String?>{_opfNamespace: 'opf', _dcNamespace: 'dc'},
         nest: () {
-      _writeAttribution(builder, meta!);
+      _writeAttribution(builder, meta);
       _writeClassification(builder, meta);
       _writeProvenance(builder, meta);
       _writeMetaItems(builder, meta.metaItems, version);
-
-      if (meta.description != null) {
-        builder.element('description',
-            namespace: _dcNamespace, nest: meta.description);
-      }
     });
   }
 
   /// Who made this and when — the elements that credit the work.
   void _writeAttribution(XmlBuilder builder, EpubMetadata meta) {
-    meta.titles?.forEach((String item) =>
-        builder.element('title', nest: item, namespace: _dcNamespace));
-    meta.creators?.forEach((EpubMetadataCreator item) =>
-        builder.element('creator', namespace: _dcNamespace, nest: () {
-          _writeAgentAttributes(builder, role: item.role, fileAs: item.fileAs);
-          builder.text(item.creator!);
-        }));
-    meta.contributors?.forEach((EpubMetadataContributor item) =>
-        builder.element('contributor', namespace: _dcNamespace, nest: () {
-          _writeAgentAttributes(builder, role: item.role, fileAs: item.fileAs);
-          builder.text(item.contributor!);
-        }));
-    meta.publishers?.forEach((String item) =>
-        builder.element('publisher', namespace: _dcNamespace, nest: item));
-    meta.dates?.forEach((EpubMetadataDate date) =>
-        builder.element('date', namespace: _dcNamespace, nest: () {
-          if (date.event != null) {
-            builder.attribute('event', date.event!, namespace: _opfNamespace);
-          }
-          builder.text(date.date!);
-        }));
+    _writeTexts(builder, 'title', meta.titles);
+    for (final EpubMetadataCreator item in meta.creators) {
+      builder.element('creator', namespace: _dcNamespace, nest: () {
+        _writeAgentAttributes(builder, role: item.role, fileAs: item.fileAs);
+        builder.text(item.creator);
+      });
+    }
+    for (final EpubMetadataContributor item in meta.contributors) {
+      builder.element('contributor', namespace: _dcNamespace, nest: () {
+        _writeAgentAttributes(builder, role: item.role, fileAs: item.fileAs);
+        builder.text(item.contributor);
+      });
+    }
+    _writeTexts(builder, 'publisher', meta.publishers);
+    for (final EpubMetadataDate date in meta.dates) {
+      builder.element('date', namespace: _dcNamespace, nest: () {
+        _writeOptionalAttribute(builder, 'event', date.event,
+            namespace: _opfNamespace);
+        builder.text(date.date);
+      });
+    }
   }
 
   /// The two optional attributes a creator and a contributor share; they are
   /// the same person-shaped element under two names.
   void _writeAgentAttributes(XmlBuilder builder,
       {required String? role, required String? fileAs}) {
-    if (role != null) {
-      builder.attribute('role', role, namespace: _opfNamespace);
-    }
-    if (fileAs != null) {
-      builder.attribute('file-as', fileAs, namespace: _opfNamespace);
-    }
+    _writeOptionalAttribute(builder, 'role', role, namespace: _opfNamespace);
+    _writeOptionalAttribute(builder, 'file-as', fileAs,
+        namespace: _opfNamespace);
   }
 
   /// What kind of thing this is — the elements a catalogue files it under.
   void _writeClassification(XmlBuilder builder, EpubMetadata meta) {
-    meta.subjects?.forEach((String item) =>
-        builder.element('subject', namespace: _dcNamespace, nest: item));
-    meta.types?.forEach((String type) =>
-        builder.element('type', namespace: _dcNamespace, nest: type));
-    meta.formats?.forEach((String format) =>
-        builder.element('format', namespace: _dcNamespace, nest: format));
-    meta.languages?.forEach((String item) =>
-        builder.element('language', namespace: _dcNamespace, nest: item));
-    meta.coverages?.forEach((String item) =>
-        builder.element('coverage', namespace: _dcNamespace, nest: item));
+    _writeTexts(builder, 'subject', meta.subjects);
+    _writeTexts(builder, 'description', meta.descriptions);
+    _writeTexts(builder, 'type', meta.types);
+    _writeTexts(builder, 'format', meta.formats);
+    _writeTexts(builder, 'language', meta.languages);
+    _writeTexts(builder, 'coverage', meta.coverages);
   }
 
   /// Where this came from and on what terms.
   void _writeProvenance(XmlBuilder builder, EpubMetadata meta) {
-    meta.identifiers?.forEach((EpubMetadataIdentifier id) =>
-        builder.element('identifier', namespace: _dcNamespace, nest: () {
-          if (id.id != null) {
-            builder.attribute('id', id.id!);
-          }
-          if (id.scheme != null) {
-            builder.attribute('scheme', id.scheme!, namespace: _opfNamespace);
-          }
-          builder.text(id.identifier!);
-        }));
-    meta.sources?.forEach((String item) =>
-        builder.element('source', namespace: _dcNamespace, nest: item));
-    meta.relations?.forEach((String item) =>
-        builder.element('relation', namespace: _dcNamespace, nest: item));
-    meta.rights?.forEach((String item) =>
-        builder.element('rights', namespace: _dcNamespace, nest: item));
+    for (final EpubMetadataIdentifier id in meta.identifiers) {
+      builder.element('identifier', namespace: _dcNamespace, nest: () {
+        _writeOptionalAttribute(builder, 'id', id.id);
+        _writeOptionalAttribute(builder, 'scheme', id.scheme,
+            namespace: _opfNamespace);
+        builder.text(id.identifier);
+      });
+    }
+    _writeTexts(builder, 'source', meta.sources);
+    _writeTexts(builder, 'relation', meta.relations);
+    _writeTexts(builder, 'rights', meta.rights);
+  }
+
+  /// One Dublin Core element per entry of [texts], each holding its text.
+  void _writeTexts(XmlBuilder builder, String element, List<String> texts) {
+    for (final String text in texts) {
+      builder.element(element, namespace: _dcNamespace, nest: text);
+    }
   }
 
   /// `<meta>` is the one metadata element whose shape changed between EPUB2
-  /// and EPUB3, so the version picks which set of attributes is written; a
-  /// version this writer does not know emits the element with none of them.
-  void _writeMetaItems(XmlBuilder builder, List<EpubMetadataMeta>? metaItems,
-      EpubVersion? version) {
-    metaItems?.forEach(
-        (EpubMetadataMeta metaitem) => builder.element('meta', nest: () {
-              if (version == EpubVersion.epub2) {
-                _writeEpub2MetaAttributes(builder, metaitem);
-              } else if (version == EpubVersion.epub3) {
-                _writeEpub3MetaAttributes(builder, metaitem);
-              }
-            }));
+  /// and EPUB3, so the version picks which set of attributes is written.
+  void _writeMetaItems(XmlBuilder builder, List<EpubMetadataMeta> metaItems,
+      EpubVersion version) {
+    for (final EpubMetadataMeta metaItem in metaItems) {
+      builder.element('meta', nest: () {
+        switch (version) {
+          case EpubVersion.epub2:
+            _writeEpub2MetaAttributes(builder, metaItem);
+          case EpubVersion.epub3:
+            _writeEpub3MetaAttributes(builder, metaItem);
+        }
+      });
+    }
   }
 
   /// EPUB2 `<meta>`: a name/content pair, which is how a book of that vintage
   /// points at its cover.
   void _writeEpub2MetaAttributes(XmlBuilder builder, EpubMetadataMeta item) {
-    if (item.name != null) {
-      builder.attribute('name', item.name!);
-    }
-    if (item.content != null) {
-      builder.attribute('content', item.content!);
-    }
+    _writeOptionalAttribute(builder, 'name', item.name);
+    builder.attribute('content', item.content);
   }
 
   /// EPUB3 `<meta>`: a property refining another element, identified by id and
   /// read against a scheme.
   void _writeEpub3MetaAttributes(XmlBuilder builder, EpubMetadataMeta item) {
-    if (item.id != null) {
-      builder.attribute('id', item.id!);
-    }
-    if (item.refines != null) {
-      builder.attribute('refines', item.refines!);
-    }
-    if (item.property != null) {
-      builder.attribute('property', item.property!);
-    }
-    if (item.scheme != null) {
-      builder.attribute('scheme', item.scheme!);
+    _writeOptionalAttribute(builder, 'id', item.id);
+    _writeOptionalAttribute(builder, 'refines', item.refines);
+    _writeOptionalAttribute(builder, 'property', item.property);
+    _writeOptionalAttribute(builder, 'scheme', item.scheme);
+  }
+
+  /// An attribute the element carries only when the book gave it a value.
+  void _writeOptionalAttribute(XmlBuilder builder, String name, String? value,
+      {String? namespace}) {
+    if (value != null) {
+      builder.attribute(name, value, namespace: namespace);
     }
   }
 }

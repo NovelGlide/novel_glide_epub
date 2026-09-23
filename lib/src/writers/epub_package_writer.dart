@@ -1,5 +1,6 @@
 import 'package:xml/xml.dart';
 
+import '../schema/opf/epub_guide.dart';
 import '../schema/opf/epub_package.dart';
 import '../schema/opf/epub_version.dart';
 import 'epub_guide_writer.dart';
@@ -29,8 +30,11 @@ class EpubPackageWriter {
 
       _metadataWriter.writeMetadata(builder, package.metadata, package.version);
       _manifestWriter.writeManifest(builder, package.manifest);
-      _spineWriter.writeSpine(builder, package.spine!);
-      _guideWriter.writeGuide(builder, package.guide);
+      _spineWriter.writeSpine(builder, package.spine);
+      final EpubGuide? guide = package.guide;
+      if (guide != null) {
+        _guideWriter.writeGuide(builder, guide);
+      }
     });
 
     return builder.buildDocument().toXmlString(pretty: false);

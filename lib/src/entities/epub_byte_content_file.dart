@@ -4,7 +4,14 @@ import 'package:quiver/core.dart';
 import 'epub_content_file.dart';
 
 class EpubByteContentFile extends EpubContentFile {
-  List<int>? content;
+  const EpubByteContentFile({
+    required super.fileName,
+    required super.contentType,
+    required super.contentMimeType,
+    required this.content,
+  });
+
+  final List<int> content;
 
   @override
   int get hashCode {
@@ -12,7 +19,7 @@ class EpubByteContentFile extends EpubContentFile {
       contentMimeType.hashCode,
       contentType.hashCode,
       fileName.hashCode,
-      ...content?.map((int content) => content.hashCode) ?? <int>[0],
+      ...content.map((int content) => content.hashCode),
     ];
     return hashObjects(objects);
   }

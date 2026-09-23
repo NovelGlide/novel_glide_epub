@@ -2,12 +2,25 @@ import 'package:quiver/collection.dart' as collections;
 import 'package:quiver/core.dart';
 
 class EpubChapter {
-  String? title;
-  String? contentFileName;
-  String? anchor;
-  String? htmlContent;
-  List<EpubChapter>? subChapters;
-  List<String> otherContentFileNames = <String>[];
+  const EpubChapter({
+    required this.title,
+    required this.contentFileName,
+    required this.htmlContent,
+    this.anchor,
+    this.subChapters = const <EpubChapter>[],
+    this.otherContentFileNames = const <String>[],
+  });
+
+  final String title;
+
+  /// The decoded file name, a key of `EpubContent.html`.
+  final String contentFileName;
+
+  /// The fragment after `#` in the navigation's link; null when it has none.
+  final String? anchor;
+  final String htmlContent;
+  final List<EpubChapter> subChapters;
+  final List<String> otherContentFileNames;
 
   @override
   int get hashCode {
@@ -20,8 +33,7 @@ class EpubChapter {
       ...otherContentFileNames.map((String fileName) => fileName.hashCode),
       anchor.hashCode,
       htmlContent.hashCode,
-      ...subChapters?.map((EpubChapter subChapter) => subChapter.hashCode) ??
-          <int>[0],
+      ...subChapters.map((EpubChapter subChapter) => subChapter.hashCode),
     ];
     return hashObjects(objects);
   }
@@ -39,6 +51,6 @@ class EpubChapter {
 
   @override
   String toString() {
-    return 'Title: $title, Subchapter count: ${subChapters!.length}';
+    return 'Title: $title, Subchapter count: ${subChapters.length}';
   }
 }

@@ -7,11 +7,22 @@ import 'epub_spine.dart';
 import 'epub_version.dart';
 
 class EpubPackage {
-  EpubVersion? version;
-  EpubMetadata? metadata;
-  EpubManifest? manifest;
-  EpubSpine? spine;
-  EpubGuide? guide;
+  const EpubPackage({
+    required this.version,
+    required this.metadata,
+    required this.manifest,
+    required this.spine,
+    this.guide,
+  });
+
+  final EpubVersion version;
+  final EpubMetadata metadata;
+  final EpubManifest manifest;
+  final EpubSpine spine;
+
+  /// Null when the package has no `<guide>`: OPF 2 makes the element
+  /// optional, and EPUB 3 deprecates it.
+  final EpubGuide? guide;
 
   @override
   int get hashCode => hashObjects(<Object?>[

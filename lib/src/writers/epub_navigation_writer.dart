@@ -23,9 +23,9 @@ class EpubNavigationWriter {
     }, nest: () {
       builder.namespace(_namespace);
 
-      writeNavigationHead(builder, navigation.head!);
-      writeNavigationDocTitle(builder, navigation.docTitle!);
-      writeNavigationMap(builder, navigation.navMap!);
+      writeNavigationHead(builder, navigation.head);
+      writeNavigationDocTitle(builder, navigation.docTitle);
+      writeNavigationMap(builder, navigation.navMap);
     });
 
     return builder.buildDocument().toXmlString(pretty: false);
@@ -34,43 +34,49 @@ class EpubNavigationWriter {
   void writeNavigationDocTitle(
       XmlBuilder builder, EpubNavigationDocTitle title) {
     builder.element('docTitle', nest: () {
-      title.titles!.forEach(builder.text);
+      title.titles.forEach(builder.text);
     });
   }
 
   void writeNavigationHead(XmlBuilder builder, EpubNavigationHead head) {
     builder.element('head', nest: () {
-      for (EpubNavigationHeadMeta item in head.metadata!) {
+      for (EpubNavigationHeadMeta item in head.metadata) {
         builder.element('meta', attributes: <String, String>{
-          'content': item.content!,
-          'name': item.name!
+          'content': item.content,
+          'name': item.name
         });
       }
     });
   }
 
+  /// An EPUB 3 heading entry links nowhere, and an NCX `navPoint` must carry
+  /// a `content` link, so such an entry has no NCX form and is left out.
   void writeNavigationMap(XmlBuilder builder, EpubNavigationMap map) {
     builder.element('navMap', nest: () {
-      for (EpubNavigationPoint item in map.points!) {
-        writeNavigationPoint(builder, item);
+      for (EpubNavigationPoint item in map.points) {
+        final String? source = item.content.source;
+        if (source != null) {
+          writeNavigationPoint(builder, item, source);
+        }
       }
     });
   }
 
-  void writeNavigationPoint(XmlBuilder builder, EpubNavigationPoint point) {
+  /// Writes [point] linking to [source], its content's source.
+  void writeNavigationPoint(
+      XmlBuilder builder, EpubNavigationPoint point, String source) {
     builder.element('navPoint', attributes: <String, String>{
-      'id': point.id!,
-      'playOrder': point.playOrder!,
+      'id': point.id,
+      'playOrder': point.playOrder,
     }, nest: () {
-      for (EpubNavigationLabel element in point.navigationLabels!) {
+      for (EpubNavigationLabel element in point.navigationLabels) {
         builder.element('navLabel', nest: () {
           builder.element('text', nest: () {
-            builder.text(element.text!);
+            builder.text(element.text);
           });
         });
       }
-      builder.element('content',
-          attributes: <String, String>{'src': point.content!.source!});
+      builder.element('content', attributes: <String, String>{'src': source});
     });
   }
 }

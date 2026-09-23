@@ -13,25 +13,34 @@ import 'epub_chapter_ref.dart';
 import 'epub_content_ref.dart';
 
 class EpubBookRef {
-  EpubBookRef(Archive epubArchive) {
-    _epubArchive = epubArchive;
-  }
-  Archive? _epubArchive;
+  const EpubBookRef({
+    required Archive epubArchive,
+    required this.title,
+    required this.authorList,
+    required this.schema,
+    required this.content,
+  }) : _epubArchive = epubArchive;
 
-  String? title;
-  String? author;
-  List<String?>? authorList;
-  EpubSchema? schema;
-  EpubContentRef? content;
+  final Archive _epubArchive;
+
+  /// The first `dc:title`; empty when the package has none, although OPF
+  /// requires one.
+  final String title;
+
+  /// Every `dc:creator`'s text, in document order; empty when the package
+  /// names no creator. How the names are joined for display is the caller's
+  /// decision.
+  final List<String> authorList;
+  final EpubSchema schema;
+  final EpubContentRef content;
 
   @override
   int get hashCode {
     final List<int> objects = <int>[
       title.hashCode,
-      author.hashCode,
       schema.hashCode,
       content.hashCode,
-      ...authorList?.map((String? author) => author.hashCode) ?? <int>[0],
+      ...authorList.map((String author) => author.hashCode),
     ];
     return hashObjects(objects);
   }
@@ -43,13 +52,12 @@ class EpubBookRef {
     }
 
     return title == other.title &&
-        author == other.author &&
         schema == other.schema &&
         content == other.content &&
         collections.listsEqual(authorList, other.authorList);
   }
 
-  Archive? epubArchive() {
+  Archive epubArchive() {
     return _epubArchive;
   }
 

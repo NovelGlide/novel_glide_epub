@@ -17,7 +17,6 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:novel_glide_epub/novel_glide_epub.dart';
-import 'package:novel_glide_epub/src/utils/zip_path_resolver.dart';
 import 'package:test/test.dart';
 
 import 'support/epub_fixture.dart';
@@ -67,9 +66,6 @@ Uint8List _buildEpub2CjkBook({
             'media-type="application/xhtml+xml"/>'
             '</manifest>'
             '<spine toc="ncx"><itemref idref="ch1"/></spine>'
-            // An empty guide, so the writer (which cannot write a book
-            // without one) can take this book too.
-            '<guide/>'
             '</package>',
         'OEBPS/目錄.ncx': _ncx(chapterHref),
         'OEBPS/文字/第一章.xhtml': seedXhtml('NGE-SEED-CJK-CH1'),
@@ -135,8 +131,8 @@ void main() {
 
     // TC-ZPR-4 [Boundary value]: with no directory, the name is the entry —
     // the OPF sits at the container root.
-    test('TC-ZPR-4 [Boundary]: a null or empty directory yields the name', () {
-      expect(_resolver.combine(null, '第一章.xhtml'), '第一章.xhtml');
+    test('TC-ZPR-4 [Boundary]: an empty directory yields the name', () {
+      expect(_resolver.combine('', '第一章.xhtml'), '第一章.xhtml');
       expect(_resolver.combine('', 'a/../第一章.xhtml'), '第一章.xhtml');
     });
 
@@ -220,8 +216,8 @@ void main() {
       final EpubBook book =
           await const EpubReader().readBook(_buildEpub2CjkBook());
 
-      expect(book.chapters!.single.title, 'NGE-SEED 第一章');
-      expect(book.chapters!.single.htmlContent, contains('NGE-SEED-CJK-CH1'));
+      expect(book.chapters.single.title, 'NGE-SEED 第一章');
+      expect(book.chapters.single.htmlContent, contains('NGE-SEED-CJK-CH1'));
     });
 
     // TC-ZPR-7 [Scenario]: the lazy path — `openBook` then read one content
@@ -232,7 +228,7 @@ void main() {
           await const EpubReader().openBook(_buildEpub2CjkBook());
 
       final String html =
-          await bookRef.content!.html!['文字/第一章.xhtml']!.readContentAsText();
+          await bookRef.content.html['文字/第一章.xhtml']!.readContentAsText();
 
       expect(html, contains('NGE-SEED-CJK-CH1'));
     });
@@ -260,13 +256,13 @@ void main() {
       final EpubBook book = await const EpubReader()
           .readBook(_buildEpub2CjkBook(ncxHref: '%E7%9B%AE%E9%8C%84.ncx'));
 
-      expect(book.chapters!.single.title, 'NGE-SEED 第一章');
+      expect(book.chapters.single.title, 'NGE-SEED 第一章');
     });
 
     // TC-ZPR-17 [Scenario]: a book that percent-encodes the chapter href in
-    // both the manifest and the NCX. The content maps are keyed by the
-    // manifest's spelling, so the chapter is found under the NCX's own
-    // spelling rather than only its decoded form.
+    // both the manifest and the NCX. Both spellings decode to the same name,
+    // which is the content map's key, so the chapter is found. The mixed
+    // spellings are pinned in `chapter_reader_test.dart` (TC-CHR-4).
     test(
         'TC-ZPR-17 [Scenario]: a chapter href escaped the same way in the '
         'manifest and the NCX is found', () async {
@@ -275,12 +271,13 @@ void main() {
               chapterHref:
                   '%E6%96%87%E5%AD%97/%E7%AC%AC%E4%B8%80%E7%AB%A0.xhtml'));
 
-      expect(book.chapters!.single.htmlContent, contains('NGE-SEED-CJK-CH1'));
+      expect(book.chapters.single.htmlContent, contains('NGE-SEED-CJK-CH1'));
     });
 
     // TC-ZPR-18 [Scenario]: writing a book back out names each archive entry
     // by its file name, not by the manifest's escaped href — otherwise the
-    // written book could not find its own chapter when read back.
+    // written book could not find its own chapter when read back. The book
+    // has no guide, which the writer takes as it comes.
     test('TC-ZPR-18 [Scenario]: the writer names entries by decoded file name',
         () async {
       final EpubBook book = await const EpubReader().readBook(
@@ -288,8 +285,9 @@ void main() {
               chapterHref:
                   '%E6%96%87%E5%AD%97/%E7%AC%AC%E4%B8%80%E7%AB%A0.xhtml'));
 
+      final List<int> written = const EpubWriter().writeBook(book)!;
       final List<String> entries = ZipDecoder()
-          .decodeBytes(const EpubWriter().writeBook(book)!)
+          .decodeBytes(written)
           .files
           .map((ArchiveFile file) => file.name)
           .toList();
@@ -299,6 +297,9 @@ void main() {
           entries,
           isNot(contains(
               'OEBPS/%E6%96%87%E5%AD%97/%E7%AC%AC%E4%B8%80%E7%AB%A0.xhtml')));
+      final EpubBook readBack = await const EpubReader().readBook(written);
+      expect(
+          readBack.chapters.single.htmlContent, contains('NGE-SEED-CJK-CH1'));
     });
   });
 }

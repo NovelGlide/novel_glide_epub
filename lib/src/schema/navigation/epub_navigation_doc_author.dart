@@ -2,18 +2,15 @@ import 'package:quiver/collection.dart' as collections;
 import 'package:quiver/core.dart';
 
 class EpubNavigationDocAuthor {
-  EpubNavigationDocAuthor() {
-    authors = <String>[];
-  }
-  List<String>? authors;
+  const EpubNavigationDocAuthor({required this.authors});
+
+  /// The `<text>` children; empty when the `<docAuthor>` has none, although
+  /// NCX requires one.
+  final List<String> authors;
 
   @override
-  int get hashCode {
-    final List<int> objects = <int>[
-      ...authors!.map((String author) => author.hashCode)
-    ];
-    return hashObjects(objects);
-  }
+  int get hashCode =>
+      hashObjects(authors.map((String author) => author.hashCode));
 
   @override
   bool operator ==(Object other) {

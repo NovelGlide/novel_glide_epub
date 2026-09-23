@@ -71,13 +71,12 @@ class ZipPathResolver {
   /// A `\` is read as a `/`. The EPUB spec only allows `/`, but books built
   /// on Windows write `\` in their hrefs, and reading it as anything else
   /// would leave those books unable to find a single file.
-  String combine(String? directory, String? fileName) {
-    final String name = fileName!;
-    final String path =
-        directory == null || directory == '' ? name : '$directory/$name';
-
+  String combine(String directory, String fileName) {
     final List<String> segments = <String>[];
-    for (final String segment in path.replaceAll(r'\', '/').split('/')) {
+    // An empty directory leaves a leading empty segment, which is dropped
+    // like any other.
+    for (final String segment
+        in '$directory/$fileName'.replaceAll(r'\', '/').split('/')) {
       if (segment == '..') {
         // A `..` with nothing left to climb is dropped: no entry lives
         // above the container root.

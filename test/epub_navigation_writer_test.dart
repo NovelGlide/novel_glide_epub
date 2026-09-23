@@ -15,32 +15,42 @@ import 'package:xml/xml.dart';
 
 import 'support/epub_fixture.dart';
 
+/// A navigation point linking to [source]; a null [source] is the shape an
+/// EPUB3 `<span>` heading reads as — an entry that links nowhere.
 EpubNavigationPoint _point(
   String id,
   String playOrder,
   String label,
-  String source, {
-  List<EpubNavigationPoint>? children,
+  String? source, {
+  List<EpubNavigationPoint> children = const <EpubNavigationPoint>[],
 }) =>
-    EpubNavigationPoint()
-      ..id = id
-      ..playOrder = playOrder
-      ..navigationLabels = <EpubNavigationLabel>[
-        EpubNavigationLabel()..text = label,
-      ]
-      ..content = (EpubNavigationContent()..source = source)
-      ..childNavigationPoints = children ?? <EpubNavigationPoint>[];
+    EpubNavigationPoint(
+      id: id,
+      playOrder: playOrder,
+      navigationLabels: <EpubNavigationLabel>[EpubNavigationLabel(text: label)],
+      content: EpubNavigationContent(source: source),
+      childNavigationPoints: children,
+    );
 
-EpubNavigation _navigation(List<EpubNavigationPoint> points) => EpubNavigation()
-  ..head = (EpubNavigationHead()
-    ..metadata = <EpubNavigationHeadMeta>[
-      EpubNavigationHeadMeta()
-        ..name = 'dtb:uid'
-        ..content = 'NGE-SEED-ID',
-    ])
-  ..docTitle =
-      (EpubNavigationDocTitle()..titles = <String>['NGE-SEED Navigation'])
-  ..navMap = (EpubNavigationMap()..points = points);
+EpubNavigation _navigation(
+  List<EpubNavigationPoint> points, {
+  List<String> titles = const <String>['NGE-SEED Navigation'],
+  List<EpubNavigationHeadMeta> headMetadata = const <EpubNavigationHeadMeta>[
+    EpubNavigationHeadMeta(name: 'dtb:uid', content: 'NGE-SEED-ID'),
+  ],
+}) =>
+    EpubNavigation(
+      head: EpubNavigationHead(metadata: headMetadata),
+      docTitle: EpubNavigationDocTitle(titles: titles),
+      navMap: EpubNavigationMap(points: points),
+    );
+
+/// Runs [write] against a fresh builder and returns the document it produced.
+String _build(void Function(XmlBuilder builder) write) {
+  final XmlBuilder builder = XmlBuilder();
+  write(builder);
+  return builder.buildDocument().toXmlString();
+}
 
 /// Wraps [ncx] in an EPUB2 archive whose spine points at it, so
 /// `EpubReader.readBook` parses it through the production navigation path.
@@ -128,16 +138,61 @@ void main() {
     // TC-NVW-4 [Boundary value]: an empty navMap and an empty docTitle are
     // both written as empty elements rather than being skipped.
     test('TC-NVW-4 [Boundary]: an empty navigation writes empty sections', () {
-      final EpubNavigation navigation = _navigation(<EpubNavigationPoint>[])
-        ..docTitle = (EpubNavigationDocTitle()..titles = <String>[])
-        ..head = (EpubNavigationHead()..metadata = <EpubNavigationHeadMeta>[]);
-
-      final String ncx =
-          const EpubNavigationWriter().writeNavigation(navigation);
+      final String ncx = const EpubNavigationWriter().writeNavigation(
+          _navigation(<EpubNavigationPoint>[],
+              titles: <String>[], headMetadata: <EpubNavigationHeadMeta>[]));
 
       expect(ncx, contains('<head/>'));
       expect(ncx, contains('<docTitle/>'));
       expect(ncx, contains('<navMap/>'));
+    });
+
+    // TC-NVW-8 [Equivalence partitioning]: an entry with no link — an EPUB3
+    // `<span>` heading — has no NCX form, since a navPoint must carry a
+    // `content` src. It is left out, and the linked entries on either side
+    // are written as usual.
+    test('TC-NVW-8 [Equivalence]: a navPoint with no source is skipped', () {
+      final String ncx = const EpubNavigationWriter()
+          .writeNavigation(_navigation(<EpubNavigationPoint>[
+        _point('np-1', '1', 'NGE-SEED Chapter One', 'chapter1.xhtml'),
+        _point('np-heading', '2', 'NGE-SEED Part Heading', null),
+        _point('np-3', '3', 'NGE-SEED Chapter Three', 'chapter3.xhtml'),
+      ]));
+
+      expect(ncx, isNot(contains('np-heading')));
+      expect(ncx, isNot(contains('NGE-SEED Part Heading')));
+      expect(
+          XmlDocument.parse(ncx)
+              .findAllElements('navPoint')
+              .map((XmlElement e) => e.getAttribute('id')),
+          <String>['np-1', 'np-3']);
+    });
+  });
+
+  group('EpubNavigationWriter.writeNavigationPoint', () {
+    // TC-NVW-9 [Scenario/use-case]: the src a navPoint links to is the
+    // `source` argument, not a second read of the point's own content —
+    // `writeNavigationMap` has already resolved it. A point whose content
+    // has no source is written with the one it is given.
+    <String, String?>{
+      'a different own source': 'NGE-SEED-own.xhtml',
+      'no own source': null,
+    }.forEach((String label, String? ownSource) {
+      test('TC-NVW-9 [Scenario]: src comes from the argument, point has $label',
+          () {
+        final String xml = _build((XmlBuilder b) => const EpubNavigationWriter()
+            .writeNavigationPoint(
+                b,
+                _point('np-1', '1', 'NGE-SEED Chapter One', ownSource),
+                'NGE-SEED-given.xhtml'));
+
+        expect(
+            xml,
+            '<navPoint id="np-1" playOrder="1">'
+            '<navLabel><text>NGE-SEED Chapter One</text></navLabel>'
+            '<content src="NGE-SEED-given.xhtml"/>'
+            '</navPoint>');
+      });
     });
   });
 
@@ -156,10 +211,10 @@ void main() {
       final EpubBook book = await const EpubReader().readBook(_archiveAround(
           const EpubNavigationWriter().writeNavigation(original)));
 
-      expect(book.schema!.navigation!.head!.metadata, original.head!.metadata);
-      expect(book.schema!.navigation!.navMap!.points, original.navMap!.points);
-      expect(book.chapters!.single.title, 'NGE-SEED Chapter One');
-      expect(book.chapters!.single.contentFileName, 'chapter1.xhtml');
+      expect(book.schema.navigation.head.metadata, original.head.metadata);
+      expect(book.schema.navigation.navMap.points, original.navMap.points);
+      expect(book.chapters.single.title, 'NGE-SEED Chapter One');
+      expect(book.chapters.single.contentFileName, 'chapter1.xhtml');
     });
 
     // TC-NVW-6 [Error guessing]: `writeNavigationDocTitle` puts the titles
@@ -170,16 +225,15 @@ void main() {
     test(
         'TC-NVW-6 [Error guessing]: docTitle is written without its text '
         'wrapper and reads back empty', () async {
-      final EpubNavigation original = _navigation(<EpubNavigationPoint>[])
-        ..docTitle = (EpubNavigationDocTitle()
-          ..titles = <String>['NGE-SEED One', 'NGE-SEED Two']);
+      final EpubNavigation original = _navigation(<EpubNavigationPoint>[],
+          titles: <String>['NGE-SEED One', 'NGE-SEED Two']);
 
       final String ncx = const EpubNavigationWriter().writeNavigation(original);
 
       expect(ncx, contains('<docTitle>NGE-SEED OneNGE-SEED Two</docTitle>'));
       final EpubBook book =
           await const EpubReader().readBook(_archiveAround(ncx));
-      expect(book.schema!.navigation!.docTitle!.titles, isEmpty);
+      expect(book.schema.navigation.docTitle.titles, isEmpty);
     });
 
     // TC-NVW-7 [Error guessing]: `writeNavigationPoint` does not recurse into
@@ -198,7 +252,7 @@ void main() {
       expect(ncx, isNot(contains('np-1-1')));
       final EpubBook book =
           await const EpubReader().readBook(_archiveAround(ncx));
-      expect(book.chapters!.single.subChapters, isEmpty);
+      expect(book.chapters.single.subChapters, isEmpty);
     });
   });
 }

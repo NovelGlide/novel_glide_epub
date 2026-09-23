@@ -1,14 +1,20 @@
 // `ContentReader` — the manifest-to-content-map sorter.
 //
 // Two halves: the mime-type table (`getContentTypeByContentMimeType`) and the
-// bucketing of manifest items into html / css / images / fonts / allFiles.
-// The bucketing runs through a real `EpubReader.openBook`, because
-// `parseContentMap` reads the schema off an opened book ref.
+// bucketing of manifest items into html / css / images / fonts / allFiles,
+// each keyed by the item's DECODED href. The bucketing is exercised both
+// through a real `EpubReader.openBook`, which is how a caller reaches it, and
+// by calling `parseContentMap` on a hand-built manifest, which isolates the
+// key rules (decoding, collisions) from every other reader.
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:novel_glide_epub/novel_glide_epub.dart';
 import 'package:novel_glide_epub/src/readers/content_reader.dart';
+import 'package:novel_glide_epub/src/ref_entities/epub_byte_content_file_ref.dart';
+import 'package:novel_glide_epub/src/ref_entities/epub_content_file_ref.dart';
 import 'package:novel_glide_epub/src/ref_entities/epub_content_ref.dart';
+import 'package:novel_glide_epub/src/ref_entities/epub_text_content_file_ref.dart';
 import 'package:test/test.dart';
 
 import 'support/epub_fixture.dart';
@@ -130,33 +136,34 @@ void main() {
   group('ContentReader.parseContentMap', () {
     // TC-CNT-4 [Scenario/use-case]: text-shaped items reach html and css;
     // the text types with no bucket of their own (DTBOOK, NCX, OEB1
-    // document, XML, OEB1 CSS) appear only in allFiles.
+    // document, XML, OEB1 CSS) appear only in allFiles — but still as TEXT
+    // refs, since each of them is a text format.
     test('TC-CNT-4 [Scenario]: text items are bucketed into html and css',
         () async {
       final EpubBookRef bookRef =
           await const EpubReader().openBook(_buildBookWithEveryMediaType());
-      final EpubContentRef content = bookRef.content!;
+      final EpubContentRef content = bookRef.content;
 
-      expect(
-        content.html!.keys,
-        containsAll(<String>[
-          'chapter1.xhtml',
-          'chapter2.html',
-          'ch%20one.xhtml',
-        ]),
-      );
-      expect(content.css!.keys, containsAll(<String>['styles.css']));
-      expect(content.css!.keys, isNot(contains('legacy.css')));
-      expect(
-        content.allFiles!.keys,
-        containsAll(<String>[
-          'toc.ncx',
-          'book.dtbook',
-          'legacy.html',
-          'data.xml',
-          'legacy.css',
-        ]),
-      );
+      expect(content.html.keys, <String>[
+        'chapter1.xhtml',
+        'chapter2.html',
+        'ch one.xhtml',
+      ]);
+      expect(content.css.keys, <String>['styles.css']);
+      for (final String textFile in <String>[
+        'chapter1.xhtml',
+        'chapter2.html',
+        'ch one.xhtml',
+        'styles.css',
+        'toc.ncx',
+        'book.dtbook',
+        'legacy.html',
+        'data.xml',
+        'legacy.css',
+      ]) {
+        expect(content.allFiles[textFile], isA<EpubTextContentFileRef>(),
+            reason: '$textFile is a text format');
+      }
     });
 
     // TC-CNT-5 [Scenario/use-case]: byte-shaped items split into images,
@@ -166,32 +173,45 @@ void main() {
         () async {
       final EpubBookRef bookRef =
           await const EpubReader().openBook(_buildBookWithEveryMediaType());
-      final EpubContentRef content = bookRef.content!;
+      final EpubContentRef content = bookRef.content;
 
       expect(
-        content.images!.keys,
+        content.images.keys,
         <String>['a.gif', 'a.jpg', 'a.png', 'a.svg', 'a.bmp'],
       );
-      expect(content.fonts!.keys, <String>['a.ttf', 'a.otf', 'ms.otf']);
-      expect(content.images!.keys, isNot(contains('a.bin')));
-      expect(content.fonts!.keys, isNot(contains('a.bin')));
-      expect(content.allFiles!.keys, contains('a.bin'));
+      expect(content.fonts.keys, <String>['a.ttf', 'a.otf', 'ms.otf']);
+      for (final String byteFile in <String>[
+        'a.gif',
+        'a.jpg',
+        'a.png',
+        'a.svg',
+        'a.bmp',
+        'a.ttf',
+        'a.otf',
+        'ms.otf',
+        'a.bin',
+      ]) {
+        expect(content.allFiles[byteFile], isA<EpubByteContentFileRef>(),
+            reason: '$byteFile is not a text format');
+      }
     });
 
-    // TC-CNT-6 [Boundary value]: a percent-encoded href keys the map RAW but
-    // stores a decoded fileName — the two must not be conflated, because
-    // ChapterReader looks the chapter up by the decoded name.
+    // TC-CNT-6 [Boundary value]: a percent-encoded href is keyed by its
+    // DECODED name, the same string as the ref's fileName — a navigation
+    // link, decoded the same way, finds it however either side spelled it.
+    // The escaped spelling is not a key at all.
     test(
-        'TC-CNT-6 [Boundary]: a percent-encoded href keys raw and stores a '
-        'decoded fileName', () async {
+        'TC-CNT-6 [Boundary]: a percent-encoded href keys and names the file '
+        'decoded', () async {
       final EpubBookRef bookRef =
           await const EpubReader().openBook(_buildBookWithEveryMediaType());
 
+      expect(bookRef.content.html['ch one.xhtml']!.fileName, 'ch one.xhtml');
+      expect(bookRef.content.html.containsKey('ch%20one.xhtml'), isFalse);
+      expect(bookRef.content.allFiles.containsKey('ch%20one.xhtml'), isFalse);
+      expect(bookRef.content.images['a.png']!.contentMimeType, 'image/png');
       expect(
-          bookRef.content!.html!['ch%20one.xhtml']!.fileName, 'ch one.xhtml');
-      expect(bookRef.content!.images!['a.png']!.contentMimeType, 'image/png');
-      expect(
-        bookRef.content!.images!['a.png']!.contentType,
+        bookRef.content.images['a.png']!.contentType,
         EpubContentType.imagePng,
       );
     });
@@ -204,9 +224,151 @@ void main() {
           await const EpubReader().openBook(_buildBookWithEveryMediaType());
 
       expect(
-        bookRef.content!.allFiles!.keys.length,
-        bookRef.schema!.package!.manifest!.items!.length,
+        bookRef.content.allFiles.keys.length,
+        bookRef.schema.package.manifest.items.length,
       );
+    });
+
+    // TC-CNT-8 [Scenario/use-case]: a manifest that escapes non-ASCII names
+    // is keyed by the raw names, and each ref reads its entry from the given
+    // archive under the given content directory.
+    test(
+        'TC-CNT-8 [Scenario]: escaped non-ASCII hrefs are keyed decoded and '
+        'read from the archive', () async {
+      final Archive archive = Archive()
+        ..addFile(ArchiveFile.string(
+            'OEBPS/第一章.xhtml', seedXhtml('NGE-SEED-CJK-CH1')))
+        ..addFile(ArchiveFile('OEBPS/圖 一.png', 3, <int>[0x4E, 0x47, 0x45]));
+
+      final EpubContentRef content = const ContentReader().parseContentMap(
+        archive,
+        'OEBPS',
+        const EpubManifest(items: <EpubManifestItem>[
+          EpubManifestItem(
+            id: 'ch1',
+            href: '%E7%AC%AC%E4%B8%80%E7%AB%A0.xhtml',
+            mediaType: 'application/xhtml+xml',
+          ),
+          EpubManifestItem(
+            id: 'img',
+            href: '%E5%9C%96%20%E4%B8%80.png',
+            mediaType: 'image/png',
+          ),
+        ]),
+      );
+
+      expect(content.html.keys, <String>['第一章.xhtml']);
+      expect(content.images.keys, <String>['圖 一.png']);
+      expect(content.allFiles.keys, <String>['第一章.xhtml', '圖 一.png']);
+      expect(content.css, isEmpty);
+      expect(content.fonts, isEmpty);
+      final EpubTextContentFileRef chapter = content.html['第一章.xhtml']!;
+      expect(chapter.fileName, '第一章.xhtml');
+      expect(chapter.contentMimeType, 'application/xhtml+xml');
+      expect(chapter.contentType, EpubContentType.xhtml11);
+      expect(await chapter.readContentAsText(), contains('NGE-SEED-CJK-CH1'));
+      expect(await content.images['圖 一.png']!.readContentAsBytes(),
+          <int>[0x4E, 0x47, 0x45]);
+    });
+
+    // TC-CNT-9 [Error guessing]: two manifest items whose hrefs decode to one
+    // name name one archive entry, so they share one key; the LATER item's
+    // ref is kept, whichever of the two spellings came first.
+    for (final List<String> row in <List<String>>[
+      <String>['ch%20one.xhtml', 'ch one.xhtml'],
+      <String>['ch one.xhtml', 'ch%20one.xhtml'],
+    ]) {
+      test(
+          'TC-CNT-9 [Error guessing]: "${row[0]}" then "${row[1]}" keep one '
+          'entry, the later', () {
+        final EpubContentRef content = const ContentReader().parseContentMap(
+          Archive(),
+          'OEBPS',
+          EpubManifest(items: <EpubManifestItem>[
+            EpubManifestItem(
+              id: 'first',
+              href: row[0],
+              mediaType: 'application/xhtml+xml',
+            ),
+            EpubManifestItem(
+              id: 'later',
+              href: row[1],
+              mediaType: 'text/html',
+            ),
+          ]),
+        );
+
+        expect(content.html.keys, <String>['ch one.xhtml']);
+        expect(content.allFiles.keys, <String>['ch one.xhtml']);
+        expect(content.html['ch one.xhtml']!.contentMimeType, 'text/html');
+        expect(content.allFiles['ch one.xhtml']!.contentMimeType, 'text/html');
+      });
+    }
+
+    // TC-CNT-12 [Error guessing]: when the two items that share a decoded
+    // name have media types filed in different buckets, the earlier item
+    // leaves no trace in its own bucket: every map agrees on the one file.
+    test(
+        'TC-CNT-12 [Error guessing]: a later item of another media type '
+        'replaces the earlier one in every map', () {
+      final EpubContentRef content = const ContentReader().parseContentMap(
+        Archive(),
+        'OEBPS',
+        const EpubManifest(items: <EpubManifestItem>[
+          EpubManifestItem(
+            id: 'first',
+            href: 'NGE-SEED%20page.png',
+            mediaType: 'image/png',
+          ),
+          EpubManifestItem(
+            id: 'later',
+            href: 'NGE-SEED page.png',
+            mediaType: 'application/xhtml+xml',
+          ),
+        ]),
+      );
+
+      expect(content.images, isEmpty);
+      expect(content.html.keys, <String>['NGE-SEED page.png']);
+      expect(content.allFiles.keys, <String>['NGE-SEED page.png']);
+      expect(content.allFiles['NGE-SEED page.png'],
+          same(content.html['NGE-SEED page.png']));
+    });
+
+    // TC-CNT-10 [Boundary value]: an empty manifest yields five empty maps,
+    // not null ones.
+    test('TC-CNT-10 [Boundary]: an empty manifest yields empty maps', () {
+      final EpubContentRef content = const ContentReader().parseContentMap(
+        Archive(),
+        '',
+        const EpubManifest(items: <EpubManifestItem>[]),
+      );
+
+      expect(content.html, isEmpty);
+      expect(content.css, isEmpty);
+      expect(content.images, isEmpty);
+      expect(content.fonts, isEmpty);
+      expect(content.allFiles, isEmpty);
+    });
+
+    // TC-CNT-11 [Scenario/use-case]: `allFiles` shares each bucketed ref
+    // rather than holding a second copy, so either map reaches the same
+    // file.
+    test('TC-CNT-11 [Scenario]: allFiles shares the bucketed refs', () async {
+      final EpubContentRef content =
+          (await const EpubReader().openBook(_buildBookWithEveryMediaType()))
+              .content;
+
+      for (final MapEntry<String, EpubContentFileRef> entry
+          in <MapEntry<String, EpubContentFileRef>>[
+        ...content.html.entries,
+        ...content.css.entries,
+        ...content.images.entries,
+        ...content.fonts.entries,
+      ]) {
+        expect(identical(content.allFiles[entry.key], entry.value), isTrue,
+            reason: entry.key);
+      }
     });
   });
 }

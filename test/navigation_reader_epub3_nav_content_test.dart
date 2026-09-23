@@ -63,22 +63,22 @@ void main() {
           ),
         );
 
-        final EpubNavigation navigation = bookRef.schema!.navigation!;
-        expect(navigation.docTitle!.titles, <String>['NGE-SEED Nav3 Content']);
+        final EpubNavigation navigation = bookRef.schema.navigation;
+        expect(navigation.docTitle.titles, <String>['NGE-SEED Nav3 Content']);
         expect(navigation.docAuthors, isEmpty);
-        expect(navigation.navMap!.points, hasLength(2));
+        expect(navigation.navMap.points, hasLength(2));
 
-        final EpubNavigationPoint first = navigation.navMap!.points!.first;
-        expect(first.navigationLabels!.single.text, 'NGE-SEED Chapter One');
+        final EpubNavigationPoint first = navigation.navMap.points.first;
+        expect(first.navigationLabels.single.text, 'NGE-SEED Chapter One');
         expect(first.childNavigationPoints, hasLength(1));
         expect(
-          first.childNavigationPoints!.single.content!.source,
+          first.childNavigationPoints.single.content.source,
           'chapter1.xhtml#sec-1',
         );
 
         final List<EpubChapterRef> chapters = await bookRef.getChapters();
         expect(chapters, hasLength(2));
-        expect(chapters.first.subChapters!.single.anchor, 'sec-1');
+        expect(chapters.first.subChapters.single.anchor, 'sec-1');
       },
     );
 
@@ -99,10 +99,14 @@ void main() {
         );
 
         final EpubNavigationPoint span =
-            bookRef.schema!.navigation!.navMap!.points!.first;
-        expect(span.navigationLabels!.single.text, 'NGE-SEED Part One');
-        expect(span.content, isNotNull);
-        expect(span.content!.source, isNull);
+            bookRef.schema.navigation.navMap.points.first;
+        expect(span.navigationLabels.single.text, 'NGE-SEED Part One');
+        expect(span.content.id, isNull);
+        expect(span.content.source, isNull);
+        expect(
+          span.childNavigationPoints.single.content.source,
+          'chapter1.xhtml',
+        );
 
         final List<EpubChapterRef> chapters = await bookRef.getChapters();
         expect(chapters, hasLength(1));
@@ -143,7 +147,7 @@ void main() {
           ),
         );
 
-        expect(bookRef.schema!.navigation!.navMap!.points, hasLength(1));
+        expect(bookRef.schema.navigation.navMap.points, hasLength(1));
       },
     );
 
@@ -161,9 +165,67 @@ void main() {
         );
 
         final EpubNavigationPoint point =
-            bookRef.schema!.navigation!.navMap!.points!.single;
-        expect(point.content!.id, 'toc-1');
-        expect(point.content!.source, 'chapter1.xhtml');
+            bookRef.schema.navigation.navMap.points.single;
+        expect(point.content.id, 'toc-1');
+        expect(point.content.source, 'chapter1.xhtml');
+      },
+    );
+
+    // TC-NAV3-6 [Scenario/use-case]: a nav document has no NCX head, doc
+    // author, nav list, page list, or per-entry id, class and play order, so
+    // the navigation reads those as empty (or null where optional) rather
+    // than leaving them for a caller to guess at.
+    test(
+      'TC-NAV3-6 [Scenario]: the NCX-only parts of an EPUB3 navigation read '
+      'empty',
+      () async {
+        final EpubBookRef bookRef = await const EpubReader().openBook(
+          _epub3With(
+            '<li><a href="chapter1.xhtml">NGE-SEED Chapter One</a>'
+            '<ol><li><a href="chapter1.xhtml#sec-1">NGE-SEED Section 1</a>'
+            '</li></ol></li>',
+          ),
+        );
+
+        final EpubNavigation navigation = bookRef.schema.navigation;
+        expect(navigation.head.metadata, isEmpty);
+        expect(navigation.docAuthors, isEmpty);
+        expect(navigation.navLists, isEmpty);
+        expect(navigation.pageList, isNull);
+
+        final EpubNavigationPoint point = navigation.navMap.points.single;
+        expect(point.id, '');
+        expect(point.className, isNull);
+        expect(point.playOrder, '');
+        final EpubNavigationPoint child = point.childNavigationPoints.single;
+        expect(child.id, '');
+        expect(child.className, isNull);
+        expect(child.playOrder, '');
+        expect(child.childNavigationPoints, isEmpty);
+      },
+    );
+
+    // TC-NAV3-7 [Equivalence partitioning]: an `<a>` with no href is a
+    // heading like a `<span>` — a label with a null source, which produces no
+    // chapter, not a refusal.
+    test(
+      'TC-NAV3-7 [Equivalence partitioning]: an anchor without an href yields '
+      'a sourceless navigation point',
+      () async {
+        final EpubBookRef bookRef = await const EpubReader().openBook(
+          _epub3With(
+            '<li><a>NGE-SEED Unlinked</a></li>'
+            '<li><a href="chapter2.xhtml">NGE-SEED Chapter Two</a></li>',
+          ),
+        );
+
+        final EpubNavigationPoint unlinked =
+            bookRef.schema.navigation.navMap.points.first;
+        expect(unlinked.navigationLabels.single.text, 'NGE-SEED Unlinked');
+        expect(unlinked.content.source, isNull);
+
+        final List<EpubChapterRef> chapters = await bookRef.getChapters();
+        expect(chapters.single.contentFileName, 'chapter2.xhtml');
       },
     );
   });

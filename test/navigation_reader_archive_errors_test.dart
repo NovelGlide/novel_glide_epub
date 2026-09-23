@@ -182,6 +182,46 @@ void main() {
       },
     );
 
+    // TC-NAVE-10 [Boundary value]: `toc=""` is refused like an absent toc
+    // attribute — the other side of the `tocId.isEmpty` guard from TC-NAVE-1.
+    test(
+      'TC-NAVE-10 [Boundary]: EPUB2 spine with an empty toc attribute is '
+      'rejected as an empty TOC ID',
+      () {
+        expect(
+          () => const EpubReader().openBook(
+            _epub2With(
+              ncx: _ncxWithout(''),
+              opf: _opfEpub2(
+                spine: '<spine toc=""><itemref idref="ch1"/></spine>',
+              ),
+            ),
+          ),
+          _throwsMessageContaining('TOC ID is empty'),
+        );
+      },
+    );
+
+    // TC-NAVE-11 [Error guessing]: an `ncx` root outside the DAISY NCX
+    // namespace is not an NCX, however it is spelled.
+    test(
+      'TC-NAVE-11 [Error guessing]: TOC file whose ncx element is in a '
+      'foreign namespace is rejected',
+      () {
+        expect(
+          () => const EpubReader().openBook(
+            _epub2With(
+              ncx: _ncxWithout('').replaceFirst(
+                'http://www.daisy.org/z3986/2005/ncx/',
+                'urn:nge-seed:not-ncx',
+              ),
+            ),
+          ),
+          _throwsMessageContaining('does not contain ncx element'),
+        );
+      },
+    );
+
     // TC-NAVE-5 [Equivalence partitioning]: each required NCX child — head,
     // docTitle, navMap — has its own guard; one case per element keeps the
     // failure attributable.
@@ -254,8 +294,8 @@ void main() {
     );
 
     // TC-NAVE-9 [Error guessing]: an EPUB3 nav document with a head but no
-    // `nav` element. The guard used to reuse the head-element wording; it now
-    // names the element it actually looked for.
+    // `nav` element. The message names the nav element, not the head the
+    // guard before it looks for, so the two failures stay distinguishable.
     test(
       'TC-NAVE-9 [Error guessing]: EPUB3 nav document without a nav element '
       'is rejected',

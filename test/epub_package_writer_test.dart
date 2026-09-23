@@ -19,25 +19,31 @@ String _build(void Function(XmlBuilder builder) write) {
   return builder.buildDocument().toXmlString();
 }
 
-EpubManifestItem _item(String id, String href, String mediaType) =>
-    EpubManifestItem()
-      ..id = id
-      ..href = href
-      ..mediaType = mediaType;
+const EpubMetadata _minimalMetadata = EpubMetadata(
+  titles: <String>['NGE-SEED Title'],
+  identifiers: <EpubMetadataIdentifier>[],
+  languages: <String>[],
+);
 
-/// The smallest package `const EpubPackageWriter().writeContent` accepts: metadata,
-/// manifest, spine and guide all non-null.
-EpubPackage _minimalPackage(EpubVersion? version) => EpubPackage()
-  ..version = version
-  ..metadata = (EpubMetadata()..titles = <String>['NGE-SEED Title'])
-  ..manifest = (EpubManifest()
-    ..items = <EpubManifestItem>[
-      _item('ncx', 'toc.ncx', 'application/x-dtbncx+xml'),
-    ])
-  ..spine = (EpubSpine()
-    ..tableOfContents = 'ncx'
-    ..items = <EpubSpineItemRef>[])
-  ..guide = (EpubGuide()..items = <EpubGuideReference>[]);
+/// The smallest package `const EpubPackageWriter().writeContent` accepts,
+/// with an empty guide unless [guide] is given; [metadata] replaces the
+/// one-title default.
+EpubPackage _minimalPackage(
+  EpubVersion version, {
+  EpubMetadata metadata = _minimalMetadata,
+  EpubGuide? guide = const EpubGuide(items: <EpubGuideReference>[]),
+}) =>
+    EpubPackage(
+      version: version,
+      metadata: metadata,
+      manifest: const EpubManifest(items: <EpubManifestItem>[
+        EpubManifestItem(
+            id: 'ncx', href: 'toc.ncx', mediaType: 'application/x-dtbncx+xml'),
+      ]),
+      spine: const EpubSpine(
+          tableOfContents: 'ncx', ltr: true, items: <EpubSpineItemRef>[]),
+      guide: guide,
+    );
 
 void main() {
   group('const EpubManifestWriter().writeManifest', () {
@@ -47,11 +53,14 @@ void main() {
       final String xml =
           _build((XmlBuilder b) => const EpubManifestWriter().writeManifest(
               b,
-              EpubManifest()
-                ..items = <EpubManifestItem>[
-                  _item('ch1', 'chapter1.xhtml', 'application/xhtml+xml'),
-                  _item('css', 'style.css', 'text/css'),
-                ]));
+              const EpubManifest(items: <EpubManifestItem>[
+                EpubManifestItem(
+                    id: 'ch1',
+                    href: 'chapter1.xhtml',
+                    mediaType: 'application/xhtml+xml'),
+                EpubManifestItem(
+                    id: 'css', href: 'style.css', mediaType: 'text/css'),
+              ])));
 
       expect(
           xml,
@@ -66,7 +75,7 @@ void main() {
     // error.
     test('TC-PKW-2 [Boundary]: an empty manifest writes a bare element', () {
       final String xml = _build((XmlBuilder b) => const EpubManifestWriter()
-          .writeManifest(b, EpubManifest()..items = <EpubManifestItem>[]));
+          .writeManifest(b, const EpubManifest(items: <EpubManifestItem>[])));
 
       expect(xml, '<manifest/>');
     });
@@ -81,45 +90,22 @@ void main() {
       final String xml =
           _build((XmlBuilder b) => const EpubManifestWriter().writeManifest(
               b,
-              EpubManifest()
-                ..items = <EpubManifestItem>[
-                  _item('nav', 'nav.xhtml', 'application/xhtml+xml')
-                    ..properties = 'nav'
-                    ..fallback = 'NGE-SEED-fallback'
-                    ..fallbackStyle = 'NGE-SEED-fallback-style'
-                    ..mediaOverlay = 'NGE-SEED-overlay'
-                    ..requiredNamespace = 'NGE-SEED-ns'
-                    ..requiredModules = 'NGE-SEED-modules',
-                ]));
+              const EpubManifest(items: <EpubManifestItem>[
+                EpubManifestItem(
+                  id: 'nav',
+                  href: 'nav.xhtml',
+                  mediaType: 'application/xhtml+xml',
+                  properties: 'nav',
+                  fallback: 'NGE-SEED-fallback',
+                  fallbackStyle: 'NGE-SEED-fallback-style',
+                  mediaOverlay: 'NGE-SEED-overlay',
+                  requiredNamespace: 'NGE-SEED-ns',
+                  requiredModules: 'NGE-SEED-modules',
+                ),
+              ])));
 
       expect(xml, isNot(contains('NGE-SEED')));
       expect(xml, isNot(contains('properties')));
-    });
-
-    // TC-PKW-4 [Error guessing]: every attribute is dereferenced with `!`, so
-    // an item the reader never produced — one with no media type — throws
-    // rather than writing a partial element.
-    test('TC-PKW-4 [Error guessing]: an item with no media type throws', () {
-      expect(
-          () =>
-              _build((XmlBuilder b) => const EpubManifestWriter().writeManifest(
-                  b,
-                  EpubManifest()
-                    ..items = <EpubManifestItem>[
-                      EpubManifestItem()
-                        ..id = 'ch1'
-                        ..href = 'chapter1.xhtml',
-                    ])),
-          throwsA(isA<TypeError>()));
-    });
-
-    // TC-PKW-5 [Error guessing]: the manifest parameter is nullable and
-    // dereferenced with `!`.
-    test('TC-PKW-5 [Error guessing]: a null manifest is not tolerated', () {
-      expect(
-          () => _build((XmlBuilder b) =>
-              const EpubManifestWriter().writeManifest(b, null)),
-          throwsA(isA<TypeError>()));
     });
   });
 
@@ -127,19 +113,16 @@ void main() {
     // TC-PKW-6 [Equivalence partitioning]: `isLinear` is the only spine item
     // state, and it maps to the two spellings of the attribute.
     test('TC-PKW-6 [Equivalence]: linearity maps to yes and no', () {
-      final String xml =
-          _build((XmlBuilder b) => const EpubSpineWriter().writeSpine(
+      final String xml = _build((XmlBuilder b) => const EpubSpineWriter()
+          .writeSpine(
               b,
-              EpubSpine()
-                ..tableOfContents = 'ncx'
-                ..items = <EpubSpineItemRef>[
-                  EpubSpineItemRef()
-                    ..idRef = 'ch1'
-                    ..isLinear = true,
-                  EpubSpineItemRef()
-                    ..idRef = 'ch2'
-                    ..isLinear = false,
-                ]));
+              const EpubSpine(
+                  tableOfContents: 'ncx',
+                  ltr: true,
+                  items: <EpubSpineItemRef>[
+                    EpubSpineItemRef(idRef: 'ch1', isLinear: true),
+                    EpubSpineItemRef(idRef: 'ch2', isLinear: false),
+                  ])));
 
       expect(
           xml,
@@ -151,37 +134,43 @@ void main() {
 
     // TC-PKW-7 [Boundary value]: a spine with no items still writes its `toc`.
     test('TC-PKW-7 [Boundary]: an empty spine keeps its toc attribute', () {
-      final String xml =
-          _build((XmlBuilder b) => const EpubSpineWriter().writeSpine(
+      final String xml = _build((XmlBuilder b) => const EpubSpineWriter()
+          .writeSpine(
               b,
-              EpubSpine()
-                ..tableOfContents = 'ncx'
-                ..items = <EpubSpineItemRef>[]));
+              const EpubSpine(
+                  tableOfContents: 'ncx',
+                  ltr: true,
+                  items: <EpubSpineItemRef>[])));
 
       expect(xml, '<spine toc="ncx"/>');
     });
 
-    // TC-PKW-8 [Error guessing]: `toc` is optional in EPUB3 and `readSpine`
-    // leaves it null there, but the writer requires it — so an EPUB3 book
-    // cannot be written back out.
-    test('TC-PKW-8 [Error guessing]: a spine with no toc throws', () {
-      expect(
-          () => _build((XmlBuilder b) => const EpubSpineWriter()
-              .writeSpine(b, EpubSpine()..items = <EpubSpineItemRef>[])),
-          throwsA(isA<TypeError>()));
+    // TC-PKW-8 [Equivalence partitioning]: `toc` is optional in EPUB3 and
+    // `readSpine` leaves it null there. A null toc is the other side of the
+    // partition from TC-PKW-7: the attribute is left off, not written empty,
+    // and the items are written as usual.
+    test('TC-PKW-8 [Equivalence]: a spine with no toc omits the attribute', () {
+      final String xml =
+          _build((XmlBuilder b) => const EpubSpineWriter().writeSpine(
+              b,
+              const EpubSpine(ltr: true, items: <EpubSpineItemRef>[
+                EpubSpineItemRef(idRef: 'ch1', isLinear: true),
+              ])));
+
+      expect(xml, '<spine><itemref idref="ch1" linear="yes"/></spine>');
     });
 
     // TC-PKW-9 [Error guessing]: `page-progression-direction` has no writer,
     // so a right-to-left book — the vertical-writing case this parser exists
     // for — loses its direction.
     test('TC-PKW-9 [Error guessing]: the reading direction is dropped', () {
-      final String xml =
-          _build((XmlBuilder b) => const EpubSpineWriter().writeSpine(
+      final String xml = _build((XmlBuilder b) => const EpubSpineWriter()
+          .writeSpine(
               b,
-              EpubSpine()
-                ..tableOfContents = 'ncx'
-                ..ltr = false
-                ..items = <EpubSpineItemRef>[]));
+              const EpubSpine(
+                  tableOfContents: 'ncx',
+                  ltr: false,
+                  items: <EpubSpineItemRef>[])));
 
       expect(xml, isNot(contains('page-progression-direction')));
     });
@@ -195,13 +184,12 @@ void main() {
       final String xml =
           _build((XmlBuilder b) => const EpubGuideWriter().writeGuide(
               b,
-              EpubGuide()
-                ..items = <EpubGuideReference>[
-                  EpubGuideReference()
-                    ..type = 'toc'
-                    ..title = 'NGE-SEED Contents'
-                    ..href = 'chapter1.xhtml',
-                ]));
+              const EpubGuide(items: <EpubGuideReference>[
+                EpubGuideReference(
+                    type: 'toc',
+                    title: 'NGE-SEED Contents',
+                    href: 'chapter1.xhtml'),
+              ])));
 
       expect(
           xml,
@@ -212,54 +200,42 @@ void main() {
     // TC-PKW-11 [Boundary value]: an empty guide is an empty element.
     test('TC-PKW-11 [Boundary]: an empty guide writes a bare element', () {
       final String xml = _build((XmlBuilder b) => const EpubGuideWriter()
-          .writeGuide(b, EpubGuide()..items = <EpubGuideReference>[]));
+          .writeGuide(b, const EpubGuide(items: <EpubGuideReference>[])));
 
       expect(xml, '<guide/>');
     });
 
-    // TC-PKW-12 [Error guessing]: `title` is optional in the OPF and
-    // `PackageReader` only requires `type` and `href`, but the writer
-    // dereferences all three — a titleless reference throws.
-    test('TC-PKW-12 [Error guessing]: a reference with no title throws', () {
-      expect(
-          () => _build((XmlBuilder b) => const EpubGuideWriter().writeGuide(
+    // TC-PKW-12 [Boundary value]: `title` is optional in the OPF, and
+    // `PackageReader` requires only `type` and `href`. A titleless reference
+    // writes those two and leaves `title` off rather than writing it empty.
+    test('TC-PKW-12 [Boundary]: a reference with no title omits the attribute',
+        () {
+      final String xml =
+          _build((XmlBuilder b) => const EpubGuideWriter().writeGuide(
               b,
-              EpubGuide()
-                ..items = <EpubGuideReference>[
-                  EpubGuideReference()
-                    ..type = 'toc'
-                    ..href = 'chapter1.xhtml',
-                ])),
-          throwsA(isA<TypeError>()));
-    });
+              const EpubGuide(items: <EpubGuideReference>[
+                EpubGuideReference(type: 'toc', href: 'chapter1.xhtml'),
+              ])));
 
-    // TC-PKW-13 [Error guessing]: and a null guide — what the reader produces
-    // for an OPF with no `<guide>` at all — throws too. This is the failure
-    // `EpubWriter` inherits; see TC-WRT-7.
-    test('TC-PKW-13 [Error guessing]: a null guide is not tolerated', () {
       expect(
-          () => _build(
-              (XmlBuilder b) => const EpubGuideWriter().writeGuide(b, null)),
-          throwsA(isA<TypeError>()));
+          xml, '<guide><reference type="toc" href="chapter1.xhtml"/></guide>');
     });
   });
 
   group('const EpubPackageWriter().writeContent', () {
     // TC-PKW-14 [Equivalence partitioning]: the version attribute is the one
-    // thing the package element decides, and the ternary has no third arm —
-    // anything that is not EPUB2 is written as 3.0.
-    for (final List<Object?> row in <List<Object?>>[
-      <Object?>[EpubVersion.epub2, '2.0'],
-      <Object?>[EpubVersion.epub3, '3.0'],
-      <Object?>[null, '3.0'],
-    ]) {
-      test('TC-PKW-14 [Equivalence]: version ${row[0]} writes ${row[1]}', () {
-        final String xml = const EpubPackageWriter()
-            .writeContent(_minimalPackage(row[0] as EpubVersion?));
+    // thing the package element decides, one spelling per version.
+    <EpubVersion, String>{
+      EpubVersion.epub2: '2.0',
+      EpubVersion.epub3: '3.0',
+    }.forEach((EpubVersion version, String written) {
+      test('TC-PKW-14 [Equivalence]: version $version writes $written', () {
+        final String xml =
+            const EpubPackageWriter().writeContent(_minimalPackage(version));
 
-        expect(xml, contains('version="${row[1]}"'));
+        expect(xml, contains('version="$written"'));
       });
-    }
+    });
 
     // TC-PKW-15 [Scenario/use-case]: the four sections are emitted in OPF
     // order, inside the package namespace, under an XML declaration.
@@ -278,17 +254,38 @@ void main() {
           <String>['metadata', 'manifest', 'spine', 'guide']);
     });
 
-    // TC-PKW-16 [Scenario/use-case]: the metadata writer really is wired in —
-    // a title and a meta item set on the package reach the output.
-    test('TC-PKW-16 [Scenario]: package metadata reaches the document', () {
-      final EpubPackage package = _minimalPackage(EpubVersion.epub2);
-      package.metadata!.metaItems = <EpubMetadataMeta>[
-        EpubMetadataMeta()
-          ..name = 'cover'
-          ..content = 'cover-image',
-      ];
+    // TC-PKW-13 [Equivalence partitioning]: a package with no guide — what
+    // the reader produces for an OPF with no `<guide>`, the norm in EPUB 3 —
+    // is the other side of TC-PKW-15. The guide is optional in the OPF, so
+    // the element is left out entirely rather than written empty.
+    test('TC-PKW-13 [Equivalence]: a package with no guide writes no guide',
+        () {
+      final String xml = const EpubPackageWriter()
+          .writeContent(_minimalPackage(EpubVersion.epub3, guide: null));
 
-      final String xml = const EpubPackageWriter().writeContent(package);
+      expect(
+          XmlDocument.parse(xml)
+              .rootElement
+              .childElements
+              .map((XmlElement e) => e.name.local),
+          <String>['metadata', 'manifest', 'spine']);
+    });
+
+    // TC-PKW-16 [Scenario/use-case]: the metadata writer really is wired in —
+    // a title and a meta item set on the package reach the output, in the
+    // dialect of the package's own version.
+    test('TC-PKW-16 [Scenario]: package metadata reaches the document', () {
+      final String xml = const EpubPackageWriter().writeContent(_minimalPackage(
+        EpubVersion.epub2,
+        metadata: const EpubMetadata(
+          titles: <String>['NGE-SEED Title'],
+          identifiers: <EpubMetadataIdentifier>[],
+          languages: <String>[],
+          metaItems: <EpubMetadataMeta>[
+            EpubMetadataMeta(name: 'cover', content: 'cover-image'),
+          ],
+        ),
+      ));
 
       expect(xml, contains('<dc:title>NGE-SEED Title</dc:title>'));
       expect(xml, contains('<meta name="cover" content="cover-image"/>'));
@@ -301,14 +298,17 @@ void main() {
     test(
         'TC-PKW-17 [Error guessing]: unique-identifier is a constant, not the '
         "identifier's id", () {
-      final EpubPackage package = _minimalPackage(EpubVersion.epub2);
-      package.metadata!.identifiers = <EpubMetadataIdentifier>[
-        EpubMetadataIdentifier()
-          ..id = 'NGE-SEED-uuid'
-          ..identifier = 'NGE-SEED-ID',
-      ];
-
-      final String xml = const EpubPackageWriter().writeContent(package);
+      final String xml = const EpubPackageWriter().writeContent(_minimalPackage(
+        EpubVersion.epub2,
+        metadata: const EpubMetadata(
+          titles: <String>['NGE-SEED Title'],
+          identifiers: <EpubMetadataIdentifier>[
+            EpubMetadataIdentifier(
+                id: 'NGE-SEED-uuid', identifier: 'NGE-SEED-ID'),
+          ],
+          languages: <String>[],
+        ),
+      ));
 
       expect(xml, contains('unique-identifier="etextno"'));
       expect(xml, contains('<dc:identifier id="NGE-SEED-uuid">'));

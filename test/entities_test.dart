@@ -1,15 +1,16 @@
 // The loaded-value entities — `EpubBook`, `EpubChapter`, `EpubContent`,
 // `EpubContentFile` and its two subclasses, and `EpubSchema`.
 //
-// These are plain data holders whose only behaviour is `==`, `hashCode` and
-// `toString`, so they are exercised by direct construction; the archive-backed
-// half of the package is covered through `EpubReader` in the reader suites.
+// These are immutable data holders whose only behaviour is `==`, `hashCode`
+// and `toString`, so they are exercised by direct construction; the
+// archive-backed half of the package is covered through `EpubReader` in the
+// reader suites.
 //
-// Two upstream defects used to shape this file; both are now FIXED and each
-// is still covered by the test that pinned it. `EpubChapter` compared
-// `otherContentFileNames` by identity (TC-ENT-22), and `EpubBook.==` threw
-// when exactly one side had a cover (TC-ENT-30). TC-ENT-33 is where the first
-// fix shows up on values the reader actually produces.
+// Two contracts shape this file. `EpubChapter` compares and hashes
+// `otherContentFileNames` by element, not by list identity (TC-ENT-22), and
+// `EpubBook.==` answers false, rather than throwing, when exactly one side
+// has a cover (TC-ENT-30). TC-ENT-33 is where element-wise comparison shows
+// up on values the reader actually produces.
 import 'dart:typed_data';
 
 import 'package:novel_glide_epub/novel_glide_epub.dart';
@@ -27,78 +28,117 @@ Image seedImage(int value) {
 }
 
 EpubTextContentFile seedTextFile({
-  String? fileName = 'NGE-SEED-chapter.xhtml',
-  String? content = 'NGE-SEED body',
-  EpubContentType? contentType = EpubContentType.xhtml11,
-  String? mimeType = 'application/xhtml+xml',
+  String fileName = 'NGE-SEED-chapter.xhtml',
+  String content = 'NGE-SEED body',
+  EpubContentType contentType = EpubContentType.xhtml11,
+  String mimeType = 'application/xhtml+xml',
 }) =>
-    EpubTextContentFile()
-      ..fileName = fileName
-      ..content = content
-      ..contentType = contentType
-      ..contentMimeType = mimeType;
+    EpubTextContentFile(
+      fileName: fileName,
+      content: content,
+      contentType: contentType,
+      contentMimeType: mimeType,
+    );
 
 EpubByteContentFile seedByteFile({
-  String? fileName = 'NGE-SEED-cover.png',
-  List<int>? content = const <int>[1, 2, 3],
-  EpubContentType? contentType = EpubContentType.imagePng,
-  String? mimeType = 'image/png',
+  String fileName = 'NGE-SEED-cover.png',
+  List<int> content = const <int>[1, 2, 3],
+  EpubContentType contentType = EpubContentType.imagePng,
+  String mimeType = 'image/png',
 }) =>
-    EpubByteContentFile()
-      ..fileName = fileName
-      ..content = content
-      ..contentType = contentType
-      ..contentMimeType = mimeType;
+    EpubByteContentFile(
+      fileName: fileName,
+      content: content,
+      contentType: contentType,
+      contentMimeType: mimeType,
+    );
 
-/// [otherContentFileNames] is a parameter rather than a left-at-default field
-/// so a test can vary the split-chapter list; it no longer has to be SHARED
-/// between the two sides of a comparison, which is what TC-ENT-22 fixed.
+/// [otherContentFileNames] is a parameter so a test can vary the
+/// split-chapter list, and hand each side of a comparison its own list.
 EpubChapter seedChapter({
-  String? title = 'NGE-SEED Chapter',
-  String? contentFileName = 'NGE-SEED-chapter.xhtml',
+  String title = 'NGE-SEED Chapter',
+  String contentFileName = 'NGE-SEED-chapter.xhtml',
   String? anchor,
-  String? htmlContent = '<p>NGE-SEED</p>',
-  List<EpubChapter>? subChapters = const <EpubChapter>[],
+  String htmlContent = '<p>NGE-SEED</p>',
+  List<EpubChapter> subChapters = const <EpubChapter>[],
   List<String> otherContentFileNames = const <String>[],
 }) =>
-    EpubChapter()
-      ..title = title
-      ..contentFileName = contentFileName
-      ..anchor = anchor
-      ..htmlContent = htmlContent
-      ..subChapters = subChapters
-      ..otherContentFileNames = otherContentFileNames;
+    EpubChapter(
+      title: title,
+      contentFileName: contentFileName,
+      anchor: anchor,
+      htmlContent: htmlContent,
+      subChapters: subChapters,
+      otherContentFileNames: otherContentFileNames,
+    );
 
-EpubSchema seedSchema({String? contentDirectoryPath = 'OEBPS'}) => EpubSchema()
-  ..contentDirectoryPath = contentDirectoryPath
-  ..package = (EpubPackage()..version = EpubVersion.epub2)
-  ..navigation = EpubNavigation();
+/// The smallest package the constructors accept: every list the OPF requires
+/// is empty, which is how a real file missing those elements reads.
+EpubPackage seedPackage({EpubVersion version = EpubVersion.epub2}) =>
+    EpubPackage(
+      version: version,
+      metadata: const EpubMetadata(
+        titles: <String>[],
+        identifiers: <EpubMetadataIdentifier>[],
+        languages: <String>[],
+      ),
+      manifest: const EpubManifest(items: <EpubManifestItem>[]),
+      spine: const EpubSpine(items: <EpubSpineItemRef>[], ltr: true),
+    );
 
-EpubBook seedBook() => EpubBook()
-  ..title = 'NGE-SEED Book'
-  ..author = 'NGE-SEED Author'
-  ..authorList = <String?>['NGE-SEED Author']
-  ..schema = seedSchema()
-  ..content = EpubContent()
-  ..chapters = <EpubChapter>[seedChapter()];
+/// The smallest navigation the constructors accept, in the same spirit as
+/// [seedPackage].
+EpubNavigation seedNavigation({
+  List<EpubNavigationDocAuthor> docAuthors = const <EpubNavigationDocAuthor>[],
+}) =>
+    EpubNavigation(
+      head: const EpubNavigationHead(metadata: <EpubNavigationHeadMeta>[]),
+      docTitle: const EpubNavigationDocTitle(titles: <String>[]),
+      navMap: const EpubNavigationMap(points: <EpubNavigationPoint>[]),
+      docAuthors: docAuthors,
+    );
+
+EpubSchema seedSchema({
+  String contentDirectoryPath = 'OEBPS',
+  EpubPackage? package,
+  EpubNavigation? navigation,
+}) =>
+    EpubSchema(
+      contentDirectoryPath: contentDirectoryPath,
+      package: package ?? seedPackage(),
+      navigation: navigation ?? seedNavigation(),
+    );
+
+EpubBook seedBook({
+  String title = 'NGE-SEED Book',
+  List<String> authorList = const <String>['NGE-SEED Author'],
+  EpubSchema? schema,
+  EpubContent content = const EpubContent(),
+  List<EpubChapter>? chapters,
+  Image? coverImage,
+}) =>
+    EpubBook(
+      title: title,
+      authorList: authorList,
+      schema: schema ?? seedSchema(),
+      content: content,
+      chapters: chapters ?? <EpubChapter>[seedChapter()],
+      coverImage: coverImage,
+    );
 
 /// The smallest possible concrete `EpubContentFile`.
 ///
 /// Both shipped subclasses override `==` and `hashCode`, so the base
 /// implementations are unreachable from anything this package constructs — see
-/// TC-ENT-36. They are nonetheless public API: `EpubContentFile` is exported,
-/// and any further subclass inherits them. This class is what lets the base
-/// behaviour be pinned at all.
+/// TC-ENT-36. They are nonetheless public API: `EpubContentFile` is exported
+/// and abstract rather than sealed, and any further subclass inherits them.
+/// This class is what lets the base behaviour be pinned at all.
 class SeedBareContentFile extends EpubContentFile {
-  SeedBareContentFile({
-    String? fileName = 'NGE-SEED-bare',
-    EpubContentType? contentType = EpubContentType.other,
-    String? mimeType = 'application/octet-stream',
-  }) {
-    this.fileName = fileName;
-    this.contentType = contentType;
-    contentMimeType = mimeType;
-  }
+  const SeedBareContentFile({
+    super.fileName = 'NGE-SEED-bare',
+    super.contentType = EpubContentType.other,
+    super.contentMimeType = 'application/octet-stream',
+  });
 }
 
 /// An operand of an unrelated type, held as `Object` so each comparison below
@@ -146,20 +186,32 @@ void main() {
 
     // TC-ENT-3 [Error guessing]: the entity classes use `is!`, so an unrelated
     // operand is rejected rather than throwing — the trait the OPF schema
-    // classes had to be fixed to match (TC-OPF-1).
+    // classes share (TC-OPF-1).
     test('TC-ENT-3 [Error guessing]: an unrelated operand is not equal', () {
       expect(seedTextFile() == unrelatedOperand, isFalse);
       expect(seedTextFile() == nullOperand, isFalse);
     });
 
-    // TC-ENT-4 [Boundary value]: an all-null file is still a valid operand on
-    // both sides — `hash3` is fed `null.hashCode` three times.
-    test('TC-ENT-4 [Boundary]: two all-null text files are equal', () {
-      final EpubTextContentFile a = EpubTextContentFile();
-      final EpubTextContentFile b = EpubTextContentFile();
+    // TC-ENT-4 [Boundary value]: every string empty is the floor of each
+    // field — the reader writes `''` for a required value the file lacks —
+    // and it still hashes and compares like any other value.
+    test('TC-ENT-4 [Boundary]: two all-empty text files are equal', () {
+      const EpubTextContentFile a = EpubTextContentFile(
+        fileName: '',
+        content: '',
+        contentType: EpubContentType.other,
+        contentMimeType: '',
+      );
+      const EpubTextContentFile b = EpubTextContentFile(
+        fileName: '',
+        content: '',
+        contentType: EpubContentType.other,
+        contentMimeType: '',
+      );
 
       expect(a, equals(b));
       expect(a.hashCode, equals(b.hashCode));
+      expect(a, isNot(equals(seedTextFile())));
     });
 
     // TC-ENT-5 [Scenario/use-case]: both subclasses override `==` and narrow
@@ -172,13 +224,13 @@ void main() {
         fileName: 'NGE-SEED-shared',
         contentType: EpubContentType.other,
         mimeType: 'application/octet-stream',
-        content: null,
+        content: '',
       );
       final EpubContentFile bytes = seedByteFile(
         fileName: 'NGE-SEED-shared',
         contentType: EpubContentType.other,
         mimeType: 'application/octet-stream',
-        content: null,
+        content: <int>[],
       );
 
       expect(bytes, isNot(equals(text)));
@@ -195,26 +247,28 @@ void main() {
     test(
         'TC-ENT-36 [Scenario]: the inherited comparison uses the three base '
         'fields', () {
-      expect(SeedBareContentFile(), equals(SeedBareContentFile()));
+      expect(const SeedBareContentFile(), equals(const SeedBareContentFile()));
       expect(
-        SeedBareContentFile().hashCode,
-        equals(SeedBareContentFile().hashCode),
+        const SeedBareContentFile().hashCode,
+        equals(const SeedBareContentFile().hashCode),
       );
     });
 
     // TC-ENT-37 [Equivalence partitioning]: each base field decides once.
     for (final MapEntry<String, SeedBareContentFile> row
         in <String, SeedBareContentFile>{
-      'fileName': SeedBareContentFile(fileName: 'NGE-SEED-other'),
-      'contentType': SeedBareContentFile(contentType: EpubContentType.xml),
-      'contentMimeType': SeedBareContentFile(mimeType: 'application/xml'),
+      'fileName': const SeedBareContentFile(fileName: 'NGE-SEED-other'),
+      'contentType':
+          const SeedBareContentFile(contentType: EpubContentType.xml),
+      'contentMimeType':
+          const SeedBareContentFile(contentMimeType: 'application/xml'),
     }.entries) {
       test(
           'TC-ENT-37 [Equivalence partitioning]: an inherited comparison on a '
           'differing ${row.key} is unequal', () {
-        expect(SeedBareContentFile(), isNot(equals(row.value)));
+        expect(const SeedBareContentFile(), isNot(equals(row.value)));
         expect(
-          SeedBareContentFile().hashCode,
+          const SeedBareContentFile().hashCode,
           isNot(equals(row.value.hashCode)),
         );
       });
@@ -229,16 +283,16 @@ void main() {
     test(
         'TC-ENT-38 [Error guessing]: the inherited comparison is asymmetric '
         'with a subclass', () {
-      final SeedBareContentFile bare = SeedBareContentFile(
+      const SeedBareContentFile bare = SeedBareContentFile(
         fileName: 'NGE-SEED-shared',
         contentType: EpubContentType.other,
-        mimeType: 'application/octet-stream',
+        contentMimeType: 'application/octet-stream',
       );
       final EpubTextContentFile text = seedTextFile(
         fileName: 'NGE-SEED-shared',
         contentType: EpubContentType.other,
         mimeType: 'application/octet-stream',
-        content: null,
+        content: '',
       );
 
       expect(bare == text, isTrue);
@@ -295,13 +349,14 @@ void main() {
       });
     }
 
-    // TC-ENT-10 [Boundary value]: null content is a legal state (nothing has
-    // been read yet) and hashes through the `?? [0]` fallback.
-    test('TC-ENT-10 [Boundary]: null content hashes and compares', () {
-      final EpubByteContentFile a = seedByteFile(content: null);
+    // TC-ENT-10 [Boundary value]: a zero-byte file is a legal state — an
+    // empty archive entry reads as one — and its empty content still hashes
+    // and compares, and differs from a file with bytes.
+    test('TC-ENT-10 [Boundary]: empty content hashes and compares', () {
+      final EpubByteContentFile a = seedByteFile(content: <int>[]);
 
-      expect(a, equals(seedByteFile(content: null)));
-      expect(a.hashCode, isA<int>());
+      expect(a, equals(seedByteFile(content: <int>[])));
+      expect(a.hashCode, equals(seedByteFile(content: <int>[]).hashCode));
       expect(a, isNot(equals(seedByteFile())));
     });
 
@@ -311,14 +366,13 @@ void main() {
       expect(seedByteFile() == nullOperand, isFalse);
     });
 
-    // TC-ENT-39 [Error guessing]: the regression guard for the `?? [0]`
-    // fallback in `hashCode`. TC-ENT-9 already shows two DIFFERING non-null
-    // `content` lists compare unequal; nothing previously checked that they
-    // also hash differently, which is the one observable effect of that
-    // fallback surviving a mutation to `[0]` outright.
+    // TC-ENT-39 [Error guessing]: `content` feeds `hashCode` byte by byte.
+    // TC-ENT-9 shows two DIFFERING lists compare unequal; this is the half
+    // that shows they also hash differently, so a `hashCode` that dropped the
+    // bytes would fail here.
     test(
-        'TC-ENT-39 [Error guessing]: differing non-null content yields a '
-        'differing hashCode', () {
+        'TC-ENT-39 [Error guessing]: differing content yields a differing '
+        'hashCode', () {
       final EpubByteContentFile a = seedByteFile(content: <int>[1, 2, 3]);
       final EpubByteContentFile b = seedByteFile(content: <int>[9, 9, 9]);
 
@@ -327,11 +381,11 @@ void main() {
   });
 
   group('EpubContent', () {
-    // TC-ENT-12 [Scenario/use-case]: the constructor initialises all five maps
+    // TC-ENT-12 [Scenario/use-case]: the constructor defaults all five maps
     // to empty, which is what makes a bare instance safe to hash.
-    test('TC-ENT-12 [Scenario]: the constructor initialises five empty maps',
+    test('TC-ENT-12 [Scenario]: the constructor defaults to five empty maps',
         () {
-      final EpubContent content = EpubContent();
+      const EpubContent content = EpubContent();
 
       expect(content.html, isEmpty);
       expect(content.css, isEmpty);
@@ -339,56 +393,76 @@ void main() {
       expect(content.fonts, isEmpty);
       expect(content.allFiles, isEmpty);
       expect(content.hashCode, isA<int>());
-      expect(content, equals(EpubContent()));
+      expect(content, equals(const EpubContent()));
     });
 
     // TC-ENT-13 [Equivalence partitioning]: each of the five maps is compared,
     // so populating exactly one of them breaks equality — and the populated
     // instance hashes over both keys and values.
-    for (final String bucket in <String>[
-      'html',
-      'css',
-      'images',
-      'fonts',
-      'allFiles',
-    ]) {
+    for (final MapEntry<String, EpubContent> row in <String, EpubContent>{
+      'html': EpubContent(
+        html: <String, EpubTextContentFile>{
+          'NGE-SEED-a.xhtml': seedTextFile(),
+        },
+      ),
+      'css': EpubContent(
+        css: <String, EpubTextContentFile>{
+          'NGE-SEED-a.css': seedTextFile(
+            contentType: EpubContentType.css,
+            mimeType: 'text/css',
+          ),
+        },
+      ),
+      'images': EpubContent(
+        images: <String, EpubByteContentFile>{
+          'NGE-SEED-a.png': seedByteFile(),
+        },
+      ),
+      'fonts': EpubContent(
+        fonts: <String, EpubByteContentFile>{
+          'NGE-SEED-a.ttf': seedByteFile(
+            contentType: EpubContentType.fontTruetype,
+            mimeType: 'font/truetype',
+          ),
+        },
+      ),
+      'allFiles': EpubContent(
+        allFiles: <String, EpubContentFile>{
+          'NGE-SEED-a.xhtml': seedTextFile(),
+        },
+      ),
+    }.entries) {
       test(
-          'TC-ENT-13 [Equivalence partitioning]: a populated $bucket breaks '
-          'equality', () {
-        final EpubContent populated = EpubContent();
-        switch (bucket) {
-          case 'html':
-            populated.html!['NGE-SEED-a.xhtml'] = seedTextFile();
-          case 'css':
-            populated.css!['NGE-SEED-a.css'] = seedTextFile(
-              contentType: EpubContentType.css,
-              mimeType: 'text/css',
-            );
-          case 'images':
-            populated.images!['NGE-SEED-a.png'] = seedByteFile();
-          case 'fonts':
-            populated.fonts!['NGE-SEED-a.ttf'] = seedByteFile(
-              contentType: EpubContentType.fontTruetype,
-              mimeType: 'font/truetype',
-            );
-          case 'allFiles':
-            populated.allFiles!['NGE-SEED-a.xhtml'] = seedTextFile();
-        }
-
-        expect(populated, isNot(equals(EpubContent())));
-        expect(populated.hashCode, isNot(equals(EpubContent().hashCode)));
+          'TC-ENT-13 [Equivalence partitioning]: a populated ${row.key} '
+          'breaks equality', () {
+        expect(row.value, isNot(equals(const EpubContent())));
+        expect(
+          row.value.hashCode,
+          isNot(equals(const EpubContent().hashCode)),
+        );
       });
     }
 
     // TC-ENT-14 [Scenario/use-case]: two independently built, identically
     // populated contents agree on both `==` and `hashCode`.
     test('TC-ENT-14 [Scenario]: identically populated contents are equal', () {
-      EpubContent build() => EpubContent()
-        ..html!['NGE-SEED-a.xhtml'] = seedTextFile()
-        ..css!['NGE-SEED-a.css'] = seedTextFile(mimeType: 'text/css')
-        ..images!['NGE-SEED-a.png'] = seedByteFile()
-        ..fonts!['NGE-SEED-a.ttf'] = seedByteFile(mimeType: 'font/truetype')
-        ..allFiles!['NGE-SEED-a.xhtml'] = seedTextFile();
+      EpubContent build() => EpubContent(
+            html: <String, EpubTextContentFile>{
+              'NGE-SEED-a.xhtml': seedTextFile(),
+            },
+            css: <String, EpubTextContentFile>{
+              'NGE-SEED-a.css': seedTextFile(mimeType: 'text/css'),
+            },
+            images: <String, EpubByteContentFile>{
+              'NGE-SEED-a.png': seedByteFile(),
+            },
+            fonts: <String, EpubByteContentFile>{
+              'NGE-SEED-a.ttf': seedByteFile(mimeType: 'font/truetype'),
+            },
+            allFiles: <String, EpubContentFile>{
+              'NGE-SEED-a.xhtml': seedTextFile(),
+            },
+          );
 
       expect(build(), equals(build()));
       expect(build().hashCode, equals(build().hashCode));
@@ -397,8 +471,8 @@ void main() {
     // TC-ENT-15 [Error guessing]: `is!`-guarded, so unrelated operands are
     // rejected without throwing.
     test('TC-ENT-15 [Error guessing]: an unrelated operand is not equal', () {
-      expect(EpubContent() == unrelatedOperand, isFalse);
-      expect(EpubContent() == nullOperand, isFalse);
+      expect(const EpubContent() == unrelatedOperand, isFalse);
+      expect(const EpubContent() == nullOperand, isFalse);
     });
   });
 
@@ -422,8 +496,8 @@ void main() {
     test(
         'TC-ENT-17 [Equivalence partitioning]: a differing package breaks '
         'equality', () {
-      final EpubSchema other = seedSchema()
-        ..package = (EpubPackage()..version = EpubVersion.epub3);
+      final EpubSchema other =
+          seedSchema(package: seedPackage(version: EpubVersion.epub3));
 
       expect(seedSchema(), isNot(equals(other)));
     });
@@ -431,25 +505,21 @@ void main() {
     test(
         'TC-ENT-17 [Equivalence partitioning]: a differing navigation breaks '
         'equality', () {
-      final EpubSchema other = seedSchema()
-        ..navigation = (EpubNavigation()
-          ..docAuthors = <EpubNavigationDocAuthor>[
-            EpubNavigationDocAuthor()..authors = <String>['NGE-SEED'],
-          ]);
+      final EpubSchema other = seedSchema(
+        navigation: seedNavigation(
+          docAuthors: const <EpubNavigationDocAuthor>[
+            EpubNavigationDocAuthor(authors: <String>['NGE-SEED']),
+          ],
+        ),
+      );
 
       expect(seedSchema(), isNot(equals(other)));
     });
 
-    // TC-ENT-18 [Boundary value]: an all-null schema hashes and compares.
-    test('TC-ENT-18 [Boundary]: an empty schema is equal to another', () {
-      expect(EpubSchema(), equals(EpubSchema()));
-      expect(EpubSchema().hashCode, equals(EpubSchema().hashCode));
-    });
-
     // TC-ENT-19 [Error guessing]: `is!`-guarded.
     test('TC-ENT-19 [Error guessing]: an unrelated operand is not equal', () {
-      expect(EpubSchema() == unrelatedOperand, isFalse);
-      expect(EpubSchema() == nullOperand, isFalse);
+      expect(seedSchema() == unrelatedOperand, isFalse);
+      expect(seedSchema() == nullOperand, isFalse);
     });
   });
 
@@ -475,6 +545,8 @@ void main() {
     });
 
     // TC-ENT-21 [Equivalence partitioning]: one differing field per run.
+    // `anchor` is the one nullable field, so its row is a present anchor
+    // against the seed's absent one.
     for (final MapEntry<String, EpubChapter> row in <String, EpubChapter>{
       'title': seedChapter(title: 'NGE-SEED Other'),
       'contentFileName': seedChapter(contentFileName: 'NGE-SEED-other.xhtml'),
@@ -494,46 +566,32 @@ void main() {
       });
     }
 
-    // TC-ENT-22 [Error guessing]: the regression guard for this file's
-    // widest-reaching defect. `otherContentFileNames` was compared with `==`
-    // on two `List` objects — identity — while every other collection field
-    // went through `listsEqual`; because the field initialiser hands every
-    // instance its own fresh `[]`, two chapters built the ordinary way were
-    // NEVER equal and never shared a `hashCode`, however identical their data.
-    // Both halves of the contract are asserted here: equal contents in two
-    // distinct list instances compare equal AND hash alike (`hashCode` hashes
-    // the list by element for the same reason), while differing contents still
-    // separate them.
+    // TC-ENT-22 [Error guessing]: `otherContentFileNames` is compared with
+    // `listsEqual` and hashed by element, like every other collection field.
+    // Two chapters built separately generally hold two distinct lists, so a
+    // comparison by list identity would make two chapters with identical
+    // data unequal and hash them apart. Both halves are asserted: equal names in two distinct
+    // lists compare equal AND hash alike, while differing names still
+    // separate the chapters.
     test(
         'TC-ENT-22 [Error guessing]: otherContentFileNames is compared by '
-        'value, so default-built chapters are equal', () {
-      final EpubChapter a = EpubChapter()..subChapters = const <EpubChapter>[];
-      final EpubChapter b = EpubChapter()..subChapters = const <EpubChapter>[];
+        'value, not by list identity', () {
+      final List<String> firstNames = <String>['NGE-SEED-part2.xhtml'];
+      final List<String> secondNames = <String>['NGE-SEED-part2.xhtml'];
+      final EpubChapter a = seedChapter(otherContentFileNames: firstNames);
+      final EpubChapter b = seedChapter(otherContentFileNames: secondNames);
 
-      expect(a.otherContentFileNames, equals(b.otherContentFileNames));
       expect(
           identical(a.otherContentFileNames, b.otherContentFileNames), isFalse);
       expect(a, equals(b));
       expect(a.hashCode, equals(b.hashCode));
 
-      // Two separately built lists with the same names are equal…
-      expect(
-        seedChapter(otherContentFileNames: <String>['NGE-SEED-part2.xhtml']),
-        equals(
-          seedChapter(otherContentFileNames: <String>['NGE-SEED-part2.xhtml']),
-        ),
-      );
-
-      // …and the field still decides equality when the names differ.
-      expect(
-        seedChapter(otherContentFileNames: <String>['NGE-SEED-part2.xhtml']),
-        isNot(
-          equals(
-            seedChapter(
-                otherContentFileNames: <String>['NGE-SEED-part3.xhtml']),
-          ),
-        ),
-      );
+      // The field still decides equality, and the hash, when the names
+      // differ.
+      final EpubChapter c =
+          seedChapter(otherContentFileNames: <String>['NGE-SEED-part3.xhtml']);
+      expect(a, isNot(equals(c)));
+      expect(a.hashCode, isNot(equals(c.hashCode)));
     });
 
     // TC-ENT-23 [Error guessing]: `is!`-guarded.
@@ -542,34 +600,37 @@ void main() {
       expect(seedChapter() == nullOperand, isFalse);
     });
 
-    // TC-ENT-24 [Error guessing]: KNOWN DEFECT. `toString` dereferences
-    // `subChapters!` unguarded, so a chapter that has not been through
-    // `EpubReader.readChapters` — which always assigns a list — cannot be
-    // printed. Pinned as it behaves today; when the `!` is guarded, this test
-    // must change to assert the rendered string.
+    // TC-ENT-24 [Boundary value]: a chapter built from the required fields
+    // alone defaults to no subchapters, no anchor and no split parts, so it
+    // prints, and equals a twin built the same way.
     test(
-        'TC-ENT-24 [Error guessing]: KNOWN DEFECT — toString throws on null '
-        'subChapters', () {
-      expect(EpubChapter().toString, throwsA(isA<TypeError>()));
+        'TC-ENT-24 [Boundary]: a chapter built from its required fields '
+        'prints a subchapter count of zero', () {
+      const EpubChapter chapter = EpubChapter(
+        title: 'NGE-SEED Bare',
+        contentFileName: 'NGE-SEED-bare.xhtml',
+        htmlContent: '',
+      );
+
+      expect(chapter.anchor, isNull);
+      expect(chapter.subChapters, isEmpty);
+      expect(chapter.otherContentFileNames, isEmpty);
+      expect(chapter.toString(), 'Title: NGE-SEED Bare, Subchapter count: 0');
+      expect(
+        chapter,
+        equals(seedChapter(
+          title: 'NGE-SEED Bare',
+          contentFileName: 'NGE-SEED-bare.xhtml',
+          htmlContent: '',
+        )),
+      );
     });
 
-    // TC-ENT-25 [Boundary value]: a null subchapter list still hashes (the
-    // `?? [0]` fallback) and still compares, so only `toString` is affected by
-    // TC-ENT-24.
-    test('TC-ENT-25 [Boundary]: null subChapters hashes and compares', () {
-      final EpubChapter a = seedChapter(subChapters: null);
-
-      expect(a.hashCode, isA<int>());
-      expect(a, equals(seedChapter(subChapters: null)));
-      expect(a, isNot(equals(seedChapter())));
-    });
-
-    // TC-ENT-40 [Error guessing]: the regression guard for the `?? [0]`
-    // fallback in `hashCode`. TC-ENT-21 already shows two DIFFERING non-null
-    // `subChapters` lists compare unequal; nothing previously checked that
-    // they also hash differently.
+    // TC-ENT-40 [Error guessing]: `subChapters` feeds `hashCode` by element.
+    // TC-ENT-21 shows two DIFFERING lists compare unequal; this is the half
+    // that shows they also hash differently.
     test(
-        'TC-ENT-40 [Error guessing]: differing non-null subChapters yields a '
+        'TC-ENT-40 [Error guessing]: differing subChapters yields a '
         'differing hashCode', () {
       final EpubChapter a =
           seedChapter(subChapters: <EpubChapter>[seedChapter(title: 'One')]);
@@ -584,8 +645,8 @@ void main() {
     // TC-ENT-26 [Scenario/use-case]: a fully populated book equals its twin,
     // cover image included — `getBytes()` is compared element-wise.
     test('TC-ENT-26 [Scenario]: identical books are equal, cover included', () {
-      final EpubBook a = seedBook()..coverImage = seedImage(7);
-      final EpubBook b = seedBook()..coverImage = seedImage(7);
+      final EpubBook a = seedBook(coverImage: seedImage(7));
+      final EpubBook b = seedBook(coverImage: seedImage(7));
 
       expect(a, equals(b));
       expect(a.hashCode, equals(b.hashCode));
@@ -593,13 +654,15 @@ void main() {
 
     // TC-ENT-27 [Equivalence partitioning]: one differing field per run.
     for (final MapEntry<String, EpubBook> row in <String, EpubBook>{
-      'title': seedBook()..title = 'NGE-SEED Other',
-      'author': seedBook()..author = 'NGE-SEED Other',
-      'authorList': seedBook()..authorList = <String?>['NGE-SEED Other'],
-      'schema': seedBook()..schema = seedSchema(contentDirectoryPath: 'OTHER'),
-      'content': seedBook()
-        ..content = (EpubContent()..html!['NGE-SEED'] = seedTextFile()),
-      'chapters': seedBook()..chapters = <EpubChapter>[],
+      'title': seedBook(title: 'NGE-SEED Other'),
+      'authorList': seedBook(authorList: <String>['NGE-SEED Other']),
+      'schema': seedBook(schema: seedSchema(contentDirectoryPath: 'OTHER')),
+      'content': seedBook(
+        content: EpubContent(
+          html: <String, EpubTextContentFile>{'NGE-SEED': seedTextFile()},
+        ),
+      ),
+      'chapters': seedBook(chapters: <EpubChapter>[]),
     }.entries) {
       test(
           'TC-ENT-27 [Equivalence partitioning]: a differing ${row.key} '
@@ -613,30 +676,28 @@ void main() {
     test(
         'TC-ENT-28 [Equivalence partitioning]: differing cover pixels break '
         'equality', () {
-      final EpubBook a = seedBook()..coverImage = seedImage(7);
-      final EpubBook b = seedBook()..coverImage = seedImage(200);
+      final EpubBook a = seedBook(coverImage: seedImage(7));
+      final EpubBook b = seedBook(coverImage: seedImage(200));
 
       expect(a, isNot(equals(b)));
       expect(a.hashCode, isNot(equals(b.hashCode)));
     });
 
-    // TC-ENT-29 [Boundary value]: two coverless books take the
-    // `coverImage == null && other.coverImage == null` short circuit.
+    // TC-ENT-29 [Boundary value]: two coverless books take the both-null
+    // branch of the cover comparison.
     test('TC-ENT-29 [Boundary]: two coverless books are equal', () {
       expect(seedBook(), equals(seedBook()));
       expect(seedBook().hashCode, equals(seedBook().hashCode));
     });
 
-    // TC-ENT-30 [Error guessing]: the regression guard for the one-sided
-    // cover. The null-pair short circuit used to fall through to
-    // `coverImage!.getBytes()`, which threw a `TypeError` in BOTH directions —
-    // the `!` that fired was whichever side was null. A missing cover is a
-    // difference, so both directions must answer false, and `==` must stay
+    // TC-ENT-30 [Error guessing]: a cover on one side only. The cover
+    // comparison must not dereference the absent side: a missing cover is a
+    // difference, so both directions answer false, and `==` stays
     // symmetric.
     test(
         'TC-ENT-30 [Error guessing]: a one-sided cover compares unequal '
         'instead of throwing', () {
-      final EpubBook withCover = seedBook()..coverImage = seedImage(7);
+      final EpubBook withCover = seedBook(coverImage: seedImage(7));
       final EpubBook withoutCover = seedBook();
 
       expect(withCover == withoutCover, isFalse);
@@ -650,33 +711,41 @@ void main() {
       expect(seedBook() == nullOperand, isFalse);
     });
 
-    // TC-ENT-32 [Boundary value]: a bare book — every field null — still
-    // hashes, through the three `?? [0]` fallbacks.
-    test('TC-ENT-32 [Boundary]: a bare book hashes and equals another', () {
-      expect(EpubBook().hashCode, isA<int>());
-      expect(EpubBook(), equals(EpubBook()));
+    // TC-ENT-32 [Boundary value]: the emptiest book — no title, no author,
+    // no chapter, no cover, which is how a package missing all of them
+    // reads — still hashes and equals another.
+    test('TC-ENT-32 [Boundary]: an empty book hashes and equals another', () {
+      EpubBook build() => seedBook(
+            title: '',
+            authorList: <String>[],
+            chapters: <EpubChapter>[],
+          );
+
+      expect(build().hashCode, equals(build().hashCode));
+      expect(build(), equals(build()));
+      expect(build(), isNot(equals(seedBook())));
     });
 
-    // TC-ENT-41 [Error guessing]: the regression guard for the `?? [0]`
-    // fallback in `hashCode`. TC-ENT-27 already shows a differing authorList
-    // or chapters breaks equality; nothing previously checked that two
-    // DIFFERING non-null values of either field also hash differently.
+    // TC-ENT-41 [Error guessing]: `authorList` feeds `hashCode` by element.
+    // TC-ENT-27 shows a differing authorList or chapters breaks equality;
+    // these two show that DIFFERING values of either field also hash
+    // differently.
     test(
-        'TC-ENT-41 [Error guessing]: differing non-null authorList yields a '
-        'differing hashCode', () {
-      final EpubBook a = seedBook()..authorList = <String?>['NGE-SEED One'];
-      final EpubBook b = seedBook()..authorList = <String?>['NGE-SEED Two'];
+        'TC-ENT-41 [Error guessing]: differing authorList yields a differing '
+        'hashCode', () {
+      final EpubBook a = seedBook(authorList: <String>['NGE-SEED One']);
+      final EpubBook b = seedBook(authorList: <String>['NGE-SEED Two']);
 
       expect(a.hashCode, isNot(equals(b.hashCode)));
     });
 
     test(
-        'TC-ENT-42 [Error guessing]: differing non-null chapters yields a '
-        'differing hashCode', () {
-      final EpubBook a = seedBook()
-        ..chapters = <EpubChapter>[seedChapter(title: 'One')];
-      final EpubBook b = seedBook()
-        ..chapters = <EpubChapter>[seedChapter(title: 'Two')];
+        'TC-ENT-42 [Error guessing]: differing chapters yields a differing '
+        'hashCode', () {
+      final EpubBook a =
+          seedBook(chapters: <EpubChapter>[seedChapter(title: 'One')]);
+      final EpubBook b =
+          seedBook(chapters: <EpubChapter>[seedChapter(title: 'Two')]);
 
       expect(a.hashCode, isNot(equals(b.hashCode)));
     });
@@ -727,10 +796,10 @@ void main() {
 
     // TC-ENT-33 [Scenario/use-case]: reading one archive twice produces two
     // graphs that compare equal all the way down — schema, content, chapters
-    // and the book itself. This is TC-ENT-22's user-visible consequence:
-    // `readChapters` builds each `EpubChapter` fresh and never assigns
-    // `otherContentFileNames`, so under the old identity comparison a book
-    // never equalled itself across two reads of the same bytes.
+    // and the book itself. Each read builds every chapter, and every
+    // collection inside the graph, afresh, so only element-wise comparison
+    // all the way down lets a book equal itself across two reads of the same
+    // bytes.
     test('TC-ENT-33 [Scenario]: two reads of one archive produce equal books',
         () async {
       final EpubBook first =
@@ -740,14 +809,14 @@ void main() {
 
       expect(first.schema, equals(second.schema));
       expect(first.content, equals(second.content));
-      expect(first.content!.allFiles, hasLength(3));
+      expect(first.content.allFiles, hasLength(3));
       expect(
-        first.content!.html!['chapter1.xhtml'],
-        equals(second.content!.html!['chapter1.xhtml']),
+        first.content.html['chapter1.xhtml'],
+        equals(second.content.html['chapter1.xhtml']),
       );
       expect(
-        first.content!.css!['style.css'],
-        equals(second.content!.css!['style.css']),
+        first.content.css['style.css'],
+        equals(second.content.css['style.css']),
       );
 
       expect(first.chapters, equals(second.chapters));
@@ -755,20 +824,20 @@ void main() {
       expect(first.hashCode, equals(second.hashCode));
 
       // The chapters are identical in every field the reader populates.
-      expect(first.chapters!.single.title, second.chapters!.single.title);
+      expect(first.chapters.single.title, second.chapters.single.title);
       expect(
-        first.chapters!.single.htmlContent,
-        second.chapters!.single.htmlContent,
+        first.chapters.single.htmlContent,
+        second.chapters.single.htmlContent,
       );
       expect(
-        first.chapters!.single.toString(),
+        first.chapters.single.toString(),
         'Title: NGE-SEED Chapter One, Subchapter count: 0',
       );
     });
 
     // TC-ENT-34 [Equivalence partitioning]: a differing chapter body changes
-    // the content entity too, so the inequality is not merely the TC-ENT-33
-    // artefact — `EpubContent.==` is doing real work here.
+    // the content entity too, so the inequality comes from
+    // `EpubContent.==` doing real work, not from the chapter alone.
     test(
         'TC-ENT-34 [Equivalence partitioning]: a differing chapter body makes '
         'the content unequal', () async {
@@ -780,8 +849,8 @@ void main() {
       expect(first.content, isNot(equals(second.content)));
       expect(first.schema, equals(second.schema));
       expect(
-        first.content!.html!['chapter1.xhtml']!.content,
-        isNot(equals(second.content!.html!['chapter1.xhtml']!.content)),
+        first.content.html['chapter1.xhtml']!.content,
+        isNot(equals(second.content.html['chapter1.xhtml']!.content)),
       );
     });
 
@@ -795,7 +864,6 @@ void main() {
 
       expect(book.coverImage, isNull);
       expect(book.title, 'NGE-SEED Entities Book');
-      expect(book.author, 'NGE-SEED Author');
       expect(book.authorList, <String>['NGE-SEED Author']);
     });
   });

@@ -3,15 +3,15 @@
 // pageList and its targets, navLists and their targets, plus the shared
 // `EpubNavigationLabel` and `EpubNavigationContent`.
 //
-// Plain data holders, so exercised by direct construction;
+// Immutable data holders, so exercised by direct construction;
 // `navigation_reader_*_test.dart` covers how the reader fills them. One
 // integration group at the end reads a real NCX through `EpubReader.openBook`
 // so the equality contract is checked over reader-produced values too.
 //
-// This layer carries the package's two documented uninitialised-field defects
-// — `EpubNavigationList` and `EpubNavigationTarget` — and this file pins the
-// CLASS-side half of each: what the object does once the reader has left those
-// fields null. Every such test says so and says what must change when fixed.
+// Every field of every class gets a one-field-at-a-time partition row that
+// checks `==` AND `hashCode`, so dropping any clause of either is caught. A
+// field the NCX makes optional is nullable, and TC-NSC-32 pins that a null
+// there is a value of its own.
 import 'dart:typed_data';
 
 import 'package:novel_glide_epub/novel_glide_epub.dart';
@@ -25,99 +25,96 @@ import 'package:test/test.dart';
 import 'support/epub_fixture.dart';
 
 EpubNavigationLabel seedLabel([String text = 'NGE-SEED Label']) =>
-    EpubNavigationLabel()..text = text;
+    EpubNavigationLabel(text: text);
 
 EpubNavigationContent seedNavContent({
   String? id = 'content-1',
   String? source = 'chapter1.xhtml',
 }) =>
-    EpubNavigationContent()
-      ..id = id
-      ..source = source;
+    EpubNavigationContent(id: id, source: source);
 
 EpubNavigationHeadMeta seedHeadMeta({
-  String? name = 'dtb:uid',
-  String? content = 'urn:uuid:NGE-SEED-NAVSCHEMA',
+  String name = 'dtb:uid',
+  String content = 'urn:uuid:NGE-SEED-NAVSCHEMA',
   String? scheme = 'URN',
 }) =>
-    EpubNavigationHeadMeta()
-      ..name = name
-      ..content = content
-      ..scheme = scheme;
+    EpubNavigationHeadMeta(name: name, content: content, scheme: scheme);
 
 EpubNavigationHead seedHead({List<EpubNavigationHeadMeta>? metadata}) =>
-    EpubNavigationHead()
-      ..metadata = metadata ?? <EpubNavigationHeadMeta>[seedHeadMeta()];
+    EpubNavigationHead(
+      metadata: metadata ?? <EpubNavigationHeadMeta>[seedHeadMeta()],
+    );
 
 EpubNavigationDocTitle seedDocTitle({List<String>? titles}) =>
-    EpubNavigationDocTitle()
-      ..titles = titles ?? <String>['NGE-SEED Navigation Book'];
+    EpubNavigationDocTitle(
+      titles: titles ?? <String>['NGE-SEED Navigation Book'],
+    );
 
 EpubNavigationDocAuthor seedDocAuthor({List<String>? authors}) =>
-    EpubNavigationDocAuthor()..authors = authors ?? <String>['NGE-SEED Author'];
+    EpubNavigationDocAuthor(authors: authors ?? <String>['NGE-SEED Author']);
 
-/// Both list fields assigned, matching what `readNavigationPoint` produces —
-/// `EpubNavigationPoint.hashCode` requires them (TC-NSC-3).
 EpubNavigationPoint seedPoint({
-  String? id = 'np-1',
+  String id = 'np-1',
   String? navClass = 'chapter',
-  String? playOrder = '1',
+  String playOrder = '1',
   List<EpubNavigationLabel>? labels,
   EpubNavigationContent? content,
   List<EpubNavigationPoint>? children,
 }) =>
-    EpubNavigationPoint()
-      ..id = id
-      ..className = navClass
-      ..playOrder = playOrder
-      ..navigationLabels = labels ?? <EpubNavigationLabel>[seedLabel()]
-      ..content = content ?? seedNavContent()
-      ..childNavigationPoints = children ?? <EpubNavigationPoint>[];
+    EpubNavigationPoint(
+      id: id,
+      className: navClass,
+      playOrder: playOrder,
+      navigationLabels: labels ?? <EpubNavigationLabel>[seedLabel()],
+      content: content ?? seedNavContent(),
+      childNavigationPoints: children ?? <EpubNavigationPoint>[],
+    );
 
 EpubNavigationMap seedMap({List<EpubNavigationPoint>? points}) =>
-    EpubNavigationMap()..points = points ?? <EpubNavigationPoint>[seedPoint()];
+    EpubNavigationMap(points: points ?? <EpubNavigationPoint>[seedPoint()]);
 
 EpubNavigationPageTarget seedPageTarget({
-  String? id = 'pt-1',
+  String id = 'pt-1',
   String? value = '1',
-  EpubNavigationPageTargetType? type = EpubNavigationPageTargetType.normal,
+  EpubNavigationPageTargetType type = EpubNavigationPageTargetType.normal,
   String? targetClass = 'pagenum',
-  String? playOrder = '1',
+  String playOrder = '1',
   List<EpubNavigationLabel>? labels,
   EpubNavigationContent? content,
 }) =>
-    EpubNavigationPageTarget()
-      ..id = id
-      ..value = value
-      ..type = type
-      ..className = targetClass
-      ..playOrder = playOrder
-      ..navigationLabels = labels ?? <EpubNavigationLabel>[seedLabel()]
-      ..content = content ?? seedNavContent();
+    EpubNavigationPageTarget(
+      id: id,
+      value: value,
+      type: type,
+      className: targetClass,
+      playOrder: playOrder,
+      navigationLabels: labels ?? <EpubNavigationLabel>[seedLabel()],
+      content: content ?? seedNavContent(),
+    );
 
 EpubNavigationPageList seedPageList({
   List<EpubNavigationPageTarget>? targets,
 }) =>
-    EpubNavigationPageList()
-      ..targets = targets ?? <EpubNavigationPageTarget>[seedPageTarget()];
+    EpubNavigationPageList(
+      targets: targets ?? <EpubNavigationPageTarget>[seedPageTarget()],
+    );
 
-/// `navigationLabels` is assigned here even though `readNavigationTarget`
-/// never does — without it the object cannot be hashed at all (TC-NSC-5).
 EpubNavigationTarget seedTarget({
-  String? id = 'nt-1',
+  String id = 'nt-1',
   String? targetClass = 'illustration',
   String? value = 'NGE-SEED Figure 1',
-  String? playOrder = '1',
+  String playOrder = '1',
   List<EpubNavigationLabel>? labels,
   EpubNavigationContent? content,
 }) =>
-    EpubNavigationTarget()
-      ..id = id
-      ..className = targetClass
-      ..value = value
-      ..playOrder = playOrder
-      ..navigationLabels = labels ?? <EpubNavigationLabel>[seedLabel()]
-      ..content = content ?? seedNavContent();
+    EpubNavigationTarget(
+      id: id,
+      className: targetClass,
+      value: value,
+      playOrder: playOrder,
+      navigationLabels: labels ?? <EpubNavigationLabel>[seedLabel()],
+      content: content ?? seedNavContent(),
+    );
 
 EpubNavigationList seedList({
   String? id = 'nl-1',
@@ -125,19 +122,34 @@ EpubNavigationList seedList({
   List<EpubNavigationLabel>? labels,
   List<EpubNavigationTarget>? targets,
 }) =>
-    EpubNavigationList()
-      ..id = id
-      ..className = listClass
-      ..navigationLabels = labels ?? <EpubNavigationLabel>[seedLabel()]
-      ..navigationTargets = targets ?? <EpubNavigationTarget>[seedTarget()];
+    EpubNavigationList(
+      id: id,
+      className: listClass,
+      navigationLabels: labels ?? <EpubNavigationLabel>[seedLabel()],
+      navigationTargets: targets ?? <EpubNavigationTarget>[seedTarget()],
+    );
 
-EpubNavigation seedNavigation() => EpubNavigation()
-  ..head = seedHead()
-  ..docTitle = seedDocTitle()
-  ..docAuthors = <EpubNavigationDocAuthor>[seedDocAuthor()]
-  ..navMap = seedMap()
-  ..pageList = seedPageList()
-  ..navLists = <EpubNavigationList>[seedList()];
+/// A navigation with every field populated. `pageList` defaults to
+/// [seedPageList] only when the caller passes nothing; [withoutPageList]
+/// builds the page-list-less variant, since an explicit null cannot be told
+/// apart from "not passed" here.
+EpubNavigation seedNavigation({
+  EpubNavigationHead? head,
+  EpubNavigationDocTitle? docTitle,
+  List<EpubNavigationDocAuthor>? docAuthors,
+  EpubNavigationMap? navMap,
+  EpubNavigationPageList? pageList,
+  bool withoutPageList = false,
+  List<EpubNavigationList>? navLists,
+}) =>
+    EpubNavigation(
+      head: head ?? seedHead(),
+      docTitle: docTitle ?? seedDocTitle(),
+      docAuthors: docAuthors ?? <EpubNavigationDocAuthor>[seedDocAuthor()],
+      navMap: navMap ?? seedMap(),
+      pageList: withoutPageList ? null : pageList ?? seedPageList(),
+      navLists: navLists ?? <EpubNavigationList>[seedList()],
+    );
 
 /// An operand of an unrelated type, held as `Object` so each comparison below
 /// is a real runtime check. Typing it `Object` rather than inlining a literal
@@ -150,14 +162,18 @@ const Object unrelatedOperand = 'NGE-SEED-not-a-domain-object';
 /// false here rather than throw.
 const Object? nullOperand = null;
 
+/// Asserts that [a] and [b] differ on both `==` and `hashCode`: a partition
+/// row that checked only `==` would let a field silently drop out of the hash.
+void expectDistinct(Object a, Object b) {
+  expect(a, isNot(equals(b)));
+  expect(a.hashCode, isNot(equals(b.hashCode)));
+}
+
 void main() {
   group('The navigation layer as a whole', () {
-    // TC-NSC-1 [Error guessing]: the regression guard for a defect every
-    // class in this directory carried except `EpubNavigationContent`.
-    // `operator ==` used to open with `other as X?` — a cast — so an unrelated
-    // operand threw a `TypeError` where the Dart contract requires `false`.
-    // Every class answers false now, which is why `EpubNavigationContent` —
-    // the lone counter-example, formerly TC-NSC-2 — is simply a row here.
+    // TC-NSC-1 [Error guessing]: every `==` in this directory opens with an
+    // `is` check, so an unrelated operand and a null one both answer false
+    // rather than throw a `TypeError` — the Dart equality contract.
     for (final MapEntry<String, Object> row in <String, Object>{
       'EpubNavigation': seedNavigation(),
       'EpubNavigationHead': seedHead(),
@@ -181,89 +197,52 @@ void main() {
       });
     }
 
-    // TC-NSC-3 [Error guessing]: KNOWN DEFECT. `EpubNavigationPoint.hashCode`
-    // dereferences both `navigationLabels!` and `childNavigationPoints!`, and
-    // `toString` dereferences `content!`, so a bare point is neither hashable
-    // nor printable. `readNavigationPoint` assigns all three, which is why the
-    // read path never hits this. Pinned as it behaves today.
+    // TC-NSC-3 [Boundary value]: an EPUB 3 nav heading (`<span>`, or `<a>`
+    // with no `href`) reads as a point with an empty id and playOrder and a
+    // content with no source. `toString` reads `content.source`, so it must
+    // print that absent source as `null` rather than throw, and the point
+    // still hashes.
     test(
-        'TC-NSC-3 [Error guessing]: KNOWN DEFECT — a bare EpubNavigationPoint '
-        'can be neither hashed nor printed', () {
-      expect(() => EpubNavigationPoint().hashCode, throwsA(isA<TypeError>()));
-      expect(EpubNavigationPoint().toString, throwsA(isA<TypeError>()));
+        'TC-NSC-3 [Boundary]: a heading-only point with no content source '
+        'hashes and prints', () {
+      final EpubNavigationPoint heading = seedPoint(
+        id: '',
+        playOrder: '',
+        content: const EpubNavigationContent(),
+      );
 
-      // A point missing only `content` still hashes; only `toString` fails.
-      final EpubNavigationPoint noContent = seedPoint()..content = null;
-      expect(noContent.hashCode, isA<int>());
-      expect(noContent.toString, throwsA(isA<TypeError>()));
+      expect(heading.hashCode, isA<int>());
+      expect(heading.toString(), 'Id: , Content.Source: null');
+      expectDistinct(heading, seedPoint(id: '', playOrder: ''));
     });
 
-    // TC-NSC-4 [Error guessing]: `EpubNavigationLabel.toString` used to return
-    // `text!`, so a label whose text was never set — a state the NCX reader
-    // can produce — could not be printed at all. It now renders as the empty
-    // string, and a populated label still renders its text verbatim.
-    test(
-        'TC-NSC-4 [Error guessing]: a label with no text prints as empty '
-        'rather than throwing', () {
-      expect(EpubNavigationLabel().toString(), isEmpty);
+    // TC-NSC-4 [Boundary value]: a label's `toString` is its text verbatim, so
+    // a label whose `<text>` is empty prints as the empty string.
+    test('TC-NSC-4 [Boundary]: a label prints as its text, empty included', () {
+      expect(seedLabel('').toString(), isEmpty);
       expect(seedLabel().toString(), 'NGE-SEED Label');
     });
 
-    // TC-NSC-5 [Error guessing]: KNOWN DEFECT, and the class-side half of the
-    // documented `readNavigationTarget` defect. `EpubNavigationTarget` never
-    // initialises `navigationLabels`, and its `hashCode` dereferences that
-    // field with `!` — so every target the reader produces is unhashable.
-    // `==` survives, because `listsEqual` accepts null. Pinned as it behaves
-    // today; when the field is initialised, the first expectation becomes a
-    // plain `isA<int>()`.
-    test(
-        'TC-NSC-5 [Error guessing]: KNOWN DEFECT — a target with null '
-        'navigationLabels cannot be hashed, though it still compares', () {
-      final EpubNavigationTarget bare = EpubNavigationTarget();
+    // TC-NSC-6 [Boundary value]: a bare `<navList/>` reads as a list with no
+    // id, no class, and empty label and target lists. That sparsest shape
+    // hashes, compares, and differs from a populated navList.
+    test('TC-NSC-6 [Boundary]: a bare EpubNavigationList hashes and compares',
+        () {
+      EpubNavigationList bare() => seedList(
+            id: null,
+            listClass: null,
+            labels: <EpubNavigationLabel>[],
+            targets: <EpubNavigationTarget>[],
+          );
 
-      expect(bare.navigationLabels, isNull);
-      expect(() => bare.hashCode, throwsA(isA<TypeError>()));
-      expect(bare == EpubNavigationTarget(), isTrue);
-      expect(bare == seedTarget(), isFalse);
+      expect(bare().hashCode, equals(bare().hashCode));
+      expect(bare(), equals(bare()));
+      expectDistinct(bare(), seedList());
     });
 
-    // TC-NSC-6 [Boundary value]: `EpubNavigationList` is the other documented
-    // uninitialised-field defect, but its `hashCode` uses `?? [0]` rather than
-    // `!`, so a bare list — exactly what `readNavigationList` produces — DOES
-    // hash and DOES compare. The reader's crash therefore comes from the
-    // `.add()` calls on those null fields, not from the class. That split is
-    // the reason this test is a boundary case and not a defect pin.
-    test(
-        'TC-NSC-6 [Boundary]: a bare EpubNavigationList hashes and compares '
-        'despite its null list fields', () {
-      final EpubNavigationList bare = EpubNavigationList();
-
-      expect(bare.navigationLabels, isNull);
-      expect(bare.navigationTargets, isNull);
-      expect(bare.hashCode, isA<int>());
-      expect(bare, equals(EpubNavigationList()));
-      expect(bare, isNot(equals(seedList())));
-    });
-
-    // TC-NSC-31 [Boundary value]: `EpubNavigationPageTarget` also falls
-    // back to `?? [0]` for a null `navigationLabels`, so — unlike the
-    // `EpubNavigationTarget` of TC-NSC-5 — a bare page target hashes. The
-    // fallback must stay distinct from an empty list's hash: the two targets
-    // compare unequal (`listsEqual(null, [])` is false), and a `?? []`
-    // "simplification" would make them collide.
-    test(
-        'TC-NSC-31 [Boundary]: a page target with null navigationLabels '
-        'hashes, and differently from one with an empty list', () {
-      final EpubNavigationPageTarget bare = EpubNavigationPageTarget();
-      final EpubNavigationPageTarget empty = EpubNavigationPageTarget()
-        ..navigationLabels = <EpubNavigationLabel>[];
-
-      expect(bare.navigationLabels, isNull);
-      expect(bare.hashCode, equals(EpubNavigationPageTarget().hashCode));
-      expect(bare.hashCode, isNot(equals(empty.hashCode)));
-    });
-
-    // TC-NSC-7 [Scenario/use-case]: every class agrees with its own twin.
+    // TC-NSC-7 [Scenario/use-case]: every class agrees with its own twin. The
+    // twins are built separately, so neither comparison can pass on identity
+    // alone.
     for (final MapEntry<String, List<Object>> row in <String, List<Object>>{
       'EpubNavigation': <Object>[seedNavigation(), seedNavigation()],
       'EpubNavigationHead': <Object>[seedHead(), seedHead()],
@@ -281,8 +260,78 @@ void main() {
     }.entries) {
       test('TC-NSC-7 [Scenario]: two identical ${row.key} values are equal',
           () {
+        expect(identical(row.value[0], row.value[1]), isFalse);
         expect(row.value[0], equals(row.value[1]));
         expect(row.value[0].hashCode, equals(row.value[1].hashCode));
+      });
+    }
+
+    // TC-NSC-32 [Boundary value]: each field the NCX makes optional is
+    // nullable, and a null there is a distinct value — it equals another
+    // null and differs from the populated field on `==` and `hashCode`.
+    for (final MapEntry<String, List<Object>> row in <String, List<Object>>{
+      'EpubNavigation.pageList': <Object>[
+        seedNavigation(withoutPageList: true),
+        seedNavigation(withoutPageList: true),
+        seedNavigation(),
+      ],
+      'EpubNavigationContent.id': <Object>[
+        seedNavContent(id: null),
+        seedNavContent(id: null),
+        seedNavContent(),
+      ],
+      'EpubNavigationContent.source': <Object>[
+        seedNavContent(source: null),
+        seedNavContent(source: null),
+        seedNavContent(),
+      ],
+      'EpubNavigationHeadMeta.scheme': <Object>[
+        seedHeadMeta(scheme: null),
+        seedHeadMeta(scheme: null),
+        seedHeadMeta(),
+      ],
+      'EpubNavigationPoint.className': <Object>[
+        seedPoint(navClass: null),
+        seedPoint(navClass: null),
+        seedPoint(),
+      ],
+      'EpubNavigationPageTarget.value': <Object>[
+        seedPageTarget(value: null),
+        seedPageTarget(value: null),
+        seedPageTarget(),
+      ],
+      'EpubNavigationPageTarget.className': <Object>[
+        seedPageTarget(targetClass: null),
+        seedPageTarget(targetClass: null),
+        seedPageTarget(),
+      ],
+      'EpubNavigationTarget.className': <Object>[
+        seedTarget(targetClass: null),
+        seedTarget(targetClass: null),
+        seedTarget(),
+      ],
+      'EpubNavigationTarget.value': <Object>[
+        seedTarget(value: null),
+        seedTarget(value: null),
+        seedTarget(),
+      ],
+      'EpubNavigationList.id': <Object>[
+        seedList(id: null),
+        seedList(id: null),
+        seedList(),
+      ],
+      'EpubNavigationList.className': <Object>[
+        seedList(listClass: null),
+        seedList(listClass: null),
+        seedList(),
+      ],
+    }.entries) {
+      test(
+          'TC-NSC-32 [Boundary]: a null ${row.key} equals another null and '
+          'differs from a value', () {
+        expect(row.value[0], equals(row.value[1]));
+        expect(row.value[0].hashCode, equals(row.value[1].hashCode));
+        expectDistinct(row.value[0], row.value[2]);
       });
     }
   });
@@ -290,12 +339,8 @@ void main() {
   group('EpubNavigationLabel / EpubNavigationContent', () {
     // TC-NSC-8 [Equivalence partitioning]: a label is its text.
     test('TC-NSC-8 [Equivalence partitioning]: labels differ by text', () {
-      expect(seedLabel(), isNot(equals(seedLabel('NGE-SEED Other'))));
-      expect(
-        seedLabel().hashCode,
-        isNot(equals(seedLabel('NGE-SEED Other').hashCode)),
-      );
-      expect(EpubNavigationLabel(), equals(EpubNavigationLabel()));
+      expectDistinct(seedLabel(), seedLabel('NGE-SEED Other'));
+      expect(seedLabel(''), equals(seedLabel('')));
     });
 
     // TC-NSC-9 [Equivalence partitioning]: both content fields decide.
@@ -307,16 +352,15 @@ void main() {
       test(
           'TC-NSC-9 [Equivalence partitioning]: content with a differing '
           '${row.key} is unequal', () {
-        expect(seedNavContent(), isNot(equals(row.value)));
-        expect(seedNavContent().hashCode, isNot(equals(row.value.hashCode)));
+        expectDistinct(seedNavContent(), row.value);
       });
     }
 
     // TC-NSC-10 [Scenario/use-case]: content renders its source only — the id
-    // is deliberately absent from `toString`.
+    // is deliberately absent from `toString` — and an absent source as `null`.
     test('TC-NSC-10 [Scenario]: content renders its source', () {
       expect(seedNavContent().toString(), 'Source: chapter1.xhtml');
-      expect(EpubNavigationContent().toString(), 'Source: null');
+      expect(const EpubNavigationContent().toString(), 'Source: null');
     });
   });
 
@@ -331,62 +375,62 @@ void main() {
       test(
           'TC-NSC-11 [Equivalence partitioning]: head meta with a differing '
           '${row.key} is unequal', () {
-        expect(seedHeadMeta(), isNot(equals(row.value)));
-        expect(seedHeadMeta().hashCode, isNot(equals(row.value.hashCode)));
+        expectDistinct(seedHeadMeta(), row.value);
       });
     }
 
-    // TC-NSC-12 [Boundary value]: the head's constructor initialises its list,
-    // so an empty head hashes — and differs from a populated one.
+    // TC-NSC-12 [Boundary value]: an empty head is what an EPUB 3 nav
+    // document reads as, having no NCX head; it hashes and differs from a
+    // populated one.
     test('TC-NSC-12 [Boundary]: an empty head hashes and differs', () {
-      expect(EpubNavigationHead().metadata, isEmpty);
-      expect(EpubNavigationHead().hashCode, isA<int>());
-      expect(EpubNavigationHead(), equals(EpubNavigationHead()));
-      expect(EpubNavigationHead(), isNot(equals(seedHead())));
+      final EpubNavigationHead empty =
+          seedHead(metadata: <EpubNavigationHeadMeta>[]);
+
+      expect(empty.metadata, isEmpty);
+      expect(empty, equals(seedHead(metadata: <EpubNavigationHeadMeta>[])));
+      expectDistinct(empty, seedHead());
     });
 
     // TC-NSC-13 [Equivalence partitioning]: the head compares its metadata
     // element-wise, so both count and content decide.
     test('TC-NSC-13 [Equivalence partitioning]: heads differ by metadata list',
         () {
-      expect(
+      expectDistinct(
         seedHead(),
-        isNot(
-          equals(
-            seedHead(
-              metadata: <EpubNavigationHeadMeta>[
-                seedHeadMeta(),
-                seedHeadMeta(name: 'dtb:depth'),
-              ],
-            ),
-          ),
+        seedHead(
+          metadata: <EpubNavigationHeadMeta>[
+            seedHeadMeta(),
+            seedHeadMeta(name: 'dtb:depth'),
+          ],
+        ),
+      );
+      expectDistinct(
+        seedHead(),
+        seedHead(
+          metadata: <EpubNavigationHeadMeta>[seedHeadMeta(name: 'dtb:depth')],
         ),
       );
     });
   });
 
   group('EpubNavigationDocTitle / EpubNavigationDocAuthor', () {
-    // TC-NSC-14 [Equivalence partitioning]: both are thin list wrappers whose
-    // constructors initialise the list.
+    // TC-NSC-14 [Equivalence partitioning]: both are thin list wrappers, so
+    // an empty list and a differing entry each decide.
     test('TC-NSC-14 [Equivalence partitioning]: doc titles differ by titles',
         () {
-      expect(EpubNavigationDocTitle().titles, isEmpty);
-      expect(EpubNavigationDocTitle().hashCode, isA<int>());
-      expect(seedDocTitle(), isNot(equals(EpubNavigationDocTitle())));
-      expect(
+      expectDistinct(seedDocTitle(), seedDocTitle(titles: <String>[]));
+      expectDistinct(
         seedDocTitle(),
-        isNot(equals(seedDocTitle(titles: <String>['NGE-SEED Other']))),
+        seedDocTitle(titles: <String>['NGE-SEED Other']),
       );
     });
 
     test('TC-NSC-14 [Equivalence partitioning]: doc authors differ by authors',
         () {
-      expect(EpubNavigationDocAuthor().authors, isEmpty);
-      expect(EpubNavigationDocAuthor().hashCode, isA<int>());
-      expect(seedDocAuthor(), isNot(equals(EpubNavigationDocAuthor())));
-      expect(
+      expectDistinct(seedDocAuthor(), seedDocAuthor(authors: <String>[]));
+      expectDistinct(
         seedDocAuthor(),
-        isNot(equals(seedDocAuthor(authors: <String>['NGE-SEED Other']))),
+        seedDocAuthor(authors: <String>['NGE-SEED Other']),
       );
     });
 
@@ -419,8 +463,7 @@ void main() {
       test(
           'TC-NSC-16 [Equivalence partitioning]: a point with a differing '
           '${row.key} is unequal', () {
-        expect(seedPoint(), isNot(equals(row.value)));
-        expect(seedPoint().hashCode, isNot(equals(row.value.hashCode)));
+        expectDistinct(seedPoint(), row.value);
       });
     }
 
@@ -447,21 +490,20 @@ void main() {
 
       expect(tree('np-1-1-1'), equals(tree('np-1-1-1')));
       expect(tree('np-1-1-1').hashCode, equals(tree('np-1-1-1').hashCode));
-      expect(tree('np-1-1-1'), isNot(equals(tree('np-1-1-2'))));
+      expectDistinct(tree('np-1-1-1'), tree('np-1-1-2'));
     });
 
-    // TC-NSC-19 [Boundary value]: `EpubNavigationMap` has no constructor, so
-    // `points` starts null — and unlike the point itself, the map survives it
-    // through `?? [0]`.
-    test('TC-NSC-19 [Boundary]: a map with null points hashes and compares',
-        () {
-      expect(EpubNavigationMap().points, isNull);
-      expect(EpubNavigationMap().hashCode, isA<int>());
-      expect(EpubNavigationMap(), equals(EpubNavigationMap()));
-      expect(EpubNavigationMap(), isNot(equals(seedMap())));
-      expect(
-        seedMap(points: <EpubNavigationPoint>[]),
-        isNot(equals(EpubNavigationMap())),
+    // TC-NSC-19 [Boundary value]: a map with no point is what the reader
+    // produces for an empty `<navMap>`; it hashes, compares, and differs from
+    // a populated map, and the map compares its points element-wise.
+    test('TC-NSC-19 [Boundary]: an empty map hashes and compares', () {
+      final EpubNavigationMap empty = seedMap(points: <EpubNavigationPoint>[]);
+
+      expect(empty, equals(seedMap(points: <EpubNavigationPoint>[])));
+      expectDistinct(empty, seedMap());
+      expectDistinct(
+        seedMap(),
+        seedMap(points: <EpubNavigationPoint>[seedPoint(id: 'np-2')]),
       );
     });
   });
@@ -485,13 +527,13 @@ void main() {
       test(
           'TC-NSC-20 [Equivalence partitioning]: a page target with a '
           'differing ${row.key} is unequal', () {
-        expect(seedPageTarget(), isNot(equals(row.value)));
-        expect(seedPageTarget().hashCode, isNot(equals(row.value.hashCode)));
+        expectDistinct(seedPageTarget(), row.value);
       });
     }
 
     // TC-NSC-21 [Boundary value]: all four enum values are distinct operands,
-    // and `undefined` is the reader's fallback for an unrecognised `type`.
+    // and `undefined` is the reader's fallback for an absent or unrecognised
+    // `type`.
     test('TC-NSC-21 [Boundary]: every page-target type is distinguished', () {
       expect(EpubNavigationPageTargetType.values, hasLength(4));
       for (final EpubNavigationPageTargetType type
@@ -504,16 +546,40 @@ void main() {
           );
         }
       }
-      expect(seedPageTarget(type: null), isNot(equals(seedPageTarget())));
     });
 
-    // TC-NSC-22 [Boundary value]: the page list has no constructor either, so
-    // null targets are its initial state.
-    test('TC-NSC-22 [Boundary]: a page list with null targets hashes', () {
-      expect(EpubNavigationPageList().targets, isNull);
-      expect(EpubNavigationPageList().hashCode, isA<int>());
-      expect(EpubNavigationPageList(), equals(EpubNavigationPageList()));
-      expect(EpubNavigationPageList(), isNot(equals(seedPageList())));
+    // TC-NSC-22 [Boundary value]: a page list with no target is what the
+    // reader produces for an empty `<pageList>`; it hashes, compares, and the
+    // list compares its targets element-wise.
+    test('TC-NSC-22 [Boundary]: an empty page list hashes and differs', () {
+      final EpubNavigationPageList empty =
+          seedPageList(targets: <EpubNavigationPageTarget>[]);
+
+      expect(
+        empty,
+        equals(seedPageList(targets: <EpubNavigationPageTarget>[])),
+      );
+      expectDistinct(empty, seedPageList());
+      expectDistinct(
+        seedPageList(),
+        seedPageList(
+          targets: <EpubNavigationPageTarget>[seedPageTarget(id: 'pt-2')],
+        ),
+      );
+    });
+
+    // TC-NSC-33 [Boundary value]: a `<pageTarget>` with no `<content>` reads
+    // with a content carrying neither id nor source. That target hashes and
+    // differs from one pointing somewhere.
+    test(
+        'TC-NSC-33 [Boundary]: a page target whose content has no source '
+        'hashes and differs', () {
+      final EpubNavigationPageTarget noContent =
+          seedPageTarget(content: const EpubNavigationContent());
+
+      expect(noContent.content.source, isNull);
+      expect(noContent.hashCode, isA<int>());
+      expectDistinct(noContent, seedPageTarget());
     });
   });
 
@@ -534,8 +600,7 @@ void main() {
       test(
           'TC-NSC-23 [Equivalence partitioning]: a target with a differing '
           '${row.key} is unequal', () {
-        expect(seedTarget(), isNot(equals(row.value)));
-        expect(seedTarget().hashCode, isNot(equals(row.value.hashCode)));
+        expectDistinct(seedTarget(), row.value);
       });
     }
 
@@ -554,95 +619,65 @@ void main() {
       test(
           'TC-NSC-24 [Equivalence partitioning]: a navList with a differing '
           '${row.key} is unequal', () {
-        expect(seedList(), isNot(equals(row.value)));
-        expect(seedList().hashCode, isNot(equals(row.value.hashCode)));
+        expectDistinct(seedList(), row.value);
       });
     }
-
-    // TC-NSC-25 [Boundary value]: a null list field and an assigned-but-empty
-    // one are DIFFERENT operands to `listsEqual`, which is what separates the
-    // reader's broken state (null) from a legitimately empty navList.
-    test('TC-NSC-25 [Boundary]: null list fields differ from empty ones', () {
-      final EpubNavigationList empty = seedList(
-        labels: <EpubNavigationLabel>[],
-        targets: <EpubNavigationTarget>[],
-      );
-
-      expect(empty, isNot(equals(EpubNavigationList()..id = 'nl-1')));
-      expect(
-        empty,
-        equals(
-          seedList(
-            labels: <EpubNavigationLabel>[],
-            targets: <EpubNavigationTarget>[],
-          ),
-        ),
-      );
-    });
   });
 
   group('EpubNavigation', () {
     // TC-NSC-26 [Equivalence partitioning]: all six fields decide. `docAuthors`
     // and `navLists` are checked before the four scalars, so each gets a row.
-    for (final MapEntry<String, EpubNavigation Function(EpubNavigation)> row
-        in <String, EpubNavigation Function(EpubNavigation)>{
-      'head': (EpubNavigation n) => n
-        ..head = seedHead(
+    for (final MapEntry<String, EpubNavigation> row in <String, EpubNavigation>{
+      'head': seedNavigation(
+        head: seedHead(
           metadata: <EpubNavigationHeadMeta>[seedHeadMeta(name: 'dtb:depth')],
         ),
-      'docTitle': (EpubNavigation n) =>
-          n..docTitle = seedDocTitle(titles: <String>['NGE-SEED Other']),
-      'docAuthors': (EpubNavigation n) => n
-        ..docAuthors = <EpubNavigationDocAuthor>[
+      ),
+      'docTitle': seedNavigation(
+        docTitle: seedDocTitle(titles: <String>['NGE-SEED Other']),
+      ),
+      'docAuthors': seedNavigation(
+        docAuthors: <EpubNavigationDocAuthor>[
           seedDocAuthor(authors: <String>['NGE-SEED Other']),
         ],
-      'navMap': (EpubNavigation n) => n
-        ..navMap =
-            seedMap(points: <EpubNavigationPoint>[seedPoint(id: 'np-2')]),
-      'pageList': (EpubNavigation n) => n
-        ..pageList = seedPageList(
+      ),
+      'navMap': seedNavigation(
+        navMap: seedMap(points: <EpubNavigationPoint>[seedPoint(id: 'np-2')]),
+      ),
+      'pageList': seedNavigation(
+        pageList: seedPageList(
           targets: <EpubNavigationPageTarget>[seedPageTarget(id: 'pt-2')],
         ),
-      'navLists': (EpubNavigation n) =>
-          n..navLists = <EpubNavigationList>[seedList(id: 'nl-2')],
+      ),
+      'navLists': seedNavigation(
+        navLists: <EpubNavigationList>[seedList(id: 'nl-2')],
+      ),
     }.entries) {
       test(
           'TC-NSC-26 [Equivalence partitioning]: a navigation with a '
           'differing ${row.key} is unequal', () {
-        final EpubNavigation other = row.value(seedNavigation());
-
-        expect(seedNavigation(), isNot(equals(other)));
-        expect(seedNavigation().hashCode, isNot(equals(other.hashCode)));
+        expectDistinct(seedNavigation(), row.value);
       });
     }
 
-    // TC-NSC-27 [Boundary value]: an all-null navigation is what an EPUB3
-    // book with neither NCX nor nav document leaves behind, and it hashes
-    // through the two `?? [0]` fallbacks.
-    test('TC-NSC-27 [Boundary]: an all-null navigation hashes and compares',
+    // TC-NSC-27 [Boundary value]: the sparsest navigation is the EPUB 3 shape
+    // — empty head, no doc author, no nav list, no page list. Built from the
+    // required arguments alone, its optional fields default to exactly that,
+    // and it hashes, compares, and differs from a populated navigation.
+    test('TC-NSC-27 [Boundary]: a required-only navigation hashes and compares',
         () {
-      expect(EpubNavigation().hashCode, isA<int>());
-      expect(EpubNavigation(), equals(EpubNavigation()));
-      expect(EpubNavigation(), isNot(equals(seedNavigation())));
-    });
+      EpubNavigation sparse() => EpubNavigation(
+            head: seedHead(metadata: <EpubNavigationHeadMeta>[]),
+            docTitle: seedDocTitle(titles: <String>[]),
+            navMap: seedMap(points: <EpubNavigationPoint>[]),
+          );
 
-    // TC-NSC-28 [Boundary value]: null and empty `docAuthors` / `navLists` are
-    // distinct, mirroring TC-NSC-25 one level up.
-    test('TC-NSC-28 [Boundary]: null and empty author/navList lists differ',
-        () {
-      final EpubNavigation empty = EpubNavigation()
-        ..docAuthors = <EpubNavigationDocAuthor>[]
-        ..navLists = <EpubNavigationList>[];
-
-      expect(empty, isNot(equals(EpubNavigation())));
-      expect(
-        empty,
-        equals(
-          EpubNavigation()
-            ..docAuthors = <EpubNavigationDocAuthor>[]
-            ..navLists = <EpubNavigationList>[],
-        ),
-      );
+      expect(sparse().docAuthors, isEmpty);
+      expect(sparse().navLists, isEmpty);
+      expect(sparse().pageList, isNull);
+      expect(sparse(), equals(sparse()));
+      expect(sparse().hashCode, equals(sparse().hashCode));
+      expectDistinct(sparse(), seedNavigation());
     });
   });
 
@@ -707,8 +742,8 @@ void main() {
       final EpubBookRef second =
           await const EpubReader().openBook(build('NGE-SEED S1'));
 
-      final EpubNavigation a = first.schema!.navigation!;
-      final EpubNavigation b = second.schema!.navigation!;
+      final EpubNavigation a = first.schema.navigation;
+      final EpubNavigation b = second.schema.navigation;
 
       expect(a, equals(b));
       expect(a.hashCode, equals(b.hashCode));
@@ -719,12 +754,12 @@ void main() {
       expect(a.pageList, equals(b.pageList));
 
       // The graph really is populated, so the equality above is not vacuous.
-      expect(a.docTitle!.titles, <String>['NGE-SEED Navigation Book']);
-      expect(a.navMap!.points, hasLength(1));
-      expect(a.navMap!.points!.single.childNavigationPoints, hasLength(1));
+      expect(a.docTitle.titles, <String>['NGE-SEED Navigation Book']);
+      expect(a.navMap.points, hasLength(1));
+      expect(a.navMap.points.single.childNavigationPoints, hasLength(1));
       expect(a.pageList!.targets, hasLength(1));
       expect(
-        a.pageList!.targets!.single.type,
+        a.pageList!.targets.single.type,
         EpubNavigationPageTargetType.normal,
       );
       expect(a.navLists, isEmpty);
@@ -741,14 +776,14 @@ void main() {
       final EpubBookRef second =
           await const EpubReader().openBook(build('NGE-SEED S2'));
 
-      final EpubNavigation a = first.schema!.navigation!;
-      final EpubNavigation b = second.schema!.navigation!;
+      final EpubNavigation a = first.schema.navigation;
+      final EpubNavigation b = second.schema.navigation;
 
       expect(a, isNot(equals(b)));
       expect(a.navMap, isNot(equals(b.navMap)));
       expect(a.docTitle, equals(b.docTitle));
       expect(
-        a.navMap!.points!.single.childNavigationPoints!.single.navigationLabels!
+        a.navMap.points.single.childNavigationPoints.single.navigationLabels
             .single.text,
         'NGE-SEED S1',
       );

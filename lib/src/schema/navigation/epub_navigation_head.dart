@@ -4,18 +4,15 @@ import 'package:quiver/core.dart';
 import 'epub_navigation_head_meta.dart';
 
 class EpubNavigationHead {
-  EpubNavigationHead() {
-    metadata = <EpubNavigationHeadMeta>[];
-  }
-  List<EpubNavigationHeadMeta>? metadata;
+  const EpubNavigationHead({required this.metadata});
+
+  /// The `<meta>` children; empty when the `<head>` has none, although NCX
+  /// requires at least one.
+  final List<EpubNavigationHeadMeta> metadata;
 
   @override
-  int get hashCode {
-    final List<int> objects = <int>[
-      ...metadata!.map((EpubNavigationHeadMeta meta) => meta.hashCode)
-    ];
-    return hashObjects(objects);
-  }
+  int get hashCode =>
+      hashObjects(metadata.map((EpubNavigationHeadMeta meta) => meta.hashCode));
 
   @override
   bool operator ==(Object other) {

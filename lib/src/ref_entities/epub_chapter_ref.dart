@@ -6,19 +6,33 @@ import 'package:quiver/core.dart';
 import 'epub_text_content_file_ref.dart';
 
 class EpubChapterRef {
-  EpubChapterRef(this.epubTextContentFileRef);
-  // Referece to text content reader.
-  EpubTextContentFileRef? epubTextContentFileRef;
-  // If the chapter is split into multiple files, this list contains the references to content readers of the other files.
-  List<EpubTextContentFileRef> otherTextContentFileRefs =
-      <EpubTextContentFileRef>[];
+  const EpubChapterRef({
+    required this.epubTextContentFileRef,
+    required this.title,
+    required this.contentFileName,
+    this.anchor,
+    this.subChapters = const <EpubChapterRef>[],
+    this.otherTextContentFileRefs = const <EpubTextContentFileRef>[],
+    this.otherContentFileNames = const <String>[],
+  });
 
-  String? title;
-  String? contentFileName;
-  String? anchor;
-  List<EpubChapterRef>? subChapters;
-  // If the chapter is split into multiple files, this list contains the names of the other files.
-  List<String> otherContentFileNames = <String>[];
+  final EpubTextContentFileRef epubTextContentFileRef;
+
+  /// The rest of a chapter the producer split into several files, in
+  /// the same order as [otherContentFileNames].
+  final List<EpubTextContentFileRef> otherTextContentFileRefs;
+
+  final String title;
+
+  /// The decoded file name, a key of `EpubContentRef.html`.
+  final String contentFileName;
+
+  /// The fragment after `#` in the navigation's link; null when it has none.
+  final String? anchor;
+  final List<EpubChapterRef> subChapters;
+
+  /// The file names of [otherTextContentFileRefs].
+  final List<String> otherContentFileNames;
 
   @override
   int get hashCode {
@@ -26,16 +40,15 @@ class EpubChapterRef {
       title.hashCode,
       contentFileName.hashCode,
       // The two split-chapter lists are hashed by ELEMENT, like
-      // `subChapters`: every ref gets its own list instance from the field
-      // initialiser, so hashing the list object would give two refs over one
-      // chapter two different hash codes.
+      // `subChapters`: two refs over one chapter hold equal lists that are
+      // not the same list, so hashing the list object would give them two
+      // different hash codes.
       ...otherContentFileNames.map((String fileName) => fileName.hashCode),
       ...otherTextContentFileRefs
           .map((EpubTextContentFileRef fileRef) => fileRef.hashCode),
       anchor.hashCode,
       epubTextContentFileRef.hashCode,
-      ...subChapters?.map((EpubChapterRef subChapter) => subChapter.hashCode) ??
-          <int>[0],
+      ...subChapters.map((EpubChapterRef subChapter) => subChapter.hashCode),
     ];
     return hashObjects(objects);
   }
@@ -53,19 +66,11 @@ class EpubChapterRef {
           otherTextContentFileRefs, other.otherTextContentFileRefs) &&
       collections.listsEqual(subChapters, other.subChapters);
 
+  /// The chapter's own file followed by its split parts, read concurrently
+  /// and joined in that order.
   Future<String> readHtmlContent() async {
-    // Started before the other parts so all of them read concurrently.
-    final Future<String> contentFuture =
-        epubTextContentFileRef!.readContentAsText();
-    // Skips Future.wait for the common single-file chapter. The fall-through
-    // below returns the same string when there is nothing to join, so the
-    // shortcut is an optimisation, not a behaviour.
-    if (otherContentFileNames.isEmpty) {
-      return contentFuture;
-    }
-
     final List<String> contents = await Future.wait(<Future<String>>[
-      contentFuture,
+      epubTextContentFileRef.readContentAsText(),
       for (EpubTextContentFileRef otherContentFileRef
           in otherTextContentFileRefs)
         otherContentFileRef.readContentAsText(),
@@ -75,6 +80,6 @@ class EpubChapterRef {
 
   @override
   String toString() {
-    return 'Title: $title, Subchapter count: ${subChapters!.length}';
+    return 'Title: $title, Subchapter count: ${subChapters.length}';
   }
 }

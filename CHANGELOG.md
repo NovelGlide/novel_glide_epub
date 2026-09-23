@@ -2,6 +2,103 @@
 
 ## Unreleased
 
+**Breaking.**
+
+- **Nullability follows the EPUB spec.** Every class under `entities/`,
+  `ref_entities/` and `schema/` (OPF, NCX and nav) declares a field non-null
+  when the spec requires the element or attribute, and nullable only when the
+  spec makes it optional. The nullable fields that remain:
+  - `EpubBook.coverImage`; `EpubChapter.anchor`, `EpubChapterRef.anchor`.
+  - `EpubPackage.guide`, `EpubGuideReference.title`,
+    `EpubSpine.tableOfContents` (required by EPUB 2 only).
+  - `EpubManifestItem`: `mediaOverlay`, `requiredNamespace`,
+    `requiredModules`, `fallback`, `fallbackStyle`, `properties`.
+  - `fileAs` and `role` on `EpubMetadataCreator` and
+    `EpubMetadataContributor`;
+    `EpubMetadataDate.event`; `EpubMetadataIdentifier.id` and `scheme`;
+    `EpubMetadataMeta.name`, `id`, `refines`, `property`, `scheme`.
+  - `EpubNavigation.pageList`; `EpubNavigationContent.id` and `source`;
+    `EpubNavigationHeadMeta.scheme`; `id` and `className` on
+    `EpubNavigationList`; `className` on `EpubNavigationPoint`;
+    `className` and `value` on `EpubNavigationTarget` and
+    `EpubNavigationPageTarget`.
+
+  Every list is non-null, and empty when the book has none of that element.
+- **A required value a real book leaves out reads as empty; the book still
+  opens.** No refusal was added. Each fallback is documented on its field:
+  - `title` is `''` when the package has no `dc:title`.
+  - `EpubMetadataMeta.content` is `''` for an EPUB 2 `<meta>` without
+    `content`.
+  - `playOrder` is `''` on a navPoint, navTarget or pageTarget without one;
+    a pageTarget's `id` is `''` when absent.
+  - A pageTarget's `type` is `EpubNavigationPageTargetType.undefined` when
+    absent or unrecognised (it was null). A literal `type="undefined"` is
+    still refused.
+  - A navTarget or pageTarget with no `<content>` gets an
+    `EpubNavigationContent` with no source.
+  - An EPUB 3 book's navigation has a `head` with no metadata, no
+    `navLists` and no `docAuthors`, and its points have `id` and
+    `playOrder` `''`.
+  - `EpubNavigationContent.source` is null for an EPUB 3 nav entry that is
+    a heading (`<span>`, or `<a>` without `href`).
+- **Every entity, ref and schema object is immutable** and built once,
+  through a `const` constructor with named parameters. Fields are `final`;
+  the `X()..field = value` style no longer compiles. The readers collect each
+  value first and construct the object at the end, and every list and map
+  they hand in is unmodifiable (a byte content's `Uint8List` excepted), so an
+  entity's hash code cannot change after it is built.
+- **`EpubMetadata.description` is now `descriptions`**, a `List<String>` of
+  every `dc:description` in document order. The element may repeat (one per
+  language, say); the old field kept only the last.
+- **`author` is removed** from `EpubBookRef` and `EpubBook`. `authorList` is a
+  non-null `List<String>`, empty when the book names no creator; joining the
+  names for display is the caller's decision.
+- **The content maps are keyed by decoded file name.** `html`, `css`,
+  `images`, `fonts` and `allFiles` on `EpubContentRef` and `EpubContent` are
+  keyed by `ZipPathResolver.decodeHref` of the manifest href (the same string
+  as the file's `fileName`), not by the href as the manifest wrote it. Decode
+  a manifest or navigation href the same way before looking it up;
+  `ZipPathResolver` is now exported for that. `ChapterReader` makes one
+  decoded lookup, so a navigation that writes raw a name the manifest escapes
+  now finds its chapter. Two manifest items whose hrefs decode to one name
+  are one entry; the later wins.
+  The chapter names follow: `contentFileName` on `EpubChapterRef` and
+  `EpubChapter`, and `EpubChapterRef.otherContentFileNames`, are the decoded
+  name too. Before, a book that escaped a name the same way in the manifest
+  and the navigation got the escaped spelling. Compare them with
+  `ZipPathResolver().decodeHref(manifestItem.href)`, not the raw href.
+- Signatures that changed with the above:
+  - `EpubContentFileRef` and its two subclasses take the `Archive` and the
+    content directory path instead of the `EpubBookRef`; the `epubBookRef`
+    field is gone. `EpubBookRef.epubArchive()` returns a non-null `Archive`.
+  - `ContentReader.parseContentMap(Archive, String contentDirectoryPath,
+    EpubManifest)` replaces `parseContentMap(EpubBookRef)`.
+  - `PackageReader.readMetadata` takes a non-null `EpubVersion`.
+  - `EpubNavigationWriter.writeNavigationPoint` takes the point's source as
+    a third argument.
+- An OPF with no `<metadata>`, `<manifest>` or `<spine>` is refused with
+  `EpubMissingElementException`. It escaped as a raw `StateError` before,
+  which the `EpubException` contract counts as a parser defect.
+
+**Other changes from the same rework:**
+
+- A `<navList>` with `<navLabel>` or `<navTarget>` children is read. It
+  crashed on a null list before, which is why the `navigationTargets` branch
+  was the one line no test reached.
+- `EpubWriter` writes a book with no `<guide>`, a spine with no `toc`, and
+  a guide reference with no `title`, by leaving the element or attribute out;
+  all three threw before. An EPUB 2 `<meta>` is always written with its
+  `content`, so one read without it is written back with `content=""`. The
+  writer throws `ArgumentError` for a content file that is neither text nor
+  bytes. `EpubNavigationWriter` leaves out a nav entry with no source, which
+  NCX cannot express.
+- `EpubMetadataMeta.attributes` holds every attribute of an EPUB 2 `<meta>`
+  too, not only of an EPUB 3 one.
+- `EpubReader.readBook` fills `EpubChapter.otherContentFileNames` for a
+  chapter split into `_split_` files; it was always empty.
+- `ZipPathResolver.combine` takes non-null `String` arguments; a null file
+  name used to compile and then throw.
+
 **Fixed: books whose files have non-ASCII names could not be opened.** There
 were two defects, and the first one fired before the second could:
 
@@ -25,18 +122,14 @@ Related changes that came with the fix:
 
 - The NCX and EPUB3 nav documents are now found when their manifest href is
   escaped. Their href used to reach `combine` still undecoded.
-- A chapter is now looked up by the navigation's own spelling of the href
-  first, then by its decoded form. A book that escapes a chapter's href the
-  same way in the manifest and in the navigation now finds it.
+- A chapter is found whichever way the manifest and the navigation spell
+  its href, escaped or raw; see the decoded content-map keys under
+  **Breaking** above.
 - `combine` reads `\` as `/`, as it did before.
 - A `..` with nothing left to climb is now dropped. Before, it was kept as a
   literal `..` segment.
 - `EpubWriter` now names archive entries by their decoded file name, not by
   the manifest's escaped href.
-
-**Still open:** a navigation that writes raw a name the manifest escapes
-still misses the chapter. The content maps are keyed by the manifest's
-spelling, and changing that key changes what consumers look up.
 
 ## 0.2.0
 

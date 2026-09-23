@@ -38,29 +38,28 @@ class EpubWriter {
     arch.addFile(ArchiveFile('META-INF/container.xml', _containerFile.length,
         convert.utf8.encode(_containerFile)));
 
-    // Add all content to the archive
-    book.content!.allFiles!.forEach((String name, EpubContentFile file) {
-      List<int>? content;
-
-      if (file is EpubByteContentFile) {
-        content = file.content;
-      } else if (file is EpubTextContentFile) {
-        content = convert.utf8.encode(file.content!);
-      }
+    // Every key is already the decoded file name the archive entry carries.
+    book.content.allFiles.forEach((String name, EpubContentFile file) {
+      final List<int> content = switch (file) {
+        EpubByteContentFile() => file.content,
+        EpubTextContentFile() => convert.utf8.encode(file.content),
+        // The reader makes only the two kinds above; a caller's own subclass
+        // carries no content this writer can serialise.
+        _ => throw ArgumentError.value(file.runtimeType, 'book.content',
+            'holds a content file that is neither text nor bytes'),
+      };
 
       arch.addFile(ArchiveFile(
-          _pathResolver.combine(book.schema!.contentDirectoryPath,
-              _pathResolver.decodeHref(name)),
-          content!.length,
+          _pathResolver.combine(book.schema.contentDirectoryPath, name),
+          content.length,
           content));
     });
 
     // Generate the content.opf file and add it to the Archive
-    final String contentopf =
-        _packageWriter.writeContent(book.schema!.package!);
+    final String contentopf = _packageWriter.writeContent(book.schema.package);
 
     arch.addFile(ArchiveFile(
-        _pathResolver.combine(book.schema!.contentDirectoryPath, 'content.opf'),
+        _pathResolver.combine(book.schema.contentDirectoryPath, 'content.opf'),
         contentopf.length,
         convert.utf8.encode(contentopf)));
 

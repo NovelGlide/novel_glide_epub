@@ -4,13 +4,15 @@ import 'package:quiver/core.dart';
 import 'epub_navigation_point.dart';
 
 class EpubNavigationMap {
-  List<EpubNavigationPoint>? points;
+  const EpubNavigationMap({required this.points});
+
+  /// Empty when the `<navMap>` (or the nav document's `<ol>`) has no entry,
+  /// although both formats require one.
+  final List<EpubNavigationPoint> points;
 
   @override
-  int get hashCode {
-    return hashObjects(
-        points?.map((EpubNavigationPoint point) => point.hashCode) ?? <int>[0]);
-  }
+  int get hashCode =>
+      hashObjects(points.map((EpubNavigationPoint point) => point.hashCode));
 
   @override
   bool operator ==(Object other) {

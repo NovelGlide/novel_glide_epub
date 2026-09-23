@@ -1,41 +1,33 @@
-// Regression coverage for `NavigationReader`'s EPUB3 nav-internal-link base
-// path resolution (packages/epubx/lib/src/readers/navigation_reader.dart).
+// Where an EPUB3 nav document (the manifest item with `properties="nav"`)
+// sits in the archive, and how `NavigationReader` resolves the relative
+// hrefs inside it.
 //
-// Bug: the base directory used to resolve relative hrefs found inside an
-// EPUB3 nav document (the manifest item with `properties="nav"`) used to be
-// computed by combining the OPF's own directory with the nav item's href,
-// then unconditionally dropping the first path segment
-// (`..removeAt(0)`) — an assumption that the OPF always lives exactly one
-// folder above the content (the classic `OEBPS/` layout). When the OPF
-// instead sits at the ZIP root and content lives under a named subfolder,
-// that assumption eats the real content folder from the base, so every
-// nav-internal relative link resolves one folder too shallow.
-// `ContentReader.parseContentMap` keys `content.html` by the RAW manifest
-// href (not the resolved base), so the mis-resolved `contentFileName` misses
-// the lookup and `ChapterReader.getChaptersImpl` throws
-// `Exception('Incorrect EPUB manifest: item with href = "..." is missing.')`
-// for every navPoint — the whole TOC fails, not a single entry.
+// A nav-internal href is relative to the nav document, and the chapter it
+// names is looked up in `content.html`, which is keyed by manifest href —
+// relative to the OPF. So the reader prefixes each nav href with the nav
+// item's own manifest-href directory, whatever directory the OPF sits in.
+// A base that assumed the OPF lives one folder above the content (the
+// classic `OEBPS/` layout) would drop a real content folder when the OPF
+// sits at the ZIP root, and every entry of the table of contents would then
+// name a file the manifest does not have. The three layouts below are the
+// three ways the OPF and the nav document can sit relative to each other.
 //
-// Fixed shape: `navDirectory = ZipPathResolver().getDirectoryPath(tocManifestItem.href!)`
-// — the nav item's own href directory, independent of where the OPF sits.
-//
-// Fixtures are minimal synthetic EPUBs assembled in-memory with
-// `package:archive`'s `ZipEncoder` (mirrors the existing fixture style in
-// `epub_book_loader_pick_metadata_test.dart` / `epub_import_guard_test.dart`)
-// — never the real ~45 MB repro book. The EPUB3 nav.xhtml shape (namespaces,
-// the single-`<ol>` `<nav epub:type="toc">` structure) is cross-checked
-// against the bundled `assets/samples/book.epub` fixture, which this parser
-// is independently known to read correctly.
+// Fixtures are minimal synthetic EPUBs assembled in memory with
+// `package:archive`'s `ZipEncoder`; the nav.xhtml shape (namespaces, the
+// single-`<ol>` `<nav epub:type="toc">` structure) is the one real EPUB3
+// books use.
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:novel_glide_epub/novel_glide_epub.dart';
 import 'package:test/test.dart';
 
+import 'support/epub_fixture.dart';
+
 /// OPF at the ZIP root, all content under a named subfolder (`sub/xhtml/`).
-/// This is the layout that regressed: the nav item's href
-/// (`sub/xhtml/nav.xhtml`) has two path segments before the file name, and
-/// the old base resolution dropped the first one (`sub`) unconditionally.
+/// The nav item's href (`sub/xhtml/nav.xhtml`) has two path segments before
+/// the file name, and a base that assumed an OPF folder would drop the first
+/// one (`sub`).
 Uint8List _buildRootOpfSubfolderContentEpub() {
   final Archive archive = Archive()
     ..addFile(
@@ -117,8 +109,7 @@ Uint8List _buildRootOpfSubfolderContentEpub() {
 }
 
 /// Classic layout: the OPF and its nav document both live directly under
-/// `OEBPS/`. Must keep resolving correctly — this is the same shape the
-/// bundled `assets/samples/book.epub` fixture uses.
+/// `OEBPS/`, so the nav base is empty.
 Uint8List _buildClassicOebpsEpub() {
   final Archive archive = Archive()
     ..addFile(
@@ -283,13 +274,19 @@ Uint8List _buildNestedOpfDeeperNavEpub() {
   return Uint8List.fromList(encoded);
 }
 
+/// Nav-point sources of [bookRef], in table-of-contents order.
+List<String?> _navSources(EpubBookRef bookRef) =>
+    bookRef.schema.navigation.navMap.points
+        .map((EpubNavigationPoint point) => point.content.source)
+        .toList();
+
 void main() {
   group('NavigationReader EPUB3 nav base-path resolution', () {
     // TC-NAV-1 [Scenario/use-case]: OPF at the ZIP root with content under a
-    // named subfolder — the regressing layout. Both chapters resolve, and
-    // their contentFileName matches the raw manifest href exactly (proving
-    // the 'sub' folder segment survived nav-internal link resolution rather
-    // than being dropped as an assumed OPF-container folder).
+    // named subfolder. Each nav href is prefixed with the nav item's own
+    // directory, so both chapters resolve and their contentFileName matches
+    // the manifest href exactly — the 'sub' folder segment is kept rather
+    // than dropped as an assumed OPF-container folder.
     test(
       'TC-NAV-1 [Scenario]: OPF at root + subfolder content resolves every '
       'chapter with contentFileName matching its manifest href',
@@ -297,6 +294,11 @@ void main() {
         final EpubBookRef bookRef = await const EpubReader().openBook(
           _buildRootOpfSubfolderContentEpub(),
         );
+
+        expect(_navSources(bookRef), <String>[
+          'sub/xhtml/chapter1.xhtml',
+          'sub/xhtml/chapter2.xhtml',
+        ]);
 
         final List<EpubChapterRef> chapters = await bookRef.getChapters();
 
@@ -316,15 +318,20 @@ void main() {
       },
     );
 
-    // TC-NAV-2 [Scenario/use-case]: classic OEBPS/-package.opf +
-    // OEBPS/nav.xhtml layout must keep resolving correctly — no regression
-    // for the layout that accidentally masked this bug before the fix.
+    // TC-NAV-2 [Scenario/use-case]: classic OEBPS/package.opf +
+    // OEBPS/nav.xhtml layout — the nav base is empty, so the hrefs are kept
+    // exactly as the nav document writes them.
     test(
       'TC-NAV-2 [Scenario]: classic OEBPS layout still resolves every '
       'chapter with contentFileName matching its manifest href',
       () async {
         final EpubBookRef bookRef = await const EpubReader().openBook(
           _buildClassicOebpsEpub(),
+        );
+
+        expect(
+          _navSources(bookRef),
+          <String>['chapter1.xhtml', 'chapter2.xhtml'],
         );
 
         final List<EpubChapterRef> chapters = await bookRef.getChapters();
@@ -352,6 +359,11 @@ void main() {
           _buildNestedOpfDeeperNavEpub(),
         );
 
+        expect(_navSources(bookRef), <String>[
+          'xhtml/chapter1.xhtml',
+          'xhtml/chapter2.xhtml',
+        ]);
+
         final List<EpubChapterRef> chapters = await bookRef.getChapters();
 
         expect(chapters, hasLength(2));
@@ -361,6 +373,51 @@ void main() {
           await chapters[0].readHtmlContent(),
           '<html><body><p>Nested layout chapter 1</p></body></html>',
         );
+      },
+    );
+
+    // TC-NAV-4 [Equivalence partitioning]: the nav item's manifest href is a
+    // URL, so it may escape its file name; the archive entry is found under
+    // the decoded name.
+    test(
+      'TC-NAV-4 [Equivalence partitioning]: a percent-encoded nav href finds '
+      'the nav document under its decoded name',
+      () async {
+        final EpubBookRef bookRef = await const EpubReader().openBook(
+          buildEpubArchive(
+            opfPath: 'OEBPS/package.opf',
+            textEntries: <String, String>{
+              'OEBPS/package.opf': '<?xml version="1.0" encoding="UTF-8"?>'
+                  '<package xmlns="http://www.idpf.org/2007/opf" '
+                  'version="3.0" unique-identifier="uid">'
+                  '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+                  '<dc:identifier id="uid">urn:uuid:NGE-SEED-NAV-ESCAPED'
+                  '</dc:identifier>'
+                  '<dc:title>NGE-SEED Escaped Nav</dc:title>'
+                  '</metadata>'
+                  '<manifest>'
+                  '<item id="nav" href="NGE-SEED%20n%C3%A4v.xhtml" '
+                  'media-type="application/xhtml+xml" properties="nav"/>'
+                  '<item id="ch1" href="chapter1.xhtml" '
+                  'media-type="application/xhtml+xml"/>'
+                  '</manifest>'
+                  '<spine><itemref idref="ch1"/></spine>'
+                  '</package>',
+              'OEBPS/NGE-SEED näv.xhtml':
+                  '<?xml version="1.0" encoding="UTF-8"?>'
+                      '<html xmlns="http://www.w3.org/1999/xhtml">'
+                      '<head><title>NGE-SEED Navigation</title></head>'
+                      '<body><nav><ol>'
+                      '<li><a href="chapter1.xhtml">NGE-SEED Chapter One</a>'
+                      '</li>'
+                      '</ol></nav></body>'
+                      '</html>',
+              'OEBPS/chapter1.xhtml': seedXhtml('NGE-SEED-CH1'),
+            },
+          ),
+        );
+
+        expect(_navSources(bookRef), <String>['chapter1.xhtml']);
       },
     );
   });

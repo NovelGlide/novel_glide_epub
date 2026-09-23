@@ -1,15 +1,29 @@
 import 'package:quiver/core.dart';
 
 class EpubManifestItem {
-  String? id;
-  String? href;
-  String? mediaType;
-  String? mediaOverlay;
-  String? requiredNamespace;
-  String? requiredModules;
-  String? fallback;
-  String? fallbackStyle;
-  String? properties;
+  const EpubManifestItem({
+    required this.id,
+    required this.href,
+    required this.mediaType,
+    this.mediaOverlay,
+    this.requiredNamespace,
+    this.requiredModules,
+    this.fallback,
+    this.fallbackStyle,
+    this.properties,
+  });
+
+  final String id;
+
+  /// As the manifest wrote it, percent-escapes included.
+  final String href;
+  final String mediaType;
+  final String? mediaOverlay;
+  final String? requiredNamespace;
+  final String? requiredModules;
+  final String? fallback;
+  final String? fallbackStyle;
+  final String? properties;
 
   @override
   int get hashCode => hashObjects(<Object?>[

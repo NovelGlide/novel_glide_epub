@@ -1,9 +1,17 @@
 import 'package:quiver/core.dart';
 
 class EpubGuideReference {
-  String? type;
-  String? title;
-  String? href;
+  const EpubGuideReference({
+    required this.type,
+    required this.href,
+    this.title,
+  });
+
+  final String type;
+  final String href;
+
+  /// Null when the reference has no `title`, which OPF 2 makes optional.
+  final String? title;
 
   @override
   int get hashCode => hash3(type.hashCode, title.hashCode, href.hashCode);

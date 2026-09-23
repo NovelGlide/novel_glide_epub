@@ -4,17 +4,15 @@ import 'package:quiver/core.dart';
 import 'epub_guide_reference.dart';
 
 class EpubGuide {
-  EpubGuide() {
-    items = <EpubGuideReference>[];
-  }
-  List<EpubGuideReference>? items;
+  const EpubGuide({required this.items});
+
+  /// Empty when the `<guide>` has no `<reference>`, although OPF 2 requires
+  /// at least one: a guide pointing nowhere is no reason to refuse the book.
+  final List<EpubGuideReference> items;
 
   @override
-  int get hashCode {
-    final List<int> objects = <int>[];
-    objects.addAll(items!.map((EpubGuideReference item) => item.hashCode));
-    return hashObjects(objects);
-  }
+  int get hashCode =>
+      hashObjects(items.map((EpubGuideReference item) => item.hashCode));
 
   @override
   bool operator ==(Object other) {

@@ -1,53 +1,87 @@
+import 'package:archive/archive.dart';
+
 import '../entities/epub_content_type.dart';
-import '../ref_entities/epub_book_ref.dart';
 import '../ref_entities/epub_byte_content_file_ref.dart';
+import '../ref_entities/epub_content_file_ref.dart';
 import '../ref_entities/epub_content_ref.dart';
 import '../ref_entities/epub_text_content_file_ref.dart';
+import '../schema/opf/epub_manifest.dart';
 import '../schema/opf/epub_manifest_item.dart';
 import '../utils/zip_path_resolver.dart';
 
 class ContentReader {
   const ContentReader();
 
-  EpubContentRef parseContentMap(EpubBookRef bookRef) {
-    final EpubContentRef result = EpubContentRef();
+  /// Files every manifest item under its decoded name, in the bucket its
+  /// media type belongs to and in `allFiles`.
+  ///
+  /// The key is the decoded name so a navigation link finds its file however
+  /// either side spells it: a manifest may escape a name (`%E7%AC%AC.xhtml`)
+  /// that the navigation writes raw (`第.xhtml`), or the other way round.
+  /// Two items whose hrefs decode to one name are one file in the archive,
+  /// so the later item replaces the earlier, in `allFiles` and in the named
+  /// buckets alike.
+  EpubContentRef parseContentMap(
+      Archive epubArchive, String contentDirectoryPath, EpubManifest manifest) {
+    final Map<String, EpubContentFileRef> allFiles =
+        <String, EpubContentFileRef>{
+      for (final EpubContentFileRef contentFile in manifest.items.map(
+          (EpubManifestItem manifestItem) =>
+              _readFileRef(epubArchive, contentDirectoryPath, manifestItem)))
+        contentFile.fileName: contentFile,
+    };
 
-    for (EpubManifestItem manifestItem
-        in bookRef.schema!.package!.manifest!.items!) {
-      _addManifestItem(result, bookRef, manifestItem);
+    final Map<String, EpubTextContentFileRef> html =
+        <String, EpubTextContentFileRef>{};
+    final Map<String, EpubTextContentFileRef> css =
+        <String, EpubTextContentFileRef>{};
+    final Map<String, EpubByteContentFileRef> images =
+        <String, EpubByteContentFileRef>{};
+    final Map<String, EpubByteContentFileRef> fonts =
+        <String, EpubByteContentFileRef>{};
+    for (final EpubContentFileRef contentFile in allFiles.values) {
+      switch (contentFile) {
+        case EpubTextContentFileRef():
+          _textBucketOf(contentFile.contentType,
+              html: html, css: css)?[contentFile.fileName] = contentFile;
+        case EpubByteContentFileRef():
+          _byteBucketOf(contentFile.contentType,
+              images: images,
+              fonts: fonts)?[contentFile.fileName] = contentFile;
+      }
     }
-    return result;
+
+    return EpubContentRef(
+      html: Map<String, EpubTextContentFileRef>.unmodifiable(html),
+      css: Map<String, EpubTextContentFileRef>.unmodifiable(css),
+      images: Map<String, EpubByteContentFileRef>.unmodifiable(images),
+      fonts: Map<String, EpubByteContentFileRef>.unmodifiable(fonts),
+      allFiles: Map<String, EpubContentFileRef>.unmodifiable(allFiles),
+    );
   }
 
-  /// Files the manifest with the bucket its media type belongs to, plus
-  /// `allFiles`.
-  ///
-  /// The bucket keys stay as the manifest wrote them while `fileName` is
-  /// percent-decoded. A navigation that links a file by the manifest's own
-  /// spelling, or escapes what the manifest writes raw, finds it; one that
-  /// writes raw what the manifest escapes does not.
-  void _addManifestItem(EpubContentRef result, EpubBookRef bookRef,
-      EpubManifestItem manifestItem) {
-    final String fileName = manifestItem.href!;
-    final String contentMimeType = manifestItem.mediaType!;
+  /// The reference for one manifest item, text or bytes by its media type.
+  EpubContentFileRef _readFileRef(Archive epubArchive,
+      String contentDirectoryPath, EpubManifestItem manifestItem) {
+    final String fileName =
+        const ZipPathResolver().decodeHref(manifestItem.href);
     final EpubContentType contentType =
-        getContentTypeByContentMimeType(contentMimeType);
-
-    if (_isTextContentType(contentType)) {
-      final EpubTextContentFileRef contentFile = EpubTextContentFileRef(bookRef)
-        ..fileName = const ZipPathResolver().decodeHref(fileName)
-        ..contentMimeType = contentMimeType
-        ..contentType = contentType;
-      _textBucketOf(result, contentType)?[fileName] = contentFile;
-      result.allFiles![fileName] = contentFile;
-    } else {
-      final EpubByteContentFileRef contentFile = EpubByteContentFileRef(bookRef)
-        ..fileName = const ZipPathResolver().decodeHref(fileName)
-        ..contentMimeType = contentMimeType
-        ..contentType = contentType;
-      _byteBucketOf(result, contentType)?[fileName] = contentFile;
-      result.allFiles![fileName] = contentFile;
-    }
+        getContentTypeByContentMimeType(manifestItem.mediaType);
+    return _isTextContentType(contentType)
+        ? EpubTextContentFileRef(
+            epubArchive: epubArchive,
+            contentDirectoryPath: contentDirectoryPath,
+            fileName: fileName,
+            contentType: contentType,
+            contentMimeType: manifestItem.mediaType,
+          )
+        : EpubByteContentFileRef(
+            epubArchive: epubArchive,
+            contentDirectoryPath: contentDirectoryPath,
+            fileName: fileName,
+            contentType: contentType,
+            contentMimeType: manifestItem.mediaType,
+          );
   }
 
   /// Whether a content type is read as text; everything else is read as bytes.
@@ -69,12 +103,14 @@ class ContentReader {
   /// The named bucket a text file also belongs in, or null when the type has
   /// no bucket of its own and is reachable only through `allFiles`.
   Map<String, EpubTextContentFileRef>? _textBucketOf(
-      EpubContentRef result, EpubContentType contentType) {
+      EpubContentType contentType,
+      {required Map<String, EpubTextContentFileRef> html,
+      required Map<String, EpubTextContentFileRef> css}) {
     switch (contentType) {
       case EpubContentType.xhtml11:
-        return result.html;
+        return html;
       case EpubContentType.css:
-        return result.css;
+        return css;
       default:
         return null;
     }
@@ -83,17 +119,19 @@ class ContentReader {
   /// The named bucket a byte file also belongs in, or null when the type has
   /// no bucket of its own and is reachable only through `allFiles`.
   Map<String, EpubByteContentFileRef>? _byteBucketOf(
-      EpubContentRef result, EpubContentType contentType) {
+      EpubContentType contentType,
+      {required Map<String, EpubByteContentFileRef> images,
+      required Map<String, EpubByteContentFileRef> fonts}) {
     switch (contentType) {
       case EpubContentType.imageGif:
       case EpubContentType.imageJpeg:
       case EpubContentType.imagePng:
       case EpubContentType.imageSvg:
       case EpubContentType.imageBmp:
-        return result.images;
+        return images;
       case EpubContentType.fontTruetype:
       case EpubContentType.fontOpentype:
-        return result.fonts;
+        return fonts;
       default:
         return null;
     }

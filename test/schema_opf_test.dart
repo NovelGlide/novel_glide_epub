@@ -1,16 +1,19 @@
 // The OPF schema value types — `EpubPackage` and everything it holds:
 // metadata and its six sub-types, manifest, spine, guide.
 //
-// These are plain data holders, so they are exercised by direct construction;
-// `package_reader_test.dart` covers how the reader fills them. Two traits run
-// through the whole layer and are checked once each rather than per class:
+// These are immutable data holders, so they are exercised by direct
+// construction; `package_reader_test.dart` covers how the reader fills them.
+// Two traits run through the whole layer and are checked once each rather
+// than per class:
 //
-//   * every `==` here answers false for an unrelated operand (TC-OPF-1). They
-//     used to open with `other as X?` — a CAST, not an `is` check — and threw
-//     a `TypeError`; that is fixed, and TC-OPF-1 is now its regression guard.
-//   * several `hashCode` getters dereference their list fields with `!`, so a
-//     bare instance cannot be hashed (TC-OPF-2). Still pinned AS IT BEHAVES
-//     TODAY, and that test says what must change when it is fixed.
+//   * every `==` here answers false for an unrelated or a null operand
+//     (TC-OPF-1), as the Dart equality contract requires.
+//   * a field the OPF makes optional is nullable, and a null there is a value
+//     of its own: it differs from any string on both `==` and `hashCode`
+//     (TC-OPF-26).
+//
+// Every field of every class gets a one-field-at-a-time partition row that
+// checks `==` AND `hashCode`, so dropping any clause of either is caught.
 import 'package:novel_glide_epub/novel_glide_epub.dart';
 import 'package:novel_glide_epub/src/schema/opf/epub_metadata_contributor.dart';
 import 'package:novel_glide_epub/src/schema/opf/epub_metadata_date.dart';
@@ -18,85 +21,128 @@ import 'package:novel_glide_epub/src/schema/opf/epub_metadata_meta.dart';
 import 'package:test/test.dart';
 
 EpubMetadataCreator seedCreator({
-  String? creator = 'NGE-SEED Author',
+  String creator = 'NGE-SEED Author',
   String? fileAs = 'Author, NGE-SEED',
   String? role = 'aut',
 }) =>
-    EpubMetadataCreator()
-      ..creator = creator
-      ..fileAs = fileAs
-      ..role = role;
+    EpubMetadataCreator(creator: creator, fileAs: fileAs, role: role);
 
 EpubMetadataContributor seedContributor({
-  String? contributor = 'NGE-SEED Contributor',
+  String contributor = 'NGE-SEED Contributor',
   String? fileAs = 'Contributor, NGE-SEED',
   String? role = 'edt',
 }) =>
-    EpubMetadataContributor()
-      ..contributor = contributor
-      ..fileAs = fileAs
-      ..role = role;
+    EpubMetadataContributor(
+      contributor: contributor,
+      fileAs: fileAs,
+      role: role,
+    );
 
 EpubMetadataDate seedDate({
-  String? date = '2026-09-21',
+  String date = '2026-09-21',
   String? event = 'publication',
 }) =>
-    EpubMetadataDate()
-      ..date = date
-      ..event = event;
+    EpubMetadataDate(date: date, event: event);
 
 EpubMetadataIdentifier seedIdentifier({
   String? id = 'uid',
   String? scheme = 'URN',
-  String? identifier = 'urn:uuid:NGE-SEED-OPF',
+  String identifier = 'urn:uuid:NGE-SEED-OPF',
 }) =>
-    EpubMetadataIdentifier()
-      ..id = id
-      ..scheme = scheme
-      ..identifier = identifier;
+    EpubMetadataIdentifier(identifier: identifier, id: id, scheme: scheme);
 
 EpubMetadataMeta seedMeta({
   String? name = 'cover',
-  String? content = 'cover-image',
+  String content = 'cover-image',
   String? id = 'meta-1',
   String? refines = '#uid',
   String? property = 'dcterms:modified',
   String? scheme = 'marc:relators',
-  Map<String, String>? attributes,
+  Map<String, String> attributes = const <String, String>{},
 }) =>
-    EpubMetadataMeta()
-      ..name = name
-      ..content = content
-      ..id = id
-      ..refines = refines
-      ..property = property
-      ..scheme = scheme
-      ..attributes = attributes;
+    EpubMetadataMeta(
+      content: content,
+      attributes: attributes,
+      name: name,
+      id: id,
+      refines: refines,
+      property: property,
+      scheme: scheme,
+    );
 
-/// Every list field assigned, which is what `EpubMetadata.hashCode` requires
-/// (TC-OPF-2).
-EpubMetadata seedMetadata() => EpubMetadata()
-  ..titles = <String>['NGE-SEED OPF Book']
-  ..creators = <EpubMetadataCreator>[seedCreator()]
-  ..subjects = <String>['NGE-SEED Subject']
-  ..description = 'NGE-SEED description'
-  ..publishers = <String>['NGE-SEED Press']
-  ..contributors = <EpubMetadataContributor>[seedContributor()]
-  ..dates = <EpubMetadataDate>[seedDate()]
-  ..types = <String>['NGE-SEED Type']
-  ..formats = <String>['application/epub+zip']
-  ..identifiers = <EpubMetadataIdentifier>[seedIdentifier()]
-  ..sources = <String>['NGE-SEED Source']
-  ..languages = <String>['en']
-  ..relations = <String>['NGE-SEED Relation']
-  ..coverages = <String>['NGE-SEED Coverage']
-  ..rights = <String>['NGE-SEED Rights']
-  ..metaItems = <EpubMetadataMeta>[seedMeta()];
+/// Every list field populated with one entry, so each can be made to differ
+/// on its own by passing a replacement. The defaults are const literals, not
+/// `?? fallback`s, so this helper carries no branch of its own.
+EpubMetadata seedMetadata({
+  List<String> titles = const <String>['NGE-SEED OPF Book'],
+  List<EpubMetadataCreator> creators = const <EpubMetadataCreator>[
+    EpubMetadataCreator(
+      creator: 'NGE-SEED Author',
+      fileAs: 'Author, NGE-SEED',
+      role: 'aut',
+    ),
+  ],
+  List<String> subjects = const <String>['NGE-SEED Subject'],
+  List<String> descriptions = const <String>['NGE-SEED description'],
+  List<String> publishers = const <String>['NGE-SEED Press'],
+  List<EpubMetadataContributor> contributors = const <EpubMetadataContributor>[
+    EpubMetadataContributor(
+      contributor: 'NGE-SEED Contributor',
+      fileAs: 'Contributor, NGE-SEED',
+      role: 'edt',
+    ),
+  ],
+  List<EpubMetadataDate> dates = const <EpubMetadataDate>[
+    EpubMetadataDate(date: '2026-09-21', event: 'publication'),
+  ],
+  List<String> types = const <String>['NGE-SEED Type'],
+  List<String> formats = const <String>['application/epub+zip'],
+  List<EpubMetadataIdentifier> identifiers = const <EpubMetadataIdentifier>[
+    EpubMetadataIdentifier(
+      identifier: 'urn:uuid:NGE-SEED-OPF',
+      id: 'uid',
+      scheme: 'URN',
+    ),
+  ],
+  List<String> sources = const <String>['NGE-SEED Source'],
+  List<String> languages = const <String>['en'],
+  List<String> relations = const <String>['NGE-SEED Relation'],
+  List<String> coverages = const <String>['NGE-SEED Coverage'],
+  List<String> rights = const <String>['NGE-SEED Rights'],
+  List<EpubMetadataMeta> metaItems = const <EpubMetadataMeta>[
+    EpubMetadataMeta(
+      content: 'cover-image',
+      name: 'cover',
+      id: 'meta-1',
+      refines: '#uid',
+      property: 'dcterms:modified',
+      scheme: 'marc:relators',
+    ),
+  ],
+}) =>
+    EpubMetadata(
+      titles: titles,
+      creators: creators,
+      subjects: subjects,
+      descriptions: descriptions,
+      publishers: publishers,
+      contributors: contributors,
+      dates: dates,
+      types: types,
+      formats: formats,
+      identifiers: identifiers,
+      sources: sources,
+      languages: languages,
+      relations: relations,
+      coverages: coverages,
+      rights: rights,
+      metaItems: metaItems,
+    );
 
 EpubManifestItem seedManifestItem({
-  String? id = 'ch1',
-  String? href = 'chapter1.xhtml',
-  String? mediaType = 'application/xhtml+xml',
+  String id = 'ch1',
+  String href = 'chapter1.xhtml',
+  String mediaType = 'application/xhtml+xml',
   String? mediaOverlay = 'overlay-1',
   String? requiredNamespace = 'http://example.org/NGE-SEED',
   String? requiredModules = 'NGE-SEED-module',
@@ -104,57 +150,68 @@ EpubManifestItem seedManifestItem({
   String? fallbackStyle = 'fallback-style-1',
   String? properties = 'nav',
 }) =>
-    EpubManifestItem()
-      ..id = id
-      ..href = href
-      ..mediaType = mediaType
-      ..mediaOverlay = mediaOverlay
-      ..requiredNamespace = requiredNamespace
-      ..requiredModules = requiredModules
-      ..fallback = fallback
-      ..fallbackStyle = fallbackStyle
-      ..properties = properties;
+    EpubManifestItem(
+      id: id,
+      href: href,
+      mediaType: mediaType,
+      mediaOverlay: mediaOverlay,
+      requiredNamespace: requiredNamespace,
+      requiredModules: requiredModules,
+      fallback: fallback,
+      fallbackStyle: fallbackStyle,
+      properties: properties,
+    );
 
 EpubSpineItemRef seedSpineItemRef({
-  String? idRef = 'ch1',
-  bool? isLinear = true,
+  String idRef = 'ch1',
+  bool isLinear = true,
 }) =>
-    EpubSpineItemRef()
-      ..idRef = idRef
-      ..isLinear = isLinear;
+    EpubSpineItemRef(idRef: idRef, isLinear: isLinear);
 
 EpubSpine seedSpine({
   String? tableOfContents = 'ncx',
-  bool? ltr = true,
+  bool ltr = true,
   List<EpubSpineItemRef>? items,
 }) =>
-    EpubSpine()
-      ..tableOfContents = tableOfContents
-      ..ltr = ltr
-      ..items = items ?? <EpubSpineItemRef>[seedSpineItemRef()];
+    EpubSpine(
+      items: items ?? <EpubSpineItemRef>[seedSpineItemRef()],
+      ltr: ltr,
+      tableOfContents: tableOfContents,
+    );
 
 EpubGuideReference seedGuideReference({
-  String? type = 'cover',
+  String type = 'cover',
   String? title = 'NGE-SEED Cover',
-  String? href = 'cover.xhtml',
+  String href = 'cover.xhtml',
 }) =>
-    EpubGuideReference()
-      ..type = type
-      ..title = title
-      ..href = href;
+    EpubGuideReference(type: type, href: href, title: title);
 
-EpubGuide seedGuide({List<EpubGuideReference>? items}) =>
-    EpubGuide()..items = items ?? <EpubGuideReference>[seedGuideReference()];
+EpubGuide seedGuide({List<EpubGuideReference>? items}) => EpubGuide(
+      items: items ?? <EpubGuideReference>[seedGuideReference()],
+    );
 
-EpubManifest seedManifest({List<EpubManifestItem>? items}) =>
-    EpubManifest()..items = items ?? <EpubManifestItem>[seedManifestItem()];
+EpubManifest seedManifest({List<EpubManifestItem>? items}) => EpubManifest(
+      items: items ?? <EpubManifestItem>[seedManifestItem()],
+    );
 
-EpubPackage seedPackage() => EpubPackage()
-  ..version = EpubVersion.epub2
-  ..metadata = seedMetadata()
-  ..manifest = seedManifest()
-  ..spine = seedSpine()
-  ..guide = seedGuide();
+/// A package with a guide. `guide` defaults to [seedGuide] only when the
+/// caller passes nothing; [withoutGuide] builds the guide-less variant, since
+/// an explicit null cannot be told apart from "not passed" here.
+EpubPackage seedPackage({
+  EpubVersion version = EpubVersion.epub2,
+  EpubMetadata? metadata,
+  EpubManifest? manifest,
+  EpubSpine? spine,
+  EpubGuide? guide,
+  bool withoutGuide = false,
+}) =>
+    EpubPackage(
+      version: version,
+      metadata: metadata ?? seedMetadata(),
+      manifest: manifest ?? seedManifest(),
+      spine: spine ?? seedSpine(),
+      guide: withoutGuide ? null : guide ?? seedGuide(),
+    );
 
 /// An operand of an unrelated type, held as `Object` so each comparison below
 /// is a real runtime check. Typing it `Object` rather than inlining a literal
@@ -167,14 +224,18 @@ const Object unrelatedOperand = 'NGE-SEED-not-a-schema-object';
 /// false here rather than throw.
 const Object? nullOperand = null;
 
+/// Asserts that [a] and [b] differ on both `==` and `hashCode`: a partition
+/// row that checked only `==` would let a field silently drop out of the hash.
+void expectDistinct(Object a, Object b) {
+  expect(a, isNot(equals(b)));
+  expect(a.hashCode, isNot(equals(b.hashCode)));
+}
+
 void main() {
   group('The OPF layer as a whole', () {
-    // TC-OPF-1 [Error guessing]: the regression guard for a defect shared by
-    // every class in this directory. `operator ==` used to open with
-    // `other as X?`, so comparing against an unrelated type threw a
-    // `TypeError` where the Dart contract requires `false` — only a null
-    // operand was handled, because `as X?` admits null. Both operands now
-    // answer false.
+    // TC-OPF-1 [Error guessing]: every `==` in this directory opens with an
+    // `is` check, so an unrelated operand and a null one both answer false
+    // rather than throw a `TypeError` — the Dart equality contract.
     for (final MapEntry<String, Object> row in <String, Object>{
       'EpubPackage': seedPackage(),
       'EpubMetadata': seedMetadata(),
@@ -198,40 +259,43 @@ void main() {
       });
     }
 
-    // TC-OPF-2 [Error guessing]: KNOWN DEFECT. `EpubMetadata.hashCode` and
-    // `EpubSpine.hashCode` dereference their list fields with `!`, and neither
-    // class has a constructor that assigns them, so a bare instance cannot be
-    // hashed. `PackageReader` always assigns them, which is why the read path
-    // never hits this. Pinned as it behaves today.
+    // TC-OPF-3 [Boundary value]: an instance built from its required
+    // arguments alone is what the reader produces for the sparsest legal
+    // element. Its optional lists default to empty and its optional strings to
+    // null, and it still hashes and compares.
     test(
-        'TC-OPF-2 [Error guessing]: KNOWN DEFECT — a bare EpubMetadata or '
-        'EpubSpine cannot be hashed', () {
-      expect(() => EpubMetadata().hashCode, throwsA(isA<TypeError>()));
-      expect(() => EpubSpine().hashCode, throwsA(isA<TypeError>()));
-    });
+        'TC-OPF-3 [Boundary]: required-only instances default their optional '
+        'fields and still hash and compare', () {
+      const EpubMetadata metadata = EpubMetadata(
+        titles: <String>[],
+        identifiers: <EpubMetadataIdentifier>[],
+        languages: <String>[],
+      );
+      expect(metadata.creators, isEmpty);
+      expect(metadata.metaItems, isEmpty);
+      expect(metadata.descriptions, isEmpty);
+      expect(metadata.hashCode, isA<int>());
 
-    // TC-OPF-3 [Boundary value]: the classes that DO initialise their list in
-    // a constructor hash fine when bare — the contrast that makes TC-OPF-2 a
-    // missing constructor rather than an inherent trait of the layer.
-    test('TC-OPF-3 [Boundary]: constructor-initialised classes hash when bare',
-        () {
-      expect(EpubGuide().items, isEmpty);
-      expect(EpubGuide().hashCode, isA<int>());
-      expect(EpubManifest().items, isEmpty);
-      expect(EpubManifest().hashCode, isA<int>());
-      expect(EpubPackage().hashCode, isA<int>());
-      expect(EpubManifestItem().hashCode, isA<int>());
-      expect(EpubMetadataMeta().hashCode, isA<int>());
-      expect(EpubSpineItemRef().hashCode, isA<int>());
-      expect(EpubGuideReference().hashCode, isA<int>());
-      expect(EpubMetadataCreator().hashCode, isA<int>());
-      expect(EpubMetadataContributor().hashCode, isA<int>());
-      expect(EpubMetadataDate().hashCode, isA<int>());
-      expect(EpubMetadataIdentifier().hashCode, isA<int>());
+      const EpubMetadataMeta meta = EpubMetadataMeta(content: '');
+      expect(meta.attributes, isEmpty);
+      expect(meta.name, isNull);
+      expect(meta.property, isNull);
+
+      const EpubPackage package = EpubPackage(
+        version: EpubVersion.epub3,
+        metadata: metadata,
+        manifest: EpubManifest(items: <EpubManifestItem>[]),
+        spine: EpubSpine(items: <EpubSpineItemRef>[], ltr: true),
+      );
+      expect(package.guide, isNull);
+      expect(package.spine.tableOfContents, isNull);
+      expect(package.hashCode, isA<int>());
+      expect(package, isNot(equals(seedPackage())));
     });
 
     // TC-OPF-4 [Scenario/use-case]: every class agrees with its own twin, on
-    // both `==` and `hashCode`.
+    // both `==` and `hashCode`. The twins are built separately, so neither
+    // comparison can pass on identity alone.
     for (final MapEntry<String, List<Object>> row in <String, List<Object>>{
       'EpubPackage': <Object>[seedPackage(), seedPackage()],
       'EpubMetadata': <Object>[seedMetadata(), seedMetadata()],
@@ -252,8 +316,128 @@ void main() {
     }.entries) {
       test('TC-OPF-4 [Scenario]: two identical ${row.key} values are equal',
           () {
+        expect(identical(row.value[0], row.value[1]), isFalse);
         expect(row.value[0], equals(row.value[1]));
         expect(row.value[0].hashCode, equals(row.value[1].hashCode));
+      });
+    }
+
+    // TC-OPF-26 [Boundary value]: each field the OPF makes optional is
+    // nullable, and a null there is a distinct value — it equals another
+    // null and differs from the populated field on `==` and `hashCode`.
+    for (final MapEntry<String, List<Object>> row in <String, List<Object>>{
+      'EpubGuideReference.title': <Object>[
+        seedGuideReference(title: null),
+        seedGuideReference(title: null),
+        seedGuideReference(),
+      ],
+      'EpubSpine.tableOfContents': <Object>[
+        seedSpine(tableOfContents: null),
+        seedSpine(tableOfContents: null),
+        seedSpine(),
+      ],
+      'EpubPackage.guide': <Object>[
+        seedPackage(withoutGuide: true),
+        seedPackage(withoutGuide: true),
+        seedPackage(),
+      ],
+      'EpubMetadataMeta.name': <Object>[
+        seedMeta(name: null),
+        seedMeta(name: null),
+        seedMeta(),
+      ],
+      'EpubMetadataMeta.id': <Object>[
+        seedMeta(id: null),
+        seedMeta(id: null),
+        seedMeta(),
+      ],
+      'EpubMetadataMeta.refines': <Object>[
+        seedMeta(refines: null),
+        seedMeta(refines: null),
+        seedMeta(),
+      ],
+      'EpubMetadataMeta.property': <Object>[
+        seedMeta(property: null),
+        seedMeta(property: null),
+        seedMeta(),
+      ],
+      'EpubMetadataMeta.scheme': <Object>[
+        seedMeta(scheme: null),
+        seedMeta(scheme: null),
+        seedMeta(),
+      ],
+      'EpubMetadataCreator.fileAs': <Object>[
+        seedCreator(fileAs: null),
+        seedCreator(fileAs: null),
+        seedCreator(),
+      ],
+      'EpubMetadataCreator.role': <Object>[
+        seedCreator(role: null),
+        seedCreator(role: null),
+        seedCreator(),
+      ],
+      'EpubMetadataContributor.fileAs': <Object>[
+        seedContributor(fileAs: null),
+        seedContributor(fileAs: null),
+        seedContributor(),
+      ],
+      'EpubMetadataContributor.role': <Object>[
+        seedContributor(role: null),
+        seedContributor(role: null),
+        seedContributor(),
+      ],
+      'EpubMetadataDate.event': <Object>[
+        seedDate(event: null),
+        seedDate(event: null),
+        seedDate(),
+      ],
+      'EpubMetadataIdentifier.id': <Object>[
+        seedIdentifier(id: null),
+        seedIdentifier(id: null),
+        seedIdentifier(),
+      ],
+      'EpubMetadataIdentifier.scheme': <Object>[
+        seedIdentifier(scheme: null),
+        seedIdentifier(scheme: null),
+        seedIdentifier(),
+      ],
+      'EpubManifestItem.mediaOverlay': <Object>[
+        seedManifestItem(mediaOverlay: null),
+        seedManifestItem(mediaOverlay: null),
+        seedManifestItem(),
+      ],
+      'EpubManifestItem.requiredNamespace': <Object>[
+        seedManifestItem(requiredNamespace: null),
+        seedManifestItem(requiredNamespace: null),
+        seedManifestItem(),
+      ],
+      'EpubManifestItem.requiredModules': <Object>[
+        seedManifestItem(requiredModules: null),
+        seedManifestItem(requiredModules: null),
+        seedManifestItem(),
+      ],
+      'EpubManifestItem.fallback': <Object>[
+        seedManifestItem(fallback: null),
+        seedManifestItem(fallback: null),
+        seedManifestItem(),
+      ],
+      'EpubManifestItem.fallbackStyle': <Object>[
+        seedManifestItem(fallbackStyle: null),
+        seedManifestItem(fallbackStyle: null),
+        seedManifestItem(),
+      ],
+      'EpubManifestItem.properties': <Object>[
+        seedManifestItem(properties: null),
+        seedManifestItem(properties: null),
+        seedManifestItem(),
+      ],
+    }.entries) {
+      test(
+          'TC-OPF-26 [Boundary]: a null ${row.key} equals another null and '
+          'differs from a value', () {
+        expect(row.value[0], equals(row.value[1]));
+        expect(row.value[0].hashCode, equals(row.value[1].hashCode));
+        expectDistinct(row.value[0], row.value[2]);
       });
     }
   });
@@ -270,8 +454,7 @@ void main() {
       test(
           'TC-OPF-5 [Equivalence partitioning]: a creator with a differing '
           '${row.key} is unequal', () {
-        expect(seedCreator(), isNot(equals(row.value)));
-        expect(seedCreator().hashCode, isNot(equals(row.value.hashCode)));
+        expectDistinct(seedCreator(), row.value);
       });
     }
 
@@ -284,8 +467,7 @@ void main() {
       test(
           'TC-OPF-5 [Equivalence partitioning]: a contributor with a '
           'differing ${row.key} is unequal', () {
-        expect(seedContributor(), isNot(equals(row.value)));
-        expect(seedContributor().hashCode, isNot(equals(row.value.hashCode)));
+        expectDistinct(seedContributor(), row.value);
       });
     }
   });
@@ -300,7 +482,7 @@ void main() {
       test(
           'TC-OPF-6 [Equivalence partitioning]: a date with a differing '
           '${row.key} is unequal', () {
-        expect(seedDate(), isNot(equals(row.value)));
+        expectDistinct(seedDate(), row.value);
       });
     }
 
@@ -314,15 +496,21 @@ void main() {
       test(
           'TC-OPF-7 [Equivalence partitioning]: an identifier with a '
           'differing ${row.key} is unequal', () {
-        expect(seedIdentifier(), isNot(equals(row.value)));
+        expectDistinct(seedIdentifier(), row.value);
       });
     }
 
-    // TC-OPF-8 [Boundary value]: an all-null date still compares, and its
-    // `hash2` is stable.
-    test('TC-OPF-8 [Boundary]: all-null dates and identifiers are equal', () {
-      expect(EpubMetadataDate(), equals(EpubMetadataDate()));
-      expect(EpubMetadataIdentifier(), equals(EpubMetadataIdentifier()));
+    // TC-OPF-8 [Boundary value]: an empty element reads as empty text with no
+    // attributes; two such dates, and two such identifiers, are equal.
+    test('TC-OPF-8 [Boundary]: empty dates and identifiers are equal', () {
+      expect(
+        seedDate(date: '', event: null),
+        equals(seedDate(date: '', event: null)),
+      );
+      expect(
+        seedIdentifier(identifier: '', id: null, scheme: null),
+        equals(seedIdentifier(identifier: '', id: null, scheme: null)),
+      );
     });
   });
 
@@ -340,108 +528,105 @@ void main() {
       test(
           'TC-OPF-9 [Equivalence partitioning]: a meta with a differing '
           '${row.key} is unequal', () {
-        expect(seedMeta(), isNot(equals(row.value)));
-        expect(seedMeta().hashCode, isNot(equals(row.value.hashCode)));
+        expectDistinct(seedMeta(), row.value);
       });
     }
 
-    // TC-OPF-10 [Error guessing]: `attributes` is declared on the class but
-    // appears in neither `==` nor `hashCode`, so two metas that differ only in
-    // their attribute bag compare EQUAL. That is deliberate enough to rely on
-    // — the EPUB3 `<meta>` reader stores the raw attribute bag there for
-    // callers, not for identity — but it is invisible from the class body, so
-    // it is pinned here.
+    // TC-OPF-10 [Error guessing]: `attributes` appears in neither `==` nor
+    // `hashCode`, so two metas that differ only in their attribute bag compare
+    // EQUAL. The bag is a raw view of the element for callers — it duplicates
+    // the named fields and carries whatever else the element had — not part of
+    // the meta's identity. Nothing in the class body says so, so it is pinned.
     test(
         'TC-OPF-10 [Error guessing]: attributes takes no part in equality or '
         'hashCode', () {
       final EpubMetadataMeta withAttributes = seedMeta(
         attributes: <String, String>{'data-nge-seed': 'yes'},
       );
+      final EpubMetadataMeta otherAttributes = seedMeta(
+        attributes: <String, String>{'data-nge-seed': 'no', 'lang': 'en'},
+      );
       final EpubMetadataMeta withoutAttributes = seedMeta();
 
-      expect(withAttributes.attributes, isNotNull);
-      expect(withoutAttributes.attributes, isNull);
+      expect(
+          withAttributes.attributes, <String, String>{'data-nge-seed': 'yes'});
+      expect(withoutAttributes.attributes, isEmpty);
       expect(withAttributes, equals(withoutAttributes));
       expect(withAttributes.hashCode, equals(withoutAttributes.hashCode));
+      expect(withAttributes, equals(otherAttributes));
+      expect(withAttributes.hashCode, equals(otherAttributes.hashCode));
     });
   });
 
   group('EpubMetadata', () {
-    // TC-OPF-11 [Equivalence partitioning]: fifteen list fields plus
-    // `description`, each decisive on its own. `description` is checked before
-    // the lists, so it gets its own row at the head.
-    test(
-        'TC-OPF-11 [Equivalence partitioning]: a differing description is '
-        'unequal', () {
-      final EpubMetadata other = seedMetadata()
-        ..description = 'NGE-SEED other description';
-
-      expect(seedMetadata(), isNot(equals(other)));
-    });
-
-    for (final MapEntry<String, EpubMetadata Function(EpubMetadata)> row
-        in <String, EpubMetadata Function(EpubMetadata)>{
-      'titles': (EpubMetadata m) => m..titles = <String>['NGE-SEED Other'],
-      'creators': (EpubMetadata m) =>
-          m..creators = <EpubMetadataCreator>[seedCreator(creator: 'Other')],
-      'subjects': (EpubMetadata m) => m..subjects = <String>['NGE-SEED Other'],
-      'publishers': (EpubMetadata m) =>
-          m..publishers = <String>['NGE-SEED Other'],
-      'contributors': (EpubMetadata m) => m
-        ..contributors = <EpubMetadataContributor>[
+    // TC-OPF-11 [Equivalence partitioning]: the fifteen Dublin Core lists and
+    // `metaItems`, each decisive on its own. `==` compares them in several
+    // groups, so every one gets a row of its own.
+    for (final MapEntry<String, EpubMetadata> row in <String, EpubMetadata>{
+      'descriptions':
+          seedMetadata(descriptions: <String>['NGE-SEED other description']),
+      'titles': seedMetadata(titles: <String>['NGE-SEED Other']),
+      'creators': seedMetadata(
+        creators: <EpubMetadataCreator>[seedCreator(creator: 'Other')],
+      ),
+      'subjects': seedMetadata(subjects: <String>['NGE-SEED Other']),
+      'publishers': seedMetadata(publishers: <String>['NGE-SEED Other']),
+      'contributors': seedMetadata(
+        contributors: <EpubMetadataContributor>[
           seedContributor(contributor: 'Other'),
         ],
-      'dates': (EpubMetadata m) =>
-          m..dates = <EpubMetadataDate>[seedDate(date: '1999-01-01')],
-      'types': (EpubMetadata m) => m..types = <String>['NGE-SEED Other'],
-      'formats': (EpubMetadata m) => m..formats = <String>['NGE-SEED Other'],
-      'identifiers': (EpubMetadata m) => m
-        ..identifiers = <EpubMetadataIdentifier>[
+      ),
+      'dates': seedMetadata(
+        dates: <EpubMetadataDate>[seedDate(date: '1999-01-01')],
+      ),
+      'types': seedMetadata(types: <String>['NGE-SEED Other']),
+      'formats': seedMetadata(formats: <String>['NGE-SEED Other']),
+      'identifiers': seedMetadata(
+        identifiers: <EpubMetadataIdentifier>[
           seedIdentifier(identifier: 'urn:uuid:NGE-SEED-OTHER'),
         ],
-      'sources': (EpubMetadata m) => m..sources = <String>['NGE-SEED Other'],
-      'languages': (EpubMetadata m) => m..languages = <String>['ja'],
-      'relations': (EpubMetadata m) =>
-          m..relations = <String>['NGE-SEED Other'],
-      'coverages': (EpubMetadata m) =>
-          m..coverages = <String>['NGE-SEED Other'],
-      'rights': (EpubMetadata m) => m..rights = <String>['NGE-SEED Other'],
-      'metaItems': (EpubMetadata m) =>
-          m..metaItems = <EpubMetadataMeta>[seedMeta(name: 'other')],
+      ),
+      'sources': seedMetadata(sources: <String>['NGE-SEED Other']),
+      'languages': seedMetadata(languages: <String>['ja']),
+      'relations': seedMetadata(relations: <String>['NGE-SEED Other']),
+      'coverages': seedMetadata(coverages: <String>['NGE-SEED Other']),
+      'rights': seedMetadata(rights: <String>['NGE-SEED Other']),
+      'metaItems': seedMetadata(
+        metaItems: <EpubMetadataMeta>[seedMeta(name: 'other')],
+      ),
     }.entries) {
       test(
           'TC-OPF-11 [Equivalence partitioning]: a differing ${row.key} is '
           'unequal', () {
-        final EpubMetadata other = row.value(seedMetadata());
-
-        expect(seedMetadata(), isNot(equals(other)));
-        expect(seedMetadata().hashCode, isNot(equals(other.hashCode)));
+        expectDistinct(seedMetadata(), row.value);
       });
     }
 
-    // TC-OPF-12 [Boundary value]: empty-but-assigned lists are the state the
-    // reader produces for an OPF carrying only a title, and they hash.
+    // TC-OPF-12 [Boundary value]: all-empty lists are the state the reader
+    // produces for an OPF whose `<metadata>` is empty, and they hash.
     test('TC-OPF-12 [Boundary]: fully empty lists still hash and compare', () {
-      EpubMetadata empty() => EpubMetadata()
-        ..titles = <String>[]
-        ..creators = <EpubMetadataCreator>[]
-        ..subjects = <String>[]
-        ..publishers = <String>[]
-        ..contributors = <EpubMetadataContributor>[]
-        ..dates = <EpubMetadataDate>[]
-        ..types = <String>[]
-        ..formats = <String>[]
-        ..identifiers = <EpubMetadataIdentifier>[]
-        ..sources = <String>[]
-        ..languages = <String>[]
-        ..relations = <String>[]
-        ..coverages = <String>[]
-        ..rights = <String>[]
-        ..metaItems = <EpubMetadataMeta>[];
+      EpubMetadata empty() => seedMetadata(
+            titles: <String>[],
+            creators: <EpubMetadataCreator>[],
+            subjects: <String>[],
+            descriptions: <String>[],
+            publishers: <String>[],
+            contributors: <EpubMetadataContributor>[],
+            dates: <EpubMetadataDate>[],
+            types: <String>[],
+            formats: <String>[],
+            identifiers: <EpubMetadataIdentifier>[],
+            sources: <String>[],
+            languages: <String>[],
+            relations: <String>[],
+            coverages: <String>[],
+            rights: <String>[],
+            metaItems: <EpubMetadataMeta>[],
+          );
 
       expect(empty(), equals(empty()));
       expect(empty().hashCode, equals(empty().hashCode));
-      expect(empty(), isNot(equals(seedMetadata())));
+      expectDistinct(empty(), seedMetadata());
     });
   });
 
@@ -462,13 +647,12 @@ void main() {
       test(
           'TC-OPF-13 [Equivalence partitioning]: an item with a differing '
           '${row.key} is unequal', () {
-        expect(seedManifestItem(), isNot(equals(row.value)));
-        expect(seedManifestItem().hashCode, isNot(equals(row.value.hashCode)));
+        expectDistinct(seedManifestItem(), row.value);
       });
     }
 
     // TC-OPF-14 [Scenario/use-case]: `toString` renders the five fields the
-    // reader debug-prints.
+    // reader debug-prints, the two optional ones as `null` when absent.
     test(
         'TC-OPF-14 [Scenario]: toString renders id, href, type, properties '
         'and overlay', () {
@@ -478,9 +662,8 @@ void main() {
         'Properties = nav, MediaOverlay = overlay-1',
       );
       expect(
-        EpubManifestItem().toString(),
-        'Id: null, Href = null, MediaType = null, Properties = null, '
-        'MediaOverlay = null',
+        const EpubManifestItem(id: '', href: '', mediaType: '').toString(),
+        'Id: , Href = , MediaType = , Properties = null, MediaOverlay = null',
       );
     });
 
@@ -488,19 +671,22 @@ void main() {
     // element-wise, so count and content both decide.
     test('TC-OPF-15 [Equivalence partitioning]: manifests differ by item list',
         () {
-      expect(seedManifest(), isNot(equals(EpubManifest())));
-      expect(
+      expectDistinct(
         seedManifest(),
-        isNot(
-          equals(
-            seedManifest(
-              items: <EpubManifestItem>[
-                seedManifestItem(),
-                seedManifestItem(id: 'ch2'),
-              ],
-            ),
-          ),
+        seedManifest(items: <EpubManifestItem>[]),
+      );
+      expectDistinct(
+        seedManifest(),
+        seedManifest(
+          items: <EpubManifestItem>[
+            seedManifestItem(),
+            seedManifestItem(id: 'ch2'),
+          ],
         ),
+      );
+      expectDistinct(
+        seedManifest(),
+        seedManifest(items: <EpubManifestItem>[seedManifestItem(id: 'ch2')]),
       );
     });
   });
@@ -515,15 +701,15 @@ void main() {
       test(
           'TC-OPF-16 [Equivalence partitioning]: a spine item with a '
           'differing ${row.key} is unequal', () {
-        expect(seedSpineItemRef(), isNot(equals(row.value)));
-        expect(seedSpineItemRef().hashCode, isNot(equals(row.value.hashCode)));
+        expectDistinct(seedSpineItemRef(), row.value);
       });
     }
 
-    // TC-OPF-17 [Scenario/use-case]: `toString` renders the idref only.
+    // TC-OPF-17 [Scenario/use-case]: `toString` renders the idref only, an
+    // empty one included.
     test('TC-OPF-17 [Scenario]: a spine item ref renders its idref', () {
       expect(seedSpineItemRef().toString(), 'IdRef: ch1');
-      expect(EpubSpineItemRef().toString(), 'IdRef: null');
+      expect(seedSpineItemRef(idRef: '').toString(), 'IdRef: ');
     });
 
     // TC-OPF-18 [Equivalence partitioning]: the spine's three fields. `items`
@@ -536,21 +722,9 @@ void main() {
       test(
           'TC-OPF-18 [Equivalence partitioning]: a spine with a differing '
           '${row.key} is unequal', () {
-        expect(seedSpine(), isNot(equals(row.value)));
-        expect(seedSpine().hashCode, isNot(equals(row.value.hashCode)));
+        expectDistinct(seedSpine(), row.value);
       });
     }
-
-    // TC-OPF-19 [Boundary value]: `ltr` is a THREE-state field — null means
-    // the OPF declared no page-progression-direction at all, which is not the
-    // same as an explicit `ltr="false"`. `spine_direction_test.dart` pins how
-    // the reader arrives at each; this pins that equality tells them apart.
-    test('TC-OPF-19 [Boundary]: a null ltr differs from both true and false',
-        () {
-      expect(seedSpine(ltr: null), isNot(equals(seedSpine(ltr: true))));
-      expect(seedSpine(ltr: null), isNot(equals(seedSpine(ltr: false))));
-      expect(seedSpine(ltr: null), equals(seedSpine(ltr: null)));
-    });
   });
 
   group('EpubGuide / EpubGuideReference', () {
@@ -564,61 +738,62 @@ void main() {
       test(
           'TC-OPF-20 [Equivalence partitioning]: a guide reference with a '
           'differing ${row.key} is unequal', () {
-        expect(seedGuideReference(), isNot(equals(row.value)));
+        expectDistinct(seedGuideReference(), row.value);
       });
     }
 
     // TC-OPF-21 [Scenario/use-case]: `toString` renders type and href, and
-    // notably NOT the title.
+    // notably NOT the title — a titled and an untitled reference print alike.
     test('TC-OPF-21 [Scenario]: a guide reference renders type and href', () {
       expect(seedGuideReference().toString(), 'Type: cover, Href: cover.xhtml');
-      expect(EpubGuideReference().toString(), 'Type: null, Href: null');
+      expect(
+        seedGuideReference(title: null).toString(),
+        'Type: cover, Href: cover.xhtml',
+      );
     });
 
-    // TC-OPF-22 [Boundary value]: an empty guide is the state the constructor
-    // produces and what the reader leaves behind for an OPF with no `<guide>`.
+    // TC-OPF-22 [Boundary value]: a guide with no reference is what the reader
+    // produces for an empty `<guide>`; it differs from a populated one, and
+    // the guide compares its references element-wise.
     test('TC-OPF-22 [Boundary]: an empty guide differs from a populated one',
         () {
-      expect(EpubGuide(), equals(EpubGuide()));
-      expect(EpubGuide(), isNot(equals(seedGuide())));
-      expect(EpubGuide().hashCode, isNot(equals(seedGuide().hashCode)));
+      expect(
+        seedGuide(items: <EpubGuideReference>[]),
+        equals(seedGuide(items: <EpubGuideReference>[])),
+      );
+      expectDistinct(seedGuide(items: <EpubGuideReference>[]), seedGuide());
+      expectDistinct(
+        seedGuide(),
+        seedGuide(items: <EpubGuideReference>[seedGuideReference(type: 'toc')]),
+      );
     });
   });
 
   group('EpubPackage', () {
     // TC-OPF-23 [Equivalence partitioning]: all five fields decide.
-    for (final MapEntry<String, EpubPackage Function(EpubPackage)> row
-        in <String, EpubPackage Function(EpubPackage)>{
-      'version': (EpubPackage p) => p..version = EpubVersion.epub3,
-      'metadata': (EpubPackage p) =>
-          p..metadata = (seedMetadata()..titles = <String>['NGE-SEED Other']),
-      'manifest': (EpubPackage p) => p..manifest = EpubManifest(),
-      'spine': (EpubPackage p) => p..spine = seedSpine(ltr: false),
-      'guide': (EpubPackage p) => p..guide = EpubGuide(),
+    for (final MapEntry<String, EpubPackage> row in <String, EpubPackage>{
+      'version': seedPackage(version: EpubVersion.epub3),
+      'metadata': seedPackage(
+        metadata: seedMetadata(titles: <String>['NGE-SEED Other']),
+      ),
+      'manifest': seedPackage(
+        manifest: seedManifest(items: <EpubManifestItem>[]),
+      ),
+      'spine': seedPackage(spine: seedSpine(ltr: false)),
+      'guide': seedPackage(guide: seedGuide(items: <EpubGuideReference>[])),
     }.entries) {
       test(
           'TC-OPF-23 [Equivalence partitioning]: a package with a differing '
           '${row.key} is unequal', () {
-        final EpubPackage other = row.value(seedPackage());
-
-        expect(seedPackage(), isNot(equals(other)));
-        expect(seedPackage().hashCode, isNot(equals(other.hashCode)));
+        expectDistinct(seedPackage(), row.value);
       });
     }
-
-    // TC-OPF-24 [Boundary value]: an all-null package hashes and compares —
-    // `EpubPackage` has no list fields, so it escapes TC-OPF-2.
-    test('TC-OPF-24 [Boundary]: an all-null package is equal to another', () {
-      expect(EpubPackage(), equals(EpubPackage()));
-      expect(EpubPackage().hashCode, equals(EpubPackage().hashCode));
-      expect(EpubPackage(), isNot(equals(seedPackage())));
-    });
 
     // TC-OPF-25 [Boundary value]: the two enum values are distinguished.
     test('TC-OPF-25 [Boundary]: epub2 and epub3 packages are unequal', () {
       expect(
-        EpubPackage()..version = EpubVersion.epub2,
-        isNot(equals(EpubPackage()..version = EpubVersion.epub3)),
+        seedPackage(),
+        isNot(equals(seedPackage(version: EpubVersion.epub3))),
       );
       expect(EpubVersion.values, hasLength(2));
     });

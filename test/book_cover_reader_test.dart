@@ -27,11 +27,14 @@ const String _ncx = '<?xml version="1.0" encoding="UTF-8"?>'
 ///
 /// [metaItems] is injected into `<metadata>`, [coverItems] into `<manifest>`;
 /// set [includeImageEntry] to false to declare a cover whose archive entry is
-/// absent.
+/// absent. The seed PNG is archived under `OEBPS/[imageEntryName]`, and
+/// [extraImages] adds further images by name.
 Uint8List _buildCoverBook({
   String metaItems = '',
   String coverItems = '',
   bool includeImageEntry = true,
+  String imageEntryName = 'cover.png',
+  Map<String, List<int>> extraImages = const <String, List<int>>{},
 }) =>
     buildEpubArchive(
       opfPath: 'OEBPS/content.opf',
@@ -57,13 +60,30 @@ Uint8List _buildCoverBook({
         'OEBPS/chapter1.xhtml': seedXhtml('NGE-SEED-CH1'),
       },
       binaryEntries: <String, List<int>>{
-        if (includeImageEntry) 'OEBPS/cover.png': seedPngBytes(),
+        if (includeImageEntry) 'OEBPS/$imageEntryName': seedPngBytes(),
+        for (final MapEntry<String, List<int>> image in extraImages.entries)
+          'OEBPS/${image.key}': image.value,
       },
     );
 
 const String _coverImageItem = '<item id="cover-img" href="cover.png" '
     'media-type="image/png"/>';
 const String _coverMeta = '<meta name="cover" content="cover-img"/>';
+
+/// The cover item with its archived name `封面.png` percent-encoded in the
+/// href, as a URL-minded producer writes it.
+const String _escapedCoverImageItem = '<item id="cover-img" '
+    'href="%E5%B0%81%E9%9D%A2.png" media-type="image/png"/>';
+
+/// The same escaped cover, flagged by the EPUB3 `cover-image` property
+/// instead of an EPUB2 meta.
+const String _escapedCoverPropertyItem = '<item id="img-1" '
+    'href="%E5%B0%81%E9%9D%A2.png" media-type="image/png" '
+    'properties="cover-image"/>';
+
+/// Bytes declared as an image that are no image format at all.
+final List<int> _notAnImage =
+    'NGE-SEED these bytes are text, not any image format at all'.codeUnits;
 
 Matcher _throwsMessageContaining(String fragment) => throwsA(
       isA<Exception>().having(
@@ -160,6 +180,83 @@ void main() {
         bookRef.readCover,
         _throwsMessageContaining('item with href = "cover.xhtml" is missing'),
       );
+    });
+
+    // TC-COV-15 [Regression]: the images map is keyed by decoded name, so a
+    // cover whose manifest href escapes a non-ASCII name is found through
+    // the decoded form of that href.
+    test(
+        'TC-COV-15 [Regression]: a cover with an escaped manifest href '
+        'decodes', () async {
+      final EpubBookRef bookRef = await const EpubReader().openBook(
+        _buildCoverBook(
+          metaItems: _coverMeta,
+          coverItems: _escapedCoverImageItem,
+          imageEntryName: '封面.png',
+        ),
+      );
+
+      final Image? cover = await bookRef.readCover();
+
+      expect(cover, isNotNull);
+      expect(cover!.width, 2);
+    });
+
+    // TC-COV-16 [Equivalence partitioning]: the `cover` meta name and the
+    // manifest id it names are each matched ignoring case, as real books
+    // write `Cover` and `Cover-Img` as often as the lower-case forms.
+    test(
+        'TC-COV-16 [Equivalence partitioning]: the cover meta name and id '
+        'match ignoring case', () async {
+      final EpubBookRef bookRef = await const EpubReader().openBook(
+        _buildCoverBook(
+          metaItems: '<meta name="COVER" content="Cover-IMG"/>',
+          coverItems: _coverImageItem,
+        ),
+      );
+
+      expect(await bookRef.readCover(), isNotNull);
+      expect(await bookRef.readCoverBytes(), seedPngBytes());
+    });
+
+    // TC-COV-17 [Error guessing]: the manifest declares an image cover the
+    // archive does not carry. Unlike `readBookCoverBytes`, this path refuses
+    // it with the archive-level exception.
+    test(
+        'TC-COV-17 [Error guessing]: a declared cover missing from the '
+        'archive is rejected', () async {
+      final EpubBookRef bookRef = await const EpubReader().openBook(
+        _buildCoverBook(
+          metaItems: _coverMeta,
+          coverItems: _coverImageItem,
+          includeImageEntry: false,
+        ),
+      );
+
+      expect(
+        bookRef.readCover,
+        throwsA(isA<EpubMissingArchiveEntryException>()),
+      );
+    });
+
+    // TC-COV-18 [Error guessing]: an image entry whose bytes are not an
+    // image decodes to no cover rather than an exception.
+    test(
+        'TC-COV-18 [Error guessing]: cover bytes that do not decode yield '
+        'no cover', () async {
+      final EpubBookRef bookRef = await const EpubReader().openBook(
+        _buildCoverBook(
+          metaItems: '<meta name="cover" content="junk"/>',
+          coverItems:
+              '<item id="junk" href="junk.png" media-type="image/png"/>',
+          extraImages: <String, List<int>>{
+            'junk.png': _notAnImage,
+          },
+        ),
+      );
+
+      expect(await bookRef.readCover(), isNull);
+      expect(await bookRef.readCoverBytes(), _notAnImage);
     });
   });
 
@@ -262,9 +359,9 @@ void main() {
     });
 
     // TC-COV-13 [Error guessing]: the cover is declared and classified as an
-    // image, but the archive entry is missing — the case the try/catch exists
-    // for, and the one that keeps its `on EpubException` honest now that the
-    // catch is typed. A book with a broken cover must still be openable.
+    // image, but the archive entry is missing — the one failure the narrow
+    // `on EpubMissingArchiveEntryException` catch exists for. A book with a
+    // broken cover must still be openable.
     test(
         'TC-COV-13 [Error guessing]: a declared cover missing from the '
         'archive yields null bytes rather than throwing', () async {
@@ -296,6 +393,78 @@ void main() {
       );
 
       expect(await bookRef.readCoverBytes(), isNull);
+    });
+
+    // TC-COV-19 [Regression]: a cover whose manifest href escapes a
+    // non-ASCII name is found by both conventions — the EPUB2 meta path and
+    // the EPUB3 manifest path — through the decoded form of that href.
+    for (final List<String> row in <List<String>>[
+      <String>['the EPUB2 cover meta', _coverMeta, _escapedCoverImageItem],
+      <String>[
+        'the EPUB3 cover-image property',
+        '',
+        _escapedCoverPropertyItem,
+      ],
+    ]) {
+      test(
+          'TC-COV-19 [Regression]: an escaped cover href is found through '
+          '${row[0]}', () async {
+        final EpubBookRef bookRef = await const EpubReader().openBook(
+          _buildCoverBook(
+            metaItems: row[1],
+            coverItems: row[2],
+            imageEntryName: '封面.png',
+          ),
+        );
+
+        expect(await bookRef.readCoverBytes(), seedPngBytes());
+      });
+    }
+
+    // TC-COV-20 [Equivalence partitioning]: when both conventions name a
+    // cover, the EPUB2 meta wins; when the meta names an id the manifest
+    // lacks, the EPUB3 convention still finds one.
+    test(
+        'TC-COV-20 [Equivalence partitioning]: the cover meta takes '
+        'precedence, and a dangling meta falls back to the manifest', () async {
+      const List<int> otherBytes = <int>[0x4F, 0x54, 0x48];
+      const String manifestCover = '<item id="cover" href="other.png" '
+          'media-type="image/png"/>';
+      final EpubBookRef both = await const EpubReader().openBook(
+        _buildCoverBook(
+          metaItems: _coverMeta,
+          coverItems: '$manifestCover$_coverImageItem',
+          extraImages: <String, List<int>>{'other.png': otherBytes},
+        ),
+      );
+      final EpubBookRef dangling = await const EpubReader().openBook(
+        _buildCoverBook(
+          metaItems: '<meta name="cover" content="nge-seed-absent"/>',
+          coverItems: manifestCover,
+          extraImages: <String, List<int>>{'other.png': otherBytes},
+        ),
+      );
+
+      expect(await both.readCoverBytes(), seedPngBytes());
+      expect(await dangling.readCoverBytes(), otherBytes);
+    });
+
+    // TC-COV-21 [Equivalence partitioning]: the EPUB3 convention matches
+    // the cover name and the image media type ignoring case, and passes over
+    // a cover-named item that is not an image to a later one that is.
+    test(
+        'TC-COV-21 [Equivalence partitioning]: the manifest convention '
+        'ignores case and skips a non-image cover item', () async {
+      final EpubBookRef bookRef = await const EpubReader().openBook(
+        _buildCoverBook(
+          coverItems: '<item id="cover" href="cover.xhtml" '
+              'media-type="application/xhtml+xml"/>'
+              '<item id="img-1" href="cover.png" media-type="IMAGE/PNG" '
+              'properties="COVER-IMAGE"/>',
+        ),
+      );
+
+      expect(await bookRef.readCoverBytes(), seedPngBytes());
     });
   });
 }
