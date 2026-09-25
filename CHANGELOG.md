@@ -2,6 +2,55 @@
 
 ## Unreleased
 
+**Archive size limits.** Every entry point now refuses a ZIP container past
+fixed limits, so a decompression bomb cannot exhaust memory:
+
+| Limit | Value |
+|---|---|
+| Compressed input (the file, or the bytes passed in) | 512 MiB |
+| Entries in the archive | 4096 |
+| Bytes one entry inflates to | 256 MiB |
+| Bytes all entries inflate to | 512 MiB |
+
+- A breach throws **`EpubArchiveTooLargeException`**, a new member of the
+  sealed `EpubException` family. This is **breaking** for an exhaustive
+  `switch` on `EpubException`, which now has to handle it.
+- The limits are private constants. There is nothing to configure and no
+  separate check to call: `openBook`, `readBook` and the two new entry points
+  all apply them.
+- **New: `openBookFile(String path)` and `readBookFile(String path)`.** They
+  check the file's size before reading any of it, so a file past the
+  compressed limit is refused without being loaded into memory, then decode
+  it as `openBook` / `readBook` do. They bring in `dart:io`, so the package no
+  longer compiles for the web.
+- **The archive is inflated once, in `openBook`.** The central directory's
+  declared sizes and entry count are checked before anything is inflated.
+  Then every entry is inflated once, counting the bytes it really produces,
+  and abandoned when they cross the per-entry limit or what the total limit
+  has left. A header that under-declares its size gets no further than the
+  limit; within the limits an entry that inflates past its declared size
+  still opens, since writers misstate it in good faith (`package:archive`'s
+  `ArchiveFile.string` declares a text's UTF-16 length). Content files are
+  read from those inflated entries without inflating again.
+- **Behaviour changes that come with the one decode:**
+  - `openBook` holds every entry inflated, up to 512 MiB, where it used to
+    inflate a content file only when it was read.
+  - DEFLATE is still inflated by `dart:io`'s zlib, now through
+    `RawZLibFilter`, fed a chunk at a time so the limits stop it part-way.
+    Its output is kept as zlib's chunks and joined once at the end, so a
+    refused bomb costs at most the 256 MiB entry limit. A corrupt stream
+    still fails with `FormatException`.
+  - `EpubArchiveTooLargeException` messages give sizes and limits, never an
+    entry's file name, which can carry the book's title.
+  - The entries of `EpubBookRef.epubArchive()` carry their name, their
+    inflated content, and a `size` that is the inflated length rather than
+    the header's claim. They no longer carry the ZIP's CRC, file mode,
+    modification time, or directory and symlink flags.
+  - STORE, DEFLATE and BZIP2 entries are inflated. An entry in any other
+    method is kept undecoded, and reading it throws `ArchiveException`, as
+    before. The ZIP encryption flag is ignored; the EPUB container format
+    forbids ZIP encryption.
+
 **Breaking.**
 
 - **Nullability follows the EPUB spec.** Every class under `entities/`,

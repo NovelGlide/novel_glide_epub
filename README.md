@@ -3,10 +3,11 @@
 EPUB parser for Dart. Used by [NovelGlide](https://github.com/NovelGlide), a
 cross-platform EPUB reader.
 
-Pure Dart — no Flutter dependency. It reads an EPUB's package document,
-navigation and content out of the ZIP container, either eagerly
-(`EpubReader.readBook`) or lazily by reference (`EpubReader.openBook`); both
-are instance methods on `const EpubReader()`.
+Pure Dart — no Flutter dependency; it uses `dart:io`, so it does not run on
+the web. It reads an EPUB's package document, navigation and content out of
+the ZIP container, either eagerly (`EpubReader.readBook`) or lazily by
+reference (`EpubReader.openBook`); both are instance methods on
+`const EpubReader()`, and each has a variant that takes a file path.
 
 ```dart
 import 'package:novel_glide_epub/novel_glide_epub.dart';
@@ -18,7 +19,18 @@ final EpubBook book = await reader.readBook(bytes);
 
 // Just the structure; each content file is read on demand.
 final EpubBookRef bookRef = await reader.openBook(bytes);
+
+// The same from a file on disk, whose size is checked before it is read.
+final EpubBook fromFile = await reader.readBookFile(path);
+final EpubBookRef refFromFile = await reader.openBookFile(path);
 ```
+
+Every entry point refuses a ZIP container past fixed limits by throwing
+`EpubArchiveTooLargeException`: 512 MiB compressed, 4096 entries, 256 MiB
+inflated per entry, 512 MiB inflated in total. The archive is inflated once,
+while the book is opened, and an entry is abandoned part-way through
+inflating as soon as it crosses a limit, whatever size its header declared.
+The limits cannot be configured.
 
 ## Origin
 
@@ -44,7 +56,7 @@ Not published to pub.dev; consumed by git reference.
 
 ## Status
 
-**Coverage: 100%** (1364 / 1364 lines, 634 tests), up from 21% at extraction,
+**Coverage: 100%** (1435 / 1435 lines, 660 tests), up from 21% at extraction,
 when the suite was seven test cases written to pin two specific bugs and forty
 of the fifty-five files had never been executed at all.
 

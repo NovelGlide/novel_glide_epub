@@ -55,3 +55,15 @@ final class EpubMissingValueException extends EpubException {
 final class EpubUnresolvedReferenceException extends EpubException {
   const EpubUnresolvedReferenceException(super.message);
 }
+
+/// The ZIP container is past one of the parser's fixed limits: the file's
+/// compressed size, the number of entries, or the bytes one entry or the
+/// whole archive inflates to.
+///
+/// Raised before any of the book is parsed, and at the latest part-way
+/// through inflating the entry that crosses the limit, so a decompression
+/// bomb is refused before it is held in memory. The file may be a
+/// well-formed EPUB that the parser declines to open.
+final class EpubArchiveTooLargeException extends EpubException {
+  const EpubArchiveTooLargeException(super.message);
+}
