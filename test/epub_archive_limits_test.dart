@@ -1075,15 +1075,17 @@ void main() {
       expect(reader.openBook(zip64With(offset: -1)), _throwsCorrupt);
     });
 
-    // TC-LIM-39 [Boundary / error guessing]: the zip64 locator has to point
-    // where a whole 56-byte zip64 end record fits in the file. Past the file,
-    // negative, or one byte too late to fit is refused. The last place it
+    // TC-LIM-39 [Boundary / error guessing]: the zip64 record the locator
+    // points at has to be in the file, all 56 bytes of it. Past the file, or
+    // negative, is refused. A zip64 record signature one byte too late for
+    // the rest of the record to fit is refused too. The last place a record
     // fits is not: no zip64 record is there, so the end record's own values,
     // marked zip64 only by its disk field, are read instead.
     test(
         'TC-LIM-39 [Boundary]: a zip64 locator pointing where no zip64 record '
         'fits fails as a corrupt archive', () {
-      Uint8List pointedAt(int Function(int length) recordAt) {
+      Uint8List pointedAt(int Function(int length) recordAt,
+          {bool signed = false}) {
         final Uint8List zip = _craftZip(oneEntry());
         final int record = zip.length - _endOfCentralDirectoryLength;
         final ByteData original = ByteData.sublistView(zip, record);
@@ -1093,18 +1095,43 @@ void main() {
           size: original.getUint32(12, Endian.little),
           offset: original.getUint32(16, Endian.little),
         );
-        ByteData.sublistView(zip64)
-            .setInt64(record + 56 + 8, recordAt(zip64.length), Endian.little);
+        final int pointed = recordAt(zip64.length);
+        final ByteData data = ByteData.sublistView(zip64)
+          ..setInt64(record + 56 + 8, pointed, Endian.little);
+        if (signed) {
+          data.setUint32(pointed, 0x06064b50, Endian.little);
+        }
         return zip64;
       }
 
       expect(
           reader.openBook(pointedAt((int length) => length)), _throwsCorrupt);
       expect(reader.openBook(pointedAt((int length) => -1)), _throwsCorrupt);
-      expect(reader.openBook(pointedAt((int length) => length - 55)),
+      expect(
+          reader.openBook(pointedAt((int length) => length - 55, signed: true)),
           _throwsCorrupt);
       expect(reader.openBook(pointedAt((int length) => length - 56)),
           _throwsDecodedWithoutContainer);
+    });
+
+    // TC-LIM-44 [Error guessing]: a streaming writer sets bit 3 of an entry's
+    // flags and puts its sizes in a data descriptor after the data, which
+    // `package:archive` reads after the compressed bytes. A compressed size
+    // reaching past the end of the file is refused before either read runs
+    // off it.
+    test(
+        'TC-LIM-44 [Error guessing]: a bit-3 entry whose compressed size '
+        'reaches past the file fails as a corrupt archive', () {
+      final Uint8List zip = _craftZip(oneEntry());
+      final int directory =
+          ByteData.sublistView(zip, zip.length - _endOfCentralDirectoryLength)
+              .getUint32(16, Endian.little);
+      ByteData.sublistView(zip)
+        ..setUint16(6, 0x08, Endian.little) // local header flags
+        ..setUint16(directory + 8, 0x08, Endian.little) // record flags
+        ..setUint32(directory + 20, zip.length, Endian.little);
+
+      expect(reader.openBook(zip), _throwsCorrupt);
     });
 
     // TC-LIM-40 [Error guessing]: a central directory that ends in a few
@@ -1179,6 +1206,9 @@ void main() {
             ByteData.sublistView(zip, end).getUint32(16, Endian.little);
         ByteData.sublistView(file)
           ..setUint16(end + 20, _localFileHeaderLength - missing, Endian.little)
+          // An empty entry: no data follows the local header.
+          ..setUint32(directory + 20, 0, Endian.little)
+          ..setUint32(directory + 24, 0, Endian.little)
           ..setUint32(directory + 42, zip.length, Endian.little);
         return file;
       }
@@ -1211,10 +1241,9 @@ void main() {
     });
 
     // TC-LIM-34 [Boundary]: compressed bytes adding up to exactly the file's
-    // length are admissible, one byte more is not. What counts is the bytes
-    // each entry is really given: both stored records start at the one
-    // entry's data, and the second claims the whole file, which only reaches
-    // to its end.
+    // length are admissible, one byte more is not. Both stored records start
+    // at the one entry's data; the second runs from there to the end of the
+    // file, and the first claims the local header's length or one byte more.
     test(
         'TC-LIM-34 [Boundary]: compressed bytes adding up to the file length '
         'are decoded, one byte more refused', () {
@@ -1224,7 +1253,7 @@ void main() {
       Uint8List zip(int firstSize) => _sharedStreamZip(
             method: _storeMethod,
             payload: payload,
-            compressedSizes: <int>[firstSize, length],
+            compressedSizes: <int>[firstSize, length - dataStart],
           );
 
       expect(reader.openBook(zip(dataStart)), _throwsDecodedWithoutContainer);

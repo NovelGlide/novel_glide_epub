@@ -64,7 +64,7 @@ Not published to pub.dev; consumed by git reference.
 
 ## Status
 
-**Coverage: 100%** (1489 / 1489 lines, 690 tests), up from 21% at extraction,
+**Coverage: 100%** (1510 / 1510 lines, 691 tests), up from 21% at extraction,
 when the suite was seven test cases written to pin two specific bugs and forty
 of the fifty-five files had never been executed at all.
 

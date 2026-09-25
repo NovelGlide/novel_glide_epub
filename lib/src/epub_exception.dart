@@ -9,12 +9,14 @@
 /// caller that shows "this file is damaged" for a parser bug hides the bug
 /// forever.
 ///
-/// One exception to that: a container damaged so that `package:archive`
-/// reads past the end of its bytes while parsing the variable-length parts
-/// of an entry's headers (its name or extra field) throws a `RangeError`
-/// from inside `package:archive`, and it escapes as it is. The file is
-/// damaged, not the parser, but a `RangeError` cannot be told apart from a
-/// defect, so it is not caught.
+/// One exception to that. The reader hands `package:archive` only streams
+/// that refuse a read past their end as [EpubCorruptArchiveException], but
+/// two of its parsers copy bytes into a stream of their own, which does not:
+/// a zip64 extra field in a central-directory record, and the extra field
+/// of an encrypted entry's local header. One damaged so that it reads past
+/// its own end throws a `RangeError` from inside `package:archive`, and it
+/// escapes as it is. The file is damaged, not the parser, but a `RangeError`
+/// cannot be told apart from a defect, so it is not caught.
 ///
 /// The family is `sealed`, so a caller can `switch` on the cause and a new
 /// cause cannot be added without every such `switch` being told about it.
@@ -30,10 +32,9 @@ sealed class EpubException implements Exception {
 }
 
 /// The file is not a ZIP container, or its container is damaged: a
-/// structure `package:archive` cannot parse, a central directory or zip64
-/// record placed outside the file, a central directory whose last record is
-/// cut short, a local header placed where it does not fit, entries whose
-/// compressed data overlap, or an entry whose deflate stream zlib rejects.
+/// structure `package:archive` cannot parse, a structure that reaches past
+/// the end of the file or has a negative length, entries whose compressed
+/// data overlap, or an entry whose deflate stream zlib rejects.
 ///
 /// Raised when the book is opened, whether or not the package document
 /// points at the damaged entry.
