@@ -19,10 +19,11 @@ bytes plus its inflated content, each within the limits below.
   members below.
 - **A damaged ZIP container now throws the new
   `EpubCorruptArchiveException`**, a member of the same family:
-  - bytes that are not a ZIP at all, which threw `ArchiveException`;
+  - bytes that are not a ZIP at all, or whose end-of-central-directory
+    record is cut short, which threw `ArchiveException` or a `RangeError`;
   - any ZIP structure that reaches past the end of the file or has a
-    negative length: an end record cut short, a central directory, zip64
-    record, directory record or local header placed or sized past the end,
+    negative length: a central directory, zip64 record, directory record or
+    local header placed or sized past the end,
     an entry's compressed data or its data descriptor (bit 3, as streaming
     writers set) running off it. These threw a `RangeError`, or were read
     short without an error. `package:archive` reads the container only
@@ -39,10 +40,10 @@ bytes plus its inflated content, each within the limits below.
   `TypeError` and `StateError` still escape unconverted: they mean a defect
   in this package or `package:archive`, not a damaged book. So does a
   `RangeError` from the two places `package:archive` copies bytes into a
-  stream of its own, a zip64 extra field in a central-directory record and
-  the extra field of an encrypted entry's local header, when one is damaged
-  so that it reads past its own end: it cannot be told apart from a defect,
-  so it is not caught.
+  stream of its own, the extra field of any central-directory record and
+  the extra field of a local header whose entry has its encryption flag
+  set, when one is damaged so that parsing it reads past its own end: it
+  cannot be told apart from a defect, so it is not caught.
 - The limits are private constants. There is nothing to configure and no
   separate check to call: `openBook`, `readBook` and the two new entry points
   all apply them.

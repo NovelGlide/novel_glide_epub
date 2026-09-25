@@ -35,6 +35,10 @@
 //   * In `_centralDirectoryOf`, deleting `input.position = end + 4`. The
 //     search that found the end record last read its signature, which leaves
 //     the position exactly there.
+//   * In `_BoundedInputStream`'s `position` setter, `v > _size` as `>=`,
+//     refusing a position exactly at the end. Every position set here, by
+//     the reader or by `package:archive`, is read from at once, and that
+//     read is refused at the end either way.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -1022,6 +1026,32 @@ void main() {
 
         expect(reader.openBook(Uint8List.sublistView(zip, 0, zip.length - cut)),
             _throwsCorrupt);
+      });
+    }
+
+    // TC-LIM-45 [Error guessing]: an end record's comment may hold anything,
+    // the end record's own signature included. One in the comment's last
+    // 21 bytes has no room for a whole record after it, so it is not taken
+    // for one, and the ZIP opens.
+    final Map<String, List<int>> commentByPlace = <String, List<int>>{
+      'last four bytes': <int>[...utf8.encode('NGE-'), 0x50, 0x4B, 0x05, 0x06],
+      '21 bytes from the end': <int>[
+        0x50, 0x4B, 0x05, 0x06, //
+        ...List<int>.filled(17, 0x4E),
+      ],
+    };
+    for (final MapEntry<String, List<int>> comment in commentByPlace.entries) {
+      test(
+          'TC-LIM-45 [Error guessing]: a ZIP whose comment has the end record '
+          'signature in its ${comment.key} opens', () {
+        final Uint8List zip = _craftZip(oneEntry());
+        ByteData.sublistView(zip)
+            .setUint16(zip.length - 2, comment.value.length, Endian.little);
+
+        expect(
+            reader
+                .openBook(Uint8List.fromList(<int>[...zip, ...comment.value])),
+            _throwsDecodedWithoutContainer);
       });
     }
 

@@ -56,6 +56,9 @@ class EpubReader {
   static const int _maxTotalBytes = 512 * 1024 * 1024;
   static const int _inflateInputChunkBytes = 64 * 1024;
 
+  /// An end-of-central-directory record without its comment.
+  static const int _endRecordLength = 22;
+
   /// Loads basics metadata.
   ///
   /// Opens the book asynchronously without parsing its content files.
@@ -347,9 +350,6 @@ class EpubReader {
     input.skip(2);
     int size = input.readUint32();
     int offset = input.readUint32();
-    // The comment's length closes the record; stepping over it refuses a
-    // record cut short.
-    input.skip(2);
     // Any of these at its maximum means the zip64 record holds the real
     // values, when there is one.
     if (offset == 0xffffffff ||
@@ -367,10 +367,14 @@ class EpubReader {
   }
 
   /// Where the end-of-central-directory record is in the unread [input]: the
-  /// last one, searching from the back from the last place a signature fits.
-  /// -1 when there is none.
+  /// last one, searching from the back from the last place a whole record
+  /// fits. -1 when there is none.
+  ///
+  /// A record's comment follows it and may hold anything, its signature
+  /// included; one in the comment's last bytes has no room for a record after
+  /// it, so the search starts before it.
   static int _endRecordOf(InputStream input) {
-    int end = input.length - 4;
+    int end = input.length - _endRecordLength;
     while (end >= 0 &&
         _uint32At(input, end) != ZipDirectory.eocdLocatorSignature) {
       end--;
@@ -490,9 +494,11 @@ class EpubReader {
 /// [EpubReader], call on these streams; `readByte` and `readUint24` are
 /// called by neither.
 ///
-/// Two paths in `package:archive` wrap bytes in an `InputStream` of their own
-/// and are not reached: the zip64 extra field in `ZipFileHeader`, and an
-/// encrypted entry's extra field in `ZipFile`.
+/// Two paths in `package:archive` copy bytes into an `InputStream` of their
+/// own, which this does not reach: `ZipFileHeader` parses every
+/// central-directory record's extra field, whatever its blocks, that way;
+/// `ZipFile` parses a local header's extra field that way when the entry's
+/// encryption flag is set and the field is longer than two bytes.
 class _BoundedInputStream extends InputStream {
   _BoundedInputStream(List<int> super.data);
 
