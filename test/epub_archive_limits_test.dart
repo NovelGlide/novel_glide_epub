@@ -35,14 +35,6 @@
 //   * In `_centralDirectoryOf`, deleting `input.position = end + 4`. The
 //     search that found the end record last read its signature, which leaves
 //     the position exactly there.
-//
-// One survivor that is not equivalent, and not pinned: in
-// `_readCentralDirectory`, `directory.length >= 4` as `> 4`. The only input
-// that tells them apart is a directory ending in a bare record signature:
-// `>=` hands it to `ZipFileHeader`, which reads past the end with a
-// RangeError, and `>` stops before it. Neither opens a book, and a test for
-// it would pin a RangeError from inside `package:archive`, which the
-// `EpubException` contract only tolerates.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -268,20 +260,23 @@ int _sharedStreamZipLength(int payloadLength, int recordCount) =>
 /// Each record declares 0 bytes uncompressed, so no declared-size limit can
 /// react.
 ///
-/// Given [zip64UncompressedSize] or [zip64CompressedSize], every record
-/// carries that size in a zip64 extra field instead, its 32-bit field set to
-/// 0xFFFFFFFF. A zip64 size is written as its 64 raw bits, and
-/// `package:archive` reads it back as a signed value.
+/// Given [zip64UncompressedSize], [zip64CompressedSize] or
+/// [zip64LocalHeaderOffset], every record carries that value in a zip64
+/// extra field instead, its 32-bit field set to 0xFFFFFFFF. A zip64 value is
+/// written as its 64 raw bits, and `package:archive` reads it back as a
+/// signed value.
 Uint8List _sharedStreamZip({
   required int method,
   required List<int> payload,
   required List<int> compressedSizes,
   int? zip64UncompressedSize,
   int? zip64CompressedSize,
+  int? zip64LocalHeaderOffset,
 }) {
   final List<int> zip64Sizes = <int>[
     if (zip64UncompressedSize != null) zip64UncompressedSize,
     if (zip64CompressedSize != null) zip64CompressedSize,
+    if (zip64LocalHeaderOffset != null) zip64LocalHeaderOffset,
   ];
   final int extraLength = zip64Sizes.isEmpty ? 0 : 4 + 8 * zip64Sizes.length;
   final Uint8List bytes = Uint8List(
@@ -305,14 +300,14 @@ Uint8List _sharedStreamZip({
       ..setUint16(at + 4, 20, Endian.little) // version made by
       ..setUint16(at + 6, 20, Endian.little) // version needed
       ..setUint16(at + 10, method, Endian.little)
+      ..setUint32(at + 20, _zip64Marked(zip64CompressedSize, compressedSize),
+          Endian.little)
       ..setUint32(
-          at + 20,
-          zip64CompressedSize == null ? compressedSize : 0xFFFFFFFF,
-          Endian.little)
-      ..setUint32(at + 24, zip64UncompressedSize == null ? 0 : 0xFFFFFFFF,
-          Endian.little)
+          at + 24, _zip64Marked(zip64UncompressedSize, 0), Endian.little)
       ..setUint16(at + 28, 1, Endian.little) // name length
-      ..setUint16(at + 30, extraLength, Endian.little);
+      ..setUint16(at + 30, extraLength, Endian.little)
+      ..setUint32(
+          at + 42, _zip64Marked(zip64LocalHeaderOffset, 0), Endian.little);
     bytes[at + _centralFileHeaderLength] = 0x78;
     at += _centralFileHeaderLength + 1;
     _writeZip64Extra(data, at, zip64Sizes);
@@ -327,6 +322,28 @@ Uint8List _sharedStreamZip({
     ),
   );
   return bytes;
+}
+
+/// A record's 32-bit field: [plain], or 0xFFFFFFFF when [zip64Value] is
+/// given, which sends a reader to the zip64 extra field for it.
+int _zip64Marked(int? zip64Value, int plain) =>
+    zip64Value == null ? plain : 0xFFFFFFFF;
+
+/// [zip], a `_craftZip` result, with [tail] added to the end of its central
+/// directory, and the end record's directory size grown to take it in.
+Uint8List _withDirectoryTail(Uint8List zip, List<int> tail) {
+  final int end = zip.length - _endOfCentralDirectoryLength;
+  final ByteData original = ByteData.sublistView(zip, end);
+  return Uint8List.fromList(<int>[
+    ...zip.sublist(0, end),
+    ...tail,
+    ..._endOfCentralDirectory(
+      entryCount: original.getUint16(10, Endian.little),
+      centralDirectoryLength:
+          original.getUint32(12, Endian.little) + tail.length,
+      centralDirectoryOffset: original.getUint32(16, Endian.little),
+    ),
+  ]);
 }
 
 /// [zip], a `_craftZip` result, with its end record in zip64 form: a zip64
@@ -1096,20 +1113,79 @@ void main() {
     test(
         'TC-LIM-40 [Error guessing]: stray bytes after the last directory '
         'record are ignored', () {
-      final Uint8List zip = _craftZip(oneEntry());
-      final int end = zip.length - _endOfCentralDirectoryLength;
-      final ByteData original = ByteData.sublistView(zip, end);
-      final Uint8List padded = Uint8List.fromList(<int>[
-        ...zip.sublist(0, end),
-        0x4E, 0x47, 0x45, // three stray bytes
-        ..._endOfCentralDirectory(
-          entryCount: 1,
-          centralDirectoryLength: original.getUint32(12, Endian.little) + 3,
-          centralDirectoryOffset: original.getUint32(16, Endian.little),
-        ),
-      ]);
+      expect(
+          reader.openBook(_withDirectoryTail(
+              _craftZip(oneEntry()), const <int>[0x4E, 0x47, 0x45])),
+          _throwsDecodedWithoutContainer);
+    });
 
-      expect(reader.openBook(padded), _throwsDecodedWithoutContainer);
+    // TC-LIM-42 [Boundary]: a directory whose last record is cut short. A
+    // signature with nothing after it, or with one byte less than a record's
+    // 42-byte fixed part, is refused; with the whole fixed part (all zeros:
+    // an empty entry at offset 0) it decodes.
+    final Map<int, Matcher> outcomeByTailLength = <int, Matcher>{
+      0: _throwsCorrupt,
+      41: _throwsCorrupt,
+      42: _throwsDecodedWithoutContainer,
+    };
+    for (final MapEntry<int, Matcher> tail in outcomeByTailLength.entries) {
+      test(
+          'TC-LIM-42 [Boundary]: a last record signature followed by '
+          '${tail.key} bytes', () {
+        final ByteData signature = ByteData(4)
+          ..setUint32(0, _centralFileHeaderSignature, Endian.little);
+
+        expect(
+            reader.openBook(_withDirectoryTail(_craftZip(oneEntry()), <int>[
+              ...signature.buffer.asUint8List(),
+              ...List<int>.filled(tail.key, 0),
+            ])),
+            tail.value);
+      });
+    }
+
+    // TC-LIM-43 [Boundary]: the local header a record points at has to fit
+    // in the file, its fixed 30 bytes at least. Negative, or with its
+    // signature there but one byte short, is refused; the last place it
+    // fits is read.
+    test(
+        'TC-LIM-43 [Boundary]: a local header placed where it does not fit '
+        'fails as a corrupt archive', () {
+      expect(
+          reader.openBook(_sharedStreamZip(
+            method: _storeMethod,
+            payload: const <int>[0x4E],
+            compressedSizes: const <int>[1],
+            zip64LocalHeaderOffset: -1,
+          )),
+          _throwsCorrupt);
+
+      Uint8List localHeaderAtEnd(int missing) {
+        // An end record whose comment is an empty local header, less its
+        // last [missing] bytes, and a record pointing at it. With none
+        // missing it is the last place a local header fits; with one, its
+        // signature is there but not its whole fixed part.
+        final Uint8List zip = _craftZip(oneEntry());
+        final int end = zip.length - _endOfCentralDirectoryLength;
+        final ByteData localHeader = ByteData(_localFileHeaderLength)
+          ..setUint32(0, _localFileHeaderSignature, Endian.little)
+          ..setUint16(4, 20, Endian.little);
+        final Uint8List file = Uint8List.fromList(<int>[
+          ...zip,
+          ...localHeader.buffer
+              .asUint8List(0, _localFileHeaderLength - missing),
+        ]);
+        final int directory =
+            ByteData.sublistView(zip, end).getUint32(16, Endian.little);
+        ByteData.sublistView(file)
+          ..setUint16(end + 20, _localFileHeaderLength - missing, Endian.little)
+          ..setUint32(directory + 42, zip.length, Endian.little);
+        return file;
+      }
+
+      expect(
+          reader.openBook(localHeaderAtEnd(0)), _throwsDecodedWithoutContainer);
+      expect(reader.openBook(localHeaderAtEnd(1)), _throwsCorrupt);
     });
   });
 

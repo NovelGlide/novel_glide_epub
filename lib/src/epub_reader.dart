@@ -59,6 +59,13 @@ class EpubReader {
   /// An end-of-central-directory record without its comment.
   static const int _endRecordLength = 22;
 
+  /// A central-directory record's fixed part after its signature: 46 bytes
+  /// less the four of the signature.
+  static const int _centralRecordFixedLength = 42;
+
+  /// A local file header's fixed part, signature included.
+  static const int _localHeaderFixedLength = 30;
+
   /// Loads basics metadata.
   ///
   /// Opens the book asynchronously without parsing its content files.
@@ -276,9 +283,7 @@ class EpubReader {
       int total = 0;
       int consumed = 0;
       for (final ZipFileHeader header in headers) {
-        header.readLocalFileHeader(input, null);
-        final ZipFile file =
-            header.file ?? (throw StateError('No ZipFile for a header'));
+        final ZipFile file = _localEntryOf(header, input, bytes.length);
         final Uint8List raw =
             (file.rawContent ?? (throw StateError('No raw content')))
                 .toUint8List();
@@ -300,6 +305,24 @@ class EpubReader {
     }
   }
 
+  /// The entry [header] describes, read from its local header in [input], a
+  /// file of [fileLength] bytes.
+  ///
+  /// `readLocalFileHeader` moves to the offset the header gives and reads the
+  /// local header's fixed part there without checking that it is in the
+  /// file, so that is checked first.
+  static ZipFile _localEntryOf(
+      ZipFileHeader header, InputStream input, int fileLength) {
+    final int offset =
+        header.localHeaderOffset ?? (throw StateError('No header offset'));
+    if (offset < 0 || offset > fileLength - _localHeaderFixedLength) {
+      throw EpubCorruptArchiveException('A local header is at $offset, '
+          'where it does not fit in the file of $fileLength.');
+    }
+    header.readLocalFileHeader(input, null);
+    return header.file ?? (throw StateError('No ZipFile for a header'));
+  }
+
   static void _checkCompressedSize(int size) {
     if (size > _maxCompressedBytes) {
       throw EpubArchiveTooLargeException(
@@ -317,13 +340,20 @@ class EpubReader {
   /// point at one entry, so a 512 MiB file holds millions of them. So the
   /// directory is found here as `ZipDirectory.read` finds it, and its records
   /// read with the same public `ZipFileHeader`.
+  ///
+  /// A record cut short before the end of its fixed part refuses the file.
   static List<ZipFileHeader> _readCentralDirectory(InputStream input) {
     final InputStream directory = _centralDirectoryOf(input);
     final List<ZipFileHeader> headers = <ZipFileHeader>[];
-    // `InputStream` reads past its end with a RangeError; a signature needs
-    // four bytes.
+    // `InputStream` reads past its end with a RangeError: a signature needs
+    // four bytes, and `ZipFileHeader` reads the record's fixed part after it
+    // without checking that it is there.
     while (directory.length >= 4 &&
         directory.readUint32() == ZipFileHeader.SIGNATURE) {
+      if (directory.length < _centralRecordFixedLength) {
+        throw const EpubCorruptArchiveException(
+            'The central directory ends part-way through a record.');
+      }
       if (headers.length == _maxEntries) {
         throw const EpubArchiveTooLargeException(
             'The archive has more than $_maxEntries entries.');

@@ -24,6 +24,9 @@ bytes plus its inflated content, each within the limits below.
     `RangeError`;
   - a central directory or zip64 record the file says lies outside it,
     which threw a `RangeError`;
+  - a central directory whose last record is cut short, and a local header
+    placed where its fixed 30 bytes do not fit, both of which threw a
+    `RangeError`;
   - a container `package:archive` cannot parse (a broken local header, say),
     which threw `ArchiveException`;
   - an entry whose deflate stream zlib rejects, which threw
@@ -36,8 +39,9 @@ bytes plus its inflated content, each within the limits below.
   `TypeError` and `StateError` still escape unconverted: they mean a defect
   in this package or `package:archive`, not a damaged book. So does a
   `RangeError` from inside `package:archive`, on a container damaged so that
-  it reads past the end of its bytes while parsing an entry's headers: it
-  cannot be told apart from a defect, so it is not caught.
+  it reads past the end of its bytes while parsing the variable-length parts
+  of an entry's headers (its name or extra field): it cannot be told apart
+  from a defect, so it is not caught.
 - The limits are private constants. There is nothing to configure and no
   separate check to call: `openBook`, `readBook` and the two new entry points
   all apply them.
