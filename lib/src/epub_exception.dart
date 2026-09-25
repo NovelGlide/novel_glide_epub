@@ -9,6 +9,12 @@
 /// caller that shows "this file is damaged" for a parser bug hides the bug
 /// forever.
 ///
+/// One exception to that: a container damaged so that `package:archive`
+/// reads past the end of its bytes while parsing an entry's headers throws a
+/// `RangeError` from inside `package:archive`, and it escapes as it is. The
+/// file is damaged, not the parser, but a `RangeError` cannot be told apart
+/// from a defect, so it is not caught.
+///
 /// The family is `sealed`, so a caller can `switch` on the cause and a new
 /// cause cannot be added without every such `switch` being told about it.
 sealed class EpubException implements Exception {
@@ -23,8 +29,9 @@ sealed class EpubException implements Exception {
 }
 
 /// The file is not a ZIP container, or its container is damaged: a
-/// structure `package:archive` cannot parse, or an entry whose deflate
-/// stream zlib rejects.
+/// structure `package:archive` cannot parse, a central directory or zip64
+/// record placed outside the file, entries whose compressed data overlap, or
+/// an entry whose deflate stream zlib rejects.
 ///
 /// Raised when the book is opened, whether or not the package document
 /// points at the damaged entry.
@@ -80,7 +87,7 @@ final class EpubUnsupportedCompressionException extends EpubException {
 
 /// The ZIP container is past one of the parser's fixed limits: the file's
 /// compressed size, the number of entries, or the bytes one entry or the
-/// whole archive inflates to; or its entries' compressed data overlap.
+/// whole archive inflates to.
 ///
 /// Raised before any of the book is parsed, and at the latest part-way
 /// through inflating the entry that crosses the limit, so a decompression

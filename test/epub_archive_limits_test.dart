@@ -35,6 +35,14 @@
 //   * In `_centralDirectoryOf`, deleting `input.position = end + 4`. The
 //     search that found the end record last read its signature, which leaves
 //     the position exactly there.
+//
+// One survivor that is not equivalent, and not pinned: in
+// `_readCentralDirectory`, `directory.length >= 4` as `> 4`. The only input
+// that tells them apart is a directory ending in a bare record signature:
+// `>=` hands it to `ZipFileHeader`, which reads past the end with a
+// RangeError, and `>` stops before it. Neither opens a book, and a test for
+// it would pin a RangeError from inside `package:archive`, which the
+// `EpubException` contract only tolerates.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -672,13 +680,15 @@ void main() {
     });
 
     // TC-LIM-28 [Error guessing]: bytes with no end record have no directory
-    // to count, and are not a ZIP at all. The bytes are not zeros, so
-    // reading them as an end record would not pass quietly.
+    // to count, and are not a ZIP at all. Zeros are the case that matters:
+    // read as an end record anyway, they describe an empty directory at
+    // offset 0, and the file would open as a ZIP with no entries.
     test(
         'TC-LIM-28 [Error guessing]: bytes that are not a ZIP fail as a '
         'corrupt archive', () {
       expect(reader.openBook(Uint8List(64)..fillRange(0, 64, 0xAB)),
           _throwsCorrupt);
+      expect(reader.openBook(Uint8List(64)), _throwsCorrupt);
     });
 
     // TC-LIM-29 [Error guessing]: a record's extra field and comment are part
@@ -751,6 +761,41 @@ void main() {
       expect(
           reader.openBook(Uint8List.fromList(
               <int>[...head.buffer.asUint8List(), ...directory])),
+          _throwsTooLarge);
+    });
+
+    // TC-LIM-41 [Boundary]: a zip64 record at the very first byte, then the
+    // records, the locator pointing at offset 0, and the end record. Offset
+    // 0 is in the file, so the record is read there.
+    test(
+        'TC-LIM-41 [Boundary]: 4097 records behind a zip64 record at offset '
+        '0 are refused', () {
+      const int zip64RecordLength = 56;
+      final Uint8List directory = _centralRecords(4097);
+      final ByteData zip64Record = ByteData(zip64RecordLength)
+        ..setUint32(0, 0x06064b50, Endian.little)
+        ..setUint64(4, zip64RecordLength - 12, Endian.little)
+        ..setUint64(24, 4097, Endian.little)
+        ..setUint64(32, 4097, Endian.little)
+        ..setUint64(40, directory.length, Endian.little)
+        ..setUint64(48, zip64RecordLength, Endian.little);
+      final ByteData tail = ByteData(20 + _endOfCentralDirectoryLength)
+        ..setUint32(0, 0x07064b50, Endian.little)
+        ..setUint64(8, 0, Endian.little)
+        ..setUint32(16, 1, Endian.little)
+        ..setUint32(20, _endOfCentralDirectorySignature, Endian.little)
+        ..setUint16(20 + 4, 0xFFFF, Endian.little)
+        ..setUint16(20 + 8, 0xFFFF, Endian.little)
+        ..setUint16(20 + 10, 0xFFFF, Endian.little)
+        ..setUint32(20 + 12, 0xFFFFFFFF, Endian.little)
+        ..setUint32(20 + 16, 0xFFFFFFFF, Endian.little);
+
+      expect(
+          reader.openBook(Uint8List.fromList(<int>[
+            ...zip64Record.buffer.asUint8List(),
+            ...directory,
+            ...tail.buffer.asUint8List(),
+          ])),
           _throwsTooLarge);
     });
 
@@ -944,12 +989,137 @@ void main() {
     });
   });
 
+  group('damaged containers', () {
+    List<_CraftedZipEntry> oneEntry() => <_CraftedZipEntry>[
+          _CraftedZipEntry.stored('NGE-SEED.txt', const <int>[0x4E]),
+        ];
+
+    // TC-LIM-37 [Error guessing]: a file cut short inside its end record.
+    // No whole end record is left to read, so the file is refused as not a
+    // ZIP rather than read past its end.
+    for (final int cut in <int>[1, 3, 10, 17, 21]) {
+      test(
+          'TC-LIM-37 [Error guessing]: a file cut $cut bytes into its end '
+          'record fails as a corrupt archive', () {
+        final Uint8List zip = _craftZip(oneEntry());
+
+        expect(reader.openBook(Uint8List.sublistView(zip, 0, zip.length - cut)),
+            _throwsCorrupt);
+      });
+    }
+
+    // TC-LIM-38 [Boundary / error guessing]: the central directory has to
+    // lie in the file. An offset past EOF, a size reaching one byte past it,
+    // and a negative offset or size through zip64 are refused; a size
+    // reaching exactly to EOF is not (the directory then takes in the end
+    // record, whose signature ends the records).
+    test(
+        'TC-LIM-38 [Boundary]: a central directory placed outside the file '
+        'fails as a corrupt archive', () {
+      Uint8List patched(int Function(int length, int offset) sizeOf,
+          {int offsetShift = 0}) {
+        final Uint8List zip = _craftZip(oneEntry());
+        final ByteData end = ByteData.sublistView(
+            zip, zip.length - _endOfCentralDirectoryLength);
+        final int offset = end.getUint32(16, Endian.little) + offsetShift;
+        end
+          ..setUint32(16, offset, Endian.little)
+          ..setUint32(12, sizeOf(zip.length, offset), Endian.little);
+        return zip;
+      }
+
+      expect(
+          reader.openBook(
+              patched((int length, int offset) => 46 + 12, offsetShift: 1000)),
+          _throwsCorrupt);
+      expect(
+          reader.openBook(patched((int length, int offset) => length - offset)),
+          _throwsDecodedWithoutContainer);
+      expect(
+          reader.openBook(
+              patched((int length, int offset) => length - offset + 1)),
+          _throwsCorrupt);
+
+      Uint8List zip64With({int? size, int? offset}) {
+        final Uint8List zip = _craftZip(oneEntry());
+        final Uint8List zip64 = _withZip64EndRecord(zip);
+        final ByteData record = ByteData.sublistView(
+            zip64, zip.length - _endOfCentralDirectoryLength);
+        if (size != null) {
+          record.setInt64(40, size, Endian.little);
+        }
+        if (offset != null) {
+          record.setInt64(48, offset, Endian.little);
+        }
+        return zip64;
+      }
+
+      expect(reader.openBook(zip64With(size: -1)), _throwsCorrupt);
+      expect(reader.openBook(zip64With(offset: -1)), _throwsCorrupt);
+    });
+
+    // TC-LIM-39 [Boundary / error guessing]: the zip64 locator has to point
+    // where a whole 56-byte zip64 end record fits in the file. Past the file,
+    // negative, or one byte too late to fit is refused. The last place it
+    // fits is not: no zip64 record is there, so the end record's own values,
+    // marked zip64 only by its disk field, are read instead.
+    test(
+        'TC-LIM-39 [Boundary]: a zip64 locator pointing where no zip64 record '
+        'fits fails as a corrupt archive', () {
+      Uint8List pointedAt(int Function(int length) recordAt) {
+        final Uint8List zip = _craftZip(oneEntry());
+        final int record = zip.length - _endOfCentralDirectoryLength;
+        final ByteData original = ByteData.sublistView(zip, record);
+        final Uint8List zip64 = _withZip64EndRecord(
+          zip,
+          diskEntries: original.getUint16(8, Endian.little),
+          size: original.getUint32(12, Endian.little),
+          offset: original.getUint32(16, Endian.little),
+        );
+        ByteData.sublistView(zip64)
+            .setInt64(record + 56 + 8, recordAt(zip64.length), Endian.little);
+        return zip64;
+      }
+
+      expect(
+          reader.openBook(pointedAt((int length) => length)), _throwsCorrupt);
+      expect(reader.openBook(pointedAt((int length) => -1)), _throwsCorrupt);
+      expect(reader.openBook(pointedAt((int length) => length - 55)),
+          _throwsCorrupt);
+      expect(reader.openBook(pointedAt((int length) => length - 56)),
+          _throwsDecodedWithoutContainer);
+    });
+
+    // TC-LIM-40 [Error guessing]: a central directory that ends in a few
+    // stray bytes, too few for another record's signature, is read to its
+    // last whole record and no further.
+    test(
+        'TC-LIM-40 [Error guessing]: stray bytes after the last directory '
+        'record are ignored', () {
+      final Uint8List zip = _craftZip(oneEntry());
+      final int end = zip.length - _endOfCentralDirectoryLength;
+      final ByteData original = ByteData.sublistView(zip, end);
+      final Uint8List padded = Uint8List.fromList(<int>[
+        ...zip.sublist(0, end),
+        0x4E, 0x47, 0x45, // three stray bytes
+        ..._endOfCentralDirectory(
+          entryCount: 1,
+          centralDirectoryLength: original.getUint32(12, Endian.little) + 3,
+          centralDirectoryOffset: original.getUint32(16, Endian.little),
+        ),
+      ]);
+
+      expect(reader.openBook(padded), _throwsDecodedWithoutContainer);
+    });
+  });
+
   group('overlapping entries', () {
     // TC-LIM-33 [Error guessing]: the overlapping-entry bomb. 4096 records
     // share one 64 KiB DEFLATE stream of empty blocks, which inflates to
-    // nothing, so no size limit reacts; only their compressed sizes adding
-    // up to far more than the file can. Without that check the stream is
-    // inflated 4096 times and the book opens.
+    // nothing, so no size limit reacts; only their compressed bytes adding
+    // up to far more than the file can. Overlapping entries are a damaged
+    // container, not a large one. Without that check the stream is inflated
+    // 4096 times and the book opens.
     test(
         'TC-LIM-33 [Error guessing]: 4096 records sharing one stream are '
         'refused', () {
@@ -961,7 +1131,7 @@ void main() {
             payload: stream,
             compressedSizes: List<int>.filled(_maxEntries, stream.length),
           )),
-          _throwsTooLarge);
+          _throwsCorrupt);
     });
 
     // TC-LIM-34 [Boundary]: compressed bytes adding up to exactly the file's
@@ -982,7 +1152,7 @@ void main() {
           );
 
       expect(reader.openBook(zip(dataStart)), _throwsDecodedWithoutContainer);
-      expect(reader.openBook(zip(dataStart + 1)), _throwsTooLarge);
+      expect(reader.openBook(zip(dataStart + 1)), _throwsCorrupt);
     });
 
     // TC-LIM-35 [Error guessing]: the same bomb with each record's compressed
@@ -1007,7 +1177,7 @@ void main() {
               compressedSizes: List<int>.filled(_maxEntries, 0),
               zip64CompressedSize: size.value,
             )),
-            _throwsTooLarge);
+            _throwsCorrupt);
       }, timeout: const Timeout(Duration(seconds: 10)));
     }
 

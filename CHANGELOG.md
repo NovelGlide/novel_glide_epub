@@ -14,23 +14,30 @@ bytes plus its inflated content, each within the limits below.
 | Bytes all entries inflate to | 512 MiB |
 
 - A breach throws **`EpubArchiveTooLargeException`**, a new member of the
-  sealed `EpubException` family. So does an archive whose entries are given
-  more compressed bytes between them than the file holds: entries that
-  overlap, sharing one stream, would have it inflated once per entry. The
-  bytes counted are the ones each entry is really given, not the sizes its
-  header claims. This is **breaking** for an exhaustive `switch` on
-  `EpubException`, which now has to handle it and the two members below.
+  sealed `EpubException` family. This is **breaking** for an exhaustive
+  `switch` on `EpubException`, which now has to handle it and the two
+  members below.
 - **A damaged ZIP container now throws the new
-  `EpubCorruptArchiveException`**, a member of the same family, instead of
-  an error the `EpubException` contract counts as a defect:
-  - bytes that are not a ZIP at all, which threw `ArchiveException`;
+  `EpubCorruptArchiveException`**, a member of the same family:
+  - bytes that are not a ZIP at all, or cut short inside the
+    end-of-central-directory record, which threw `ArchiveException` or a
+    `RangeError`;
+  - a central directory or zip64 record the file says lies outside it,
+    which threw a `RangeError`;
   - a container `package:archive` cannot parse (a broken local header, say),
     which threw `ArchiveException`;
   - an entry whose deflate stream zlib rejects, which threw
-    `FormatException`.
+    `FormatException`;
+  - entries given more compressed bytes between them than the file holds,
+    which is new: entries that overlap, sharing one stream, would have it
+    inflated once per entry. The bytes counted are the ones each entry is
+    really given, not the sizes its header claims.
 
   `TypeError` and `StateError` still escape unconverted: they mean a defect
-  in this package or `package:archive`, not a damaged book.
+  in this package or `package:archive`, not a damaged book. So does a
+  `RangeError` from inside `package:archive`, on a container damaged so that
+  it reads past the end of its bytes while parsing an entry's headers: it
+  cannot be told apart from a defect, so it is not caught.
 - The limits are private constants. There is nothing to configure and no
   separate check to call: `openBook`, `readBook` and the two new entry points
   all apply them.

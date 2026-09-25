@@ -56,6 +56,9 @@ class EpubReader {
   static const int _maxTotalBytes = 512 * 1024 * 1024;
   static const int _inflateInputChunkBytes = 64 * 1024;
 
+  /// An end-of-central-directory record without its comment.
+  static const int _endRecordLength = 22;
+
   /// Loads basics metadata.
   ///
   /// Opens the book asynchronously without parsing its content files.
@@ -250,15 +253,18 @@ class EpubReader {
   /// produces, and abandoned as soon as they cross a limit.
   ///
   /// The compressed bytes are counted the same way, as each entry is given
-  /// them: an honest ZIP's entries each hold their own bytes, so together
-  /// they fit in the file. More means entries overlap, and every entry is
-  /// inflated here: one stream shared by thousands would be inflated
-  /// thousands of times, a cost the output limits do not bound when the
-  /// stream inflates to little or nothing.
+  /// them: a well-formed ZIP's entries each hold their own bytes, so
+  /// together they fit in the file. More means entries overlap, which is a
+  /// damaged container, and is refused before the overlap is inflated: every
+  /// entry is inflated here, and one stream shared by thousands would be
+  /// inflated thousands of times, a cost the output limits do not bound when
+  /// the stream inflates to little or nothing.
   ///
   /// This is where a ZIP that fails to decode becomes
   /// [EpubCorruptArchiveException]: `package:archive` reports a malformed
-  /// container, and zlib an invalid stream, as a `FormatException`.
+  /// container, and zlib an invalid stream, as a `FormatException`. A
+  /// container damaged so that `package:archive` itself reads past the end of
+  /// its bytes throws a RangeError from inside it, which is left alone.
   static Archive _decodeArchive(List<int> bytes) {
     _checkCompressedSize(bytes.length);
     try {
@@ -278,7 +284,7 @@ class EpubReader {
                 .toUint8List();
         consumed += raw.length;
         if (consumed > bytes.length) {
-          throw EpubArchiveTooLargeException('The entries hold $consumed '
+          throw EpubCorruptArchiveException('The entries hold $consumed '
               'compressed bytes between them, more than the file\'s '
               '${bytes.length}: they overlap.');
         }
@@ -314,8 +320,10 @@ class EpubReader {
   static List<ZipFileHeader> _readCentralDirectory(InputStream input) {
     final InputStream directory = _centralDirectoryOf(input);
     final List<ZipFileHeader> headers = <ZipFileHeader>[];
-    while (
-        !directory.isEOS && directory.readUint32() == ZipFileHeader.SIGNATURE) {
+    // `InputStream` reads past its end with a RangeError; a signature needs
+    // four bytes.
+    while (directory.length >= 4 &&
+        directory.readUint32() == ZipFileHeader.SIGNATURE) {
       if (headers.length == _maxEntries) {
         throw const EpubArchiveTooLargeException(
             'The archive has more than $_maxEntries entries.');
@@ -326,8 +334,15 @@ class EpubReader {
   }
 
   /// The central directory, found as `ZipDirectory.read` finds it.
+  ///
+  /// Every position and length read here is the file's own claim, checked
+  /// against the file before it is followed: `InputStream` does not check
+  /// bounds, and reads past its end with a RangeError.
   static InputStream _centralDirectoryOf(InputStream input) {
-    final int end = _endRecordOf(input);
+    // Taken before anything is read: `InputStream.length` counts only what
+    // is left after the read position.
+    final int fileLength = input.length;
+    final int end = _endRecordOf(input, fileLength);
     if (end < 0) {
       throw const EpubCorruptArchiveException(
           'No end-of-central-directory record: the file is not a ZIP.');
@@ -346,21 +361,32 @@ class EpubReader {
         size == 0xffffffff ||
         diskEntries == 0xffff ||
         disk == 0xffff) {
-      final int? record = _zip64EndRecordOf(input, end);
+      final int? record = _zip64EndRecordOf(input, end, fileLength);
       if (record != null) {
         input.position = record + 40;
         size = input.readUint64();
         offset = input.readUint64();
       }
     }
+    return _directoryAt(input, offset, size, fileLength);
+  }
+
+  /// The [size] bytes at [offset], all of which have to be in the file of
+  /// [fileLength] bytes.
+  static InputStream _directoryAt(
+      InputStream input, int offset, int size, int fileLength) {
+    if (offset < 0 || size < 0 || offset > fileLength - size) {
+      throw EpubCorruptArchiveException('The central directory is $size '
+          'bytes at offset $offset, outside the file of $fileLength.');
+    }
     return InputStream(input.subset(offset, size).toUint8List());
   }
 
-  /// Where the end-of-central-directory record is, found as
-  /// `ZipDirectory.read` finds it: the last one, searching from the back.
-  /// -1 when there is none.
-  static int _endRecordOf(InputStream input) {
-    int end = input.length - 5;
+  /// Where the end-of-central-directory record is: the last one, searching
+  /// from the back from the last place a whole record fits in the file of
+  /// [fileLength] bytes. -1 when there is none.
+  static int _endRecordOf(InputStream input, int fileLength) {
+    int end = fileLength - _endRecordLength;
     while (end >= 0 &&
         _uint32At(input, end) != ZipDirectory.eocdLocatorSignature) {
       end--;
@@ -370,7 +396,10 @@ class EpubReader {
 
   /// Where the zip64 end-of-central-directory record is, when the locator
   /// before the end record at [end] points at one.
-  static int? _zip64EndRecordOf(InputStream input, int end) {
+  ///
+  /// A locator pointing where no whole zip64 record fits in the file of
+  /// [fileLength] bytes refuses the file.
+  static int? _zip64EndRecordOf(InputStream input, int end, int fileLength) {
     final int locator = end - ZipDirectory.zip64EocdLocatorSize;
     if (locator < 0 ||
         _uint32At(input, locator) != ZipDirectory.zip64EocdLocatorSignature) {
@@ -378,6 +407,11 @@ class EpubReader {
     }
     input.position = locator + 8;
     final int record = input.readUint64();
+    if (record < 0 || record > fileLength - ZipDirectory.zip64EocdSize) {
+      throw EpubCorruptArchiveException('The zip64 locator points at '
+          '$record, where no zip64 end record fits in the file of '
+          '$fileLength.');
+    }
     return _uint32At(input, record) == ZipDirectory.zip64EocdSignature
         ? record
         : null;
