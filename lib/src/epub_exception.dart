@@ -19,13 +19,10 @@ sealed class EpubException implements Exception {
   String toString() => '$runtimeType: $message';
 }
 
-/// A file the package document points at is absent from the ZIP container,
-/// or an entry of the container cannot be read at all.
+/// A file the package document points at is absent from the ZIP container.
 ///
 /// The archive is incomplete or truncated: the EPUB says the file is there
-/// and it is not. An entry compressed with a method other than the two an
-/// EPUB container allows (store and deflate) counts as absent too, whether
-/// or not the package document points at it.
+/// and it is not.
 final class EpubMissingArchiveEntryException extends EpubException {
   const EpubMissingArchiveEntryException(super.message);
 }
@@ -59,9 +56,18 @@ final class EpubUnresolvedReferenceException extends EpubException {
   const EpubUnresolvedReferenceException(super.message);
 }
 
+/// An entry of the ZIP container is compressed with a method other than the
+/// two an EPUB container allows, store and deflate.
+///
+/// Raised when the book is opened, whether or not the package document
+/// points at the entry.
+final class EpubUnsupportedCompressionException extends EpubException {
+  const EpubUnsupportedCompressionException(super.message);
+}
+
 /// The ZIP container is past one of the parser's fixed limits: the file's
 /// compressed size, the number of entries, or the bytes one entry or the
-/// whole archive inflates to.
+/// whole archive inflates to; or its entries' compressed data overlap.
 ///
 /// Raised before any of the book is parsed, and at the latest part-way
 /// through inflating the entry that crosses the limit, so a decompression

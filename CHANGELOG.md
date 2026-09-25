@@ -14,8 +14,11 @@ bytes plus its inflated content, each within the limits below.
 | Bytes all entries inflate to | 512 MiB |
 
 - A breach throws **`EpubArchiveTooLargeException`**, a new member of the
-  sealed `EpubException` family. This is **breaking** for an exhaustive
-  `switch` on `EpubException`, which now has to handle it.
+  sealed `EpubException` family. So does an archive whose entries' compressed
+  sizes add up to more than the file: entries that overlap, sharing one
+  stream, would have it inflated once per entry. This is **breaking** for an
+  exhaustive `switch` on `EpubException`, which now has to handle it and
+  `EpubUnsupportedCompressionException` below.
 - The limits are private constants. There is nothing to configure and no
   separate check to call: `openBook`, `readBook` and the two new entry points
   all apply them.
@@ -24,10 +27,11 @@ bytes plus its inflated content, each within the limits below.
   compressed limit is refused without being loaded into memory, then decode
   it as `openBook` / `readBook` do. They bring in `dart:io`, so the package no
   longer compiles for the web.
-- **The archive is inflated once, in `openBook`.** The entries are counted
-  from the central directory's records before `package:archive` builds any
-  of them, whatever count the end record claims, and their declared sizes
-  are checked before anything is inflated.
+- **The archive is inflated once, in `openBook`.** The central directory is
+  read here, record by record, rather than by `package:archive`'s
+  `ZipDirectory.read`, so the entries are counted as they are read, whatever
+  count the end record claims, and the one past the limit is refused before
+  it is built. Their declared sizes are checked before anything is inflated.
   Then every entry is inflated once, counting the bytes it really produces,
   and abandoned when they cross the per-entry limit or what the total limit
   has left. A header that under-declares its size gets no further than the
@@ -58,8 +62,9 @@ bytes plus its inflated content, each within the limits below.
     modification time, or directory and symlink flags.
   - Only STORE and DEFLATE entries are read, the two methods the EPUB
     container format allows. An entry in any other method, BZIP2 included,
-    refuses the book at open with `EpubMissingArchiveEntryException`; before,
-    BZIP2 was read and other methods threw `ArchiveException` when read. The
+    refuses the book at open with the new
+    **`EpubUnsupportedCompressionException`**; before, BZIP2 was read and
+    other methods threw `ArchiveException` when read. The
     ZIP encryption flag is ignored; the EPUB container format forbids ZIP
     encryption.
 

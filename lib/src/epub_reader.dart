@@ -241,26 +241,25 @@ class EpubReader {
 
   /// Decodes [bytes] as a ZIP archive whose every entry is already inflated.
   ///
-  /// The entry count and the central directory's declared sizes are checked
-  /// before anything is inflated. The declared sizes are the archive's own
-  /// claim, which a decompression bomb lies in, and which some writers get
-  /// wrong in good faith (`package:archive`'s `ArchiveFile.string` declares a
-  /// text's UTF-16 length, short of its UTF-8 bytes). So each entry is then
-  /// inflated counting the bytes it really produces, and abandoned as soon
-  /// as they cross a limit.
+  /// The entry count, and the sizes the central directory declares, are
+  /// checked before anything is inflated. The declared uncompressed sizes are
+  /// the archive's own claim, which a decompression bomb lies in, and which
+  /// some writers get wrong in good faith (`package:archive`'s
+  /// `ArchiveFile.string` declares a text's UTF-16 length, short of its UTF-8
+  /// bytes). So each entry is then inflated counting the bytes it really
+  /// produces, and abandoned as soon as they cross a limit.
   static Archive _decodeArchive(List<int> bytes) {
     _checkCompressedSize(bytes.length);
-    // A stream of its own for each: `InputStream.length` counts only what is
-    // left after the read position, which the count moves.
-    _checkEntryCount(_centralDirectoryOf(InputStream(bytes)));
-    final List<ZipFileHeader> headers =
-        ZipDirectory.read(InputStream(bytes)).fileHeaders;
-    _checkDeclaredSizes(headers);
+    final InputStream input = InputStream(bytes);
+    final List<ZipFileHeader> headers = _readCentralDirectory(input);
+    _checkDeclaredSizes(headers, bytes.length);
 
     final Archive archive = Archive();
     int total = 0;
     for (final ZipFileHeader header in headers) {
-      final ZipFile file = header.file ?? (throw _entryWithoutContent);
+      header.readLocalFileHeader(input, null);
+      final ZipFile file =
+          header.file ?? (throw StateError('No ZipFile for a header'));
       final Uint8List content =
           _inflateEntry(file, min(_maxEntryBytes, _maxTotalBytes - total));
       total += content.length;
@@ -269,12 +268,6 @@ class EpubReader {
     return archive;
   }
 
-  /// Thrown for a header `ZipDirectory.read` left without its entry, or an
-  /// entry without its bytes. Neither happens with `package:archive` as it
-  /// is; an entry without content is missing all the same.
-  static const EpubMissingArchiveEntryException _entryWithoutContent =
-      EpubMissingArchiveEntryException('A ZIP entry has no content.');
-
   static void _checkCompressedSize(int size) {
     if (size > _maxCompressedBytes) {
       throw EpubArchiveTooLargeException(
@@ -282,16 +275,37 @@ class EpubReader {
     }
   }
 
-  /// The central directory `ZipDirectory.read` will read, found the way it
-  /// finds it; empty when there is no end-of-central-directory record, which
-  /// `ZipDirectory.read` then refuses on its own.
+  /// The central directory's headers, built one record at a time, the one
+  /// past [_maxEntries] refused before it is built.
   ///
-  /// This has to match `ZipDirectory.read` exactly: the entry count is only
-  /// a limit if it is taken from the bytes that are then decoded.
+  /// `package:archive` has no public way to find the directory short of
+  /// `ZipDirectory.read`, which builds a header for every record before the
+  /// count can be seen, reading until the directory's bytes run out whatever
+  /// count the end record states. A record is 46 bytes at least and many may
+  /// point at one entry, so a 512 MiB file holds millions of them. So the
+  /// directory is found here as `ZipDirectory.read` finds it, and its records
+  /// read with the same public `ZipFileHeader`.
+  static List<ZipFileHeader> _readCentralDirectory(InputStream input) {
+    final InputStream directory = _centralDirectoryOf(input);
+    final List<ZipFileHeader> headers = <ZipFileHeader>[];
+    while (
+        !directory.isEOS && directory.readUint32() == ZipFileHeader.SIGNATURE) {
+      if (headers.length == _maxEntries) {
+        throw const EpubArchiveTooLargeException(
+            'The archive has more than $_maxEntries entries.');
+      }
+      headers.add(ZipFileHeader(directory));
+    }
+    return headers;
+  }
+
+  /// The central directory, found as `ZipDirectory.read` finds it.
   static InputStream _centralDirectoryOf(InputStream input) {
     final int end = _endRecordOf(input);
     if (end < 0) {
-      return InputStream(const <int>[]);
+      // `ZipDirectory.read`'s own refusal, kept so that bytes which are not a
+      // ZIP fail as they always have.
+      throw ArchiveException('Could not find End of Central Directory Record');
     }
 
     input.position = end + 4;
@@ -349,43 +363,35 @@ class EpubReader {
     return input.readUint32();
   }
 
-  /// Refuses a central [directory] of more than [_maxEntries] records,
-  /// reading only each record's lengths.
+  /// Refuses [headers] whose declared sizes are past the limits, or whose
+  /// compressed sizes add up to more than the [fileSize] they sit in.
   ///
-  /// `ZipDirectory.read` builds an object for every record before its count
-  /// can be seen, and reads records until the directory's bytes run out,
-  /// whatever count the end record states. A record is 46 bytes at least and
-  /// many may point at one entry, so a 512 MiB file holds millions of them.
-  static void _checkEntryCount(InputStream directory) {
-    int count = 0;
-    while (
-        !directory.isEOS && directory.readUint32() == ZipFileHeader.SIGNATURE) {
-      count++;
-      if (count > _maxEntries) {
-        throw const EpubArchiveTooLargeException(
-            'The archive has more than $_maxEntries entries.');
-      }
-      directory.skip(24);
-      final int nameLength = directory.readUint16();
-      final int extraLength = directory.readUint16();
-      final int commentLength = directory.readUint16();
-      directory.skip(12 + nameLength + extraLength + commentLength);
-    }
-  }
-
-  static void _checkDeclaredSizes(List<ZipFileHeader> headers) {
+  /// An honest ZIP's entries each hold their own bytes, so their compressed
+  /// sizes fit in the file together. More means entries overlap, and every
+  /// entry is inflated here: one stream shared by thousands would be
+  /// inflated thousands of times, a cost the output limits do not bound when
+  /// the stream inflates to little or nothing.
+  static void _checkDeclaredSizes(List<ZipFileHeader> headers, int fileSize) {
     int total = 0;
+    int compressed = 0;
     for (final ZipFileHeader header in headers) {
-      final int declared = header.uncompressedSize ?? 0;
+      final int declared =
+          header.uncompressedSize ?? (throw StateError('No uncompressed size'));
       if (declared > _maxEntryBytes) {
         throw EpubArchiveTooLargeException('An entry declares $declared '
             'bytes; the limit is $_maxEntryBytes.');
       }
       total += declared;
+      compressed +=
+          header.compressedSize ?? (throw StateError('No compressed size'));
     }
     if (total > _maxTotalBytes) {
       throw EpubArchiveTooLargeException('The entries declare $total bytes '
           'in total; the limit is $_maxTotalBytes.');
+    }
+    if (compressed > fileSize) {
+      throw EpubArchiveTooLargeException('The entries declare $compressed '
+          'compressed bytes, more than the file\'s $fileSize: they overlap.');
     }
   }
 
@@ -398,7 +404,8 @@ class EpubReader {
   /// forbids ZIP encryption, and decrypting without a password would only
   /// produce other bytes to inflate.
   static Uint8List _inflateEntry(ZipFile file, int limit) {
-    final InputStreamBase raw = file.rawContent ?? (throw _entryWithoutContent);
+    final InputStreamBase raw =
+        file.rawContent ?? (throw StateError('No raw content for a ZipFile'));
     switch (file.compressionMethod) {
       case ZipFile.zipCompressionStore:
         final Uint8List stored = raw.toUint8List();
@@ -407,9 +414,9 @@ class EpubReader {
       case ZipFile.zipCompressionDeflate:
         return _inflateDeflate(raw.toUint8List(), limit);
       default:
-        throw EpubMissingArchiveEntryException('An entry uses ZIP compression '
-            'method ${file.compressionMethod}; an EPUB may only store or '
-            'deflate.');
+        throw EpubUnsupportedCompressionException('An entry uses ZIP '
+            'compression method ${file.compressionMethod}; an EPUB may only '
+            'store or deflate.');
     }
   }
 

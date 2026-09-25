@@ -220,6 +220,61 @@ Uint8List _centralRecords(
   return bytes;
 }
 
+/// The length of a [_sharedStreamZip] with a [payloadLength]-byte stream and
+/// [recordCount] records.
+int _sharedStreamZipLength(int payloadLength, int recordCount) =>
+    _localFileHeaderLength +
+    1 +
+    payloadLength +
+    recordCount * (_centralFileHeaderLength + 1) +
+    _endOfCentralDirectoryLength;
+
+/// One entry's [payload] at the start of the file, and one central-directory
+/// record for each of [compressedSizes], every record pointing at that one
+/// entry and claiming its own compressed size: the overlapping-entry shape.
+/// Each record declares 0 bytes uncompressed, so no declared-size limit can
+/// react.
+Uint8List _sharedStreamZip({
+  required int method,
+  required List<int> payload,
+  required List<int> compressedSizes,
+}) {
+  final Uint8List bytes =
+      Uint8List(_sharedStreamZipLength(payload.length, compressedSizes.length));
+  final ByteData data = ByteData.sublistView(bytes)
+    ..setUint32(0, _localFileHeaderSignature, Endian.little)
+    ..setUint16(4, 20, Endian.little) // version needed
+    ..setUint16(8, method, Endian.little)
+    ..setUint32(18, payload.length, Endian.little)
+    ..setUint16(26, 1, Endian.little); // name length
+  bytes
+    ..[_localFileHeaderLength] = 0x78 // 'x'
+    ..setAll(_localFileHeaderLength + 1, payload);
+
+  final int directory = _localFileHeaderLength + 1 + payload.length;
+  int at = directory;
+  for (final int compressedSize in compressedSizes) {
+    data
+      ..setUint32(at, _centralFileHeaderSignature, Endian.little)
+      ..setUint16(at + 4, 20, Endian.little) // version made by
+      ..setUint16(at + 6, 20, Endian.little) // version needed
+      ..setUint16(at + 10, method, Endian.little)
+      ..setUint32(at + 20, compressedSize, Endian.little)
+      ..setUint16(at + 28, 1, Endian.little); // name length
+    bytes[at + _centralFileHeaderLength] = 0x78;
+    at += _centralFileHeaderLength + 1;
+  }
+  bytes.setAll(
+    at,
+    _endOfCentralDirectory(
+      entryCount: compressedSizes.length,
+      centralDirectoryLength: at - directory,
+      centralDirectoryOffset: directory,
+    ),
+  );
+  return bytes;
+}
+
 /// [zip], a `_craftZip` result, with its end record in zip64 form: a zip64
 /// end record holding the central directory's count, size and place, the
 /// locator pointing at it, and an end record carrying [disk],
@@ -843,6 +898,52 @@ void main() {
     });
   });
 
+  group('overlapping entries', () {
+    // TC-LIM-33 [Error guessing]: the overlapping-entry bomb. 4096 records
+    // share one 64 KiB DEFLATE stream of empty blocks, which inflates to
+    // nothing, so no size limit reacts; only their compressed sizes adding
+    // up to far more than the file can. Without that check the stream is
+    // inflated 4096 times and the book opens.
+    test(
+        'TC-LIM-33 [Error guessing]: 4096 records sharing one stream are '
+        'refused', () {
+      const List<int> emptyBlock = <int>[0x00, 0x00, 0x00, 0xFF, 0xFF];
+      const List<int> lastEmptyBlock = <int>[0x01, 0x00, 0x00, 0xFF, 0xFF];
+      final List<int> stream = <int>[
+        for (int i = 0; i < 64 * 1024 ~/ emptyBlock.length; i++) ...emptyBlock,
+        ...lastEmptyBlock,
+      ];
+
+      expect(
+          reader.openBook(_sharedStreamZip(
+            method: _deflateMethod,
+            payload: stream,
+            compressedSizes: List<int>.filled(_maxEntries, stream.length),
+          )),
+          _throwsTooLarge);
+    });
+
+    // TC-LIM-34 [Boundary]: compressed sizes adding up to exactly the file's
+    // length are admissible, one byte more is not. Two stored records share
+    // one 3-byte entry; the second claims the rest of the file.
+    test(
+        'TC-LIM-34 [Boundary]: compressed sizes adding up to the file length '
+        'are decoded, one byte more refused', () {
+      const List<int> payload = <int>[0x4E, 0x47, 0x45];
+      final int length = _sharedStreamZipLength(payload.length, 2);
+      Uint8List zip(int secondSize) => _sharedStreamZip(
+            method: _storeMethod,
+            payload: payload,
+            compressedSizes: <int>[payload.length, secondSize],
+          );
+
+      expect(reader.openBook(zip(length - payload.length)),
+          _throwsDecodedWithoutContainer);
+      expect(
+          reader.openBook(zip(length - payload.length + 1)), _throwsTooLarge);
+    });
+  });
+
   group('the one decode', () {
     // TC-LIM-19 [Equivalence partitioning]: each compression method an EPUB
     // may use produces the chapter it holds.
@@ -888,7 +989,7 @@ void main() {
                 ),
               ],
             )),
-            throwsA(isA<EpubMissingArchiveEntryException>()));
+            throwsA(isA<EpubUnsupportedCompressionException>()));
       });
     }
 
