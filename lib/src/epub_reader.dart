@@ -316,8 +316,8 @@ class EpubReader {
   /// count can be seen, reading until the directory's bytes run out whatever
   /// count the end record states. A record is 46 bytes at least and many may
   /// point at one entry, so a 512 MiB file holds millions of them. So the
-  /// directory is found here as `ZipDirectory.read` finds it, and its records
-  /// read with the same public `ZipFileHeader`.
+  /// directory is found here, and its records read with the same public
+  /// `ZipFileHeader`.
   static List<ZipFileHeader> _readCentralDirectory(InputStream input) {
     final InputStreamBase directory = _centralDirectoryOf(input);
     final List<ZipFileHeader> headers = <ZipFileHeader>[];
@@ -334,8 +334,9 @@ class EpubReader {
     return headers;
   }
 
-  /// The central directory in the unread [input], found as
-  /// `ZipDirectory.read` finds it.
+  /// The central directory in the unread [input]: the end record is searched
+  /// for from the last position a whole one fits, where `ZipDirectory.read`
+  /// starts in the last five bytes.
   static InputStreamBase _centralDirectoryOf(InputStream input) {
     final int end = _endRecordOf(input);
     if (end < 0) {

@@ -52,6 +52,9 @@ bytes plus its inflated content, each within the limits below.
   compressed limit is refused without being loaded into memory, then decode
   it as `openBook` / `readBook` do. They bring in `dart:io`, so the package no
   longer compiles for the web.
+- The `archive` dependency now requires `^3.6.1`: the decode uses its public
+  `ZipFileHeader`, `readLocalFileHeader` and `InputStream` API as of that
+  version.
 - **The archive is inflated once, in `openBook`.** The central directory is
   read here, record by record, rather than by `package:archive`'s
   `ZipDirectory.read`, so the entries are counted as they are read, whatever
@@ -91,7 +94,12 @@ bytes plus its inflated content, each within the limits below.
     **`EpubUnsupportedCompressionException`**; before, BZIP2 was read and
     other methods threw `ArchiveException` when read. The
     ZIP encryption flag is ignored; the EPUB container format forbids ZIP
-    encryption.
+    encryption. An entry with the flag set but its bytes in the clear now
+    opens, where it used to throw `FormatException`.
+  - The end record is searched for from the last position a whole one
+    fits. A valid ZIP whose comment ends with the end-record signature now
+    opens, where `ZipDirectory.read` matched that signature first and threw
+    a `RangeError`.
 
 **Breaking.**
 
