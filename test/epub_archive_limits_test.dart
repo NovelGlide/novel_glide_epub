@@ -220,8 +220,33 @@ Uint8List _centralRecords(
   return bytes;
 }
 
+/// A raw-deflate stream of about [length] bytes that inflates to nothing:
+/// empty stored blocks, then a final one.
+List<int> _emptyDeflateBlocks(int length) {
+  const List<int> emptyBlock = <int>[0x00, 0x00, 0x00, 0xFF, 0xFF];
+  const List<int> lastEmptyBlock = <int>[0x01, 0x00, 0x00, 0xFF, 0xFF];
+  return <int>[
+    for (int i = 0; i < length ~/ emptyBlock.length; i++) ...emptyBlock,
+    ...lastEmptyBlock,
+  ];
+}
+
+/// Writes a zip64 extended-information extra field holding [sizes] at [at];
+/// nothing when there are none.
+void _writeZip64Extra(ByteData data, int at, List<int> sizes) {
+  if (sizes.isEmpty) {
+    return;
+  }
+  data
+    ..setUint16(at, 1, Endian.little) // zip64 extended information
+    ..setUint16(at + 2, 8 * sizes.length, Endian.little);
+  for (int i = 0; i < sizes.length; i++) {
+    data.setUint64(at + 4 + 8 * i, sizes[i], Endian.little);
+  }
+}
+
 /// The length of a [_sharedStreamZip] with a [payloadLength]-byte stream and
-/// [recordCount] records.
+/// [recordCount] records without a zip64 extra field.
 int _sharedStreamZipLength(int payloadLength, int recordCount) =>
     _localFileHeaderLength +
     1 +
@@ -234,13 +259,26 @@ int _sharedStreamZipLength(int payloadLength, int recordCount) =>
 /// entry and claiming its own compressed size: the overlapping-entry shape.
 /// Each record declares 0 bytes uncompressed, so no declared-size limit can
 /// react.
+///
+/// Given [zip64UncompressedSize] or [zip64CompressedSize], every record
+/// carries that size in a zip64 extra field instead, its 32-bit field set to
+/// 0xFFFFFFFF. A zip64 size is written as its 64 raw bits, and
+/// `package:archive` reads it back as a signed value.
 Uint8List _sharedStreamZip({
   required int method,
   required List<int> payload,
   required List<int> compressedSizes,
+  int? zip64UncompressedSize,
+  int? zip64CompressedSize,
 }) {
-  final Uint8List bytes =
-      Uint8List(_sharedStreamZipLength(payload.length, compressedSizes.length));
+  final List<int> zip64Sizes = <int>[
+    if (zip64UncompressedSize != null) zip64UncompressedSize,
+    if (zip64CompressedSize != null) zip64CompressedSize,
+  ];
+  final int extraLength = zip64Sizes.isEmpty ? 0 : 4 + 8 * zip64Sizes.length;
+  final Uint8List bytes = Uint8List(
+      _sharedStreamZipLength(payload.length, compressedSizes.length) +
+          compressedSizes.length * extraLength);
   final ByteData data = ByteData.sublistView(bytes)
     ..setUint32(0, _localFileHeaderSignature, Endian.little)
     ..setUint16(4, 20, Endian.little) // version needed
@@ -259,10 +297,18 @@ Uint8List _sharedStreamZip({
       ..setUint16(at + 4, 20, Endian.little) // version made by
       ..setUint16(at + 6, 20, Endian.little) // version needed
       ..setUint16(at + 10, method, Endian.little)
-      ..setUint32(at + 20, compressedSize, Endian.little)
-      ..setUint16(at + 28, 1, Endian.little); // name length
+      ..setUint32(
+          at + 20,
+          zip64CompressedSize == null ? compressedSize : 0xFFFFFFFF,
+          Endian.little)
+      ..setUint32(at + 24, zip64UncompressedSize == null ? 0 : 0xFFFFFFFF,
+          Endian.little)
+      ..setUint16(at + 28, 1, Endian.little) // name length
+      ..setUint16(at + 30, extraLength, Endian.little);
     bytes[at + _centralFileHeaderLength] = 0x78;
     at += _centralFileHeaderLength + 1;
+    _writeZip64Extra(data, at, zip64Sizes);
+    at += extraLength;
   }
   bytes.setAll(
     at,
@@ -457,6 +503,8 @@ Uint8List _buildConventionalBook() => buildEpubArchive(
 
 final Matcher _throwsTooLarge = throwsA(isA<EpubArchiveTooLargeException>());
 
+final Matcher _throwsCorrupt = throwsA(isA<EpubCorruptArchiveException>());
+
 /// The archive decoded within the limits; parsing then found no container.
 final Matcher _throwsDecodedWithoutContainer =
     throwsA(isA<EpubMissingArchiveEntryException>());
@@ -576,7 +624,7 @@ void main() {
     // TC-LIM-25 [Error guessing]: the count is taken from the central
     // directory's records, before `package:archive` reads a single one. The
     // end record claims one entry, and the first local header is broken so
-    // that reading the entries fails with ArchiveException: 4097 records are
+    // that reading the entries fails as a corrupt archive: 4097 records are
     // refused as too many before that can happen, and 4096 get as far as it.
     test(
         'TC-LIM-25 [Error guessing]: records are counted before any is read, '
@@ -593,8 +641,7 @@ void main() {
       }
 
       expect(reader.openBook(lyingZip(_maxEntries + 1)), _throwsTooLarge);
-      expect(reader.openBook(lyingZip(_maxEntries)),
-          throwsA(isA<ArchiveException>()));
+      expect(reader.openBook(lyingZip(_maxEntries)), _throwsCorrupt);
     });
 
     // TC-LIM-26 [Equivalence partitioning]: a zip64 end record moves the
@@ -625,14 +672,13 @@ void main() {
     });
 
     // TC-LIM-28 [Error guessing]: bytes with no end record have no directory
-    // to count; `package:archive` refuses them as it always has. The bytes
-    // are not zeros, so reading them as an end record would not pass
-    // quietly.
+    // to count, and are not a ZIP at all. The bytes are not zeros, so
+    // reading them as an end record would not pass quietly.
     test(
-        'TC-LIM-28 [Error guessing]: bytes that are not a ZIP still fail '
-        'with ArchiveException', () {
+        'TC-LIM-28 [Error guessing]: bytes that are not a ZIP fail as a '
+        'corrupt archive', () {
       expect(reader.openBook(Uint8List(64)..fillRange(0, 64, 0xAB)),
-          throwsA(isA<ArchiveException>()));
+          _throwsCorrupt);
     });
 
     // TC-LIM-29 [Error guessing]: a record's extra field and comment are part
@@ -907,12 +953,7 @@ void main() {
     test(
         'TC-LIM-33 [Error guessing]: 4096 records sharing one stream are '
         'refused', () {
-      const List<int> emptyBlock = <int>[0x00, 0x00, 0x00, 0xFF, 0xFF];
-      const List<int> lastEmptyBlock = <int>[0x01, 0x00, 0x00, 0xFF, 0xFF];
-      final List<int> stream = <int>[
-        for (int i = 0; i < 64 * 1024 ~/ emptyBlock.length; i++) ...emptyBlock,
-        ...lastEmptyBlock,
-      ];
+      final List<int> stream = _emptyDeflateBlocks(64 * 1024);
 
       expect(
           reader.openBook(_sharedStreamZip(
@@ -923,24 +964,67 @@ void main() {
           _throwsTooLarge);
     });
 
-    // TC-LIM-34 [Boundary]: compressed sizes adding up to exactly the file's
-    // length are admissible, one byte more is not. Two stored records share
-    // one 3-byte entry; the second claims the rest of the file.
+    // TC-LIM-34 [Boundary]: compressed bytes adding up to exactly the file's
+    // length are admissible, one byte more is not. What counts is the bytes
+    // each entry is really given: both stored records start at the one
+    // entry's data, and the second claims the whole file, which only reaches
+    // to its end.
     test(
-        'TC-LIM-34 [Boundary]: compressed sizes adding up to the file length '
+        'TC-LIM-34 [Boundary]: compressed bytes adding up to the file length '
         'are decoded, one byte more refused', () {
       const List<int> payload = <int>[0x4E, 0x47, 0x45];
+      const int dataStart = _localFileHeaderLength + 1;
       final int length = _sharedStreamZipLength(payload.length, 2);
-      Uint8List zip(int secondSize) => _sharedStreamZip(
+      Uint8List zip(int firstSize) => _sharedStreamZip(
             method: _storeMethod,
             payload: payload,
-            compressedSizes: <int>[payload.length, secondSize],
+            compressedSizes: <int>[firstSize, length],
           );
 
-      expect(reader.openBook(zip(length - payload.length)),
-          _throwsDecodedWithoutContainer);
+      expect(reader.openBook(zip(dataStart)), _throwsDecodedWithoutContainer);
+      expect(reader.openBook(zip(dataStart + 1)), _throwsTooLarge);
+    });
+
+    // TC-LIM-35 [Error guessing]: the same bomb with each record's compressed
+    // size in a zip64 extra field, which `package:archive` reads as a signed
+    // value. -1 gives each record the whole rest of the file; 4096 × 2^62
+    // wraps to 0. Claimed sizes would add up to nothing past the file; the
+    // bytes each record is really given do, from the second record on.
+    final Map<String, int> zip64SizeByName = <String, int>{
+      '-1': -1,
+      '2^62': 1 << 62,
+    };
+    for (final MapEntry<String, int> size in zip64SizeByName.entries) {
+      test(
+          'TC-LIM-35 [Error guessing]: 4096 records sharing one 4 MiB stream, '
+          'each claiming ${size.key} bytes through zip64, are refused', () {
+        final List<int> stream = _emptyDeflateBlocks(4 * 1024 * 1024);
+
+        expect(
+            reader.openBook(_sharedStreamZip(
+              method: _deflateMethod,
+              payload: stream,
+              compressedSizes: List<int>.filled(_maxEntries, 0),
+              zip64CompressedSize: size.value,
+            )),
+            _throwsTooLarge);
+      }, timeout: const Timeout(Duration(seconds: 10)));
+    }
+
+    // TC-LIM-36 [Error guessing]: a zip64 uncompressed size of -1 passes the
+    // declared-size check, which it lies below. The inflate count, which
+    // reads no header, still stops the entry one byte past the limit.
+    test(
+        'TC-LIM-36 [Error guessing]: an entry declaring -1 bytes through zip64 '
+        'is still stopped at the per-entry limit', () {
       expect(
-          reader.openBook(zip(length - payload.length + 1)), _throwsTooLarge);
+          reader.openBook(_sharedStreamZip(
+            method: _deflateMethod,
+            payload: _deflateOneOverEntryLimit,
+            compressedSizes: <int>[_deflateOneOverEntryLimit.length],
+            zip64UncompressedSize: -1,
+          )),
+          _throwsTooLarge);
     });
   });
 
@@ -1007,7 +1091,7 @@ void main() {
                   declaredUncompressedSize: 16),
             ],
           )),
-          throwsA(isA<FormatException>()));
+          _throwsCorrupt);
     });
 
     // TC-LIM-24 [Error guessing]: a DEFLATE stream cut short is accepted as
@@ -1062,19 +1146,18 @@ void main() {
     }
 
     // TC-LIM-22 [Error guessing]: a corrupt DEFLATE stream — first block type
-    // 3, which deflate reserves — fails opening with an Exception a caller
-    // catching `on Exception` sees, not an Error. The parser maps nothing
-    // here into EpubException, so zlib's FormatException is what arrives.
+    // 3, which deflate reserves — fails opening as a corrupt archive, not as
+    // zlib's own FormatException.
     test(
-        'TC-LIM-22 [Error guessing]: a corrupt DEFLATE entry fails with '
-        'FormatException, an Exception', () {
+        'TC-LIM-22 [Error guessing]: a corrupt DEFLATE entry fails as a '
+        'corrupt archive', () {
       expect(
           reader.openBook(_craftBook(
             chapter: _deflateEntry(
                 _chapterPath, Uint8List(16)..fillRange(0, 16, 0xFF),
                 declaredUncompressedSize: 16),
           )),
-          throwsA(allOf(isA<Exception>(), isA<FormatException>())));
+          _throwsCorrupt);
     });
   });
 }

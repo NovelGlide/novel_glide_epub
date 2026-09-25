@@ -1,10 +1,13 @@
 /// The base of every failure this package raises on purpose.
 ///
 /// Catching [EpubException] means exactly one thing: *this book is not a
-/// readable EPUB*. Anything else that escapes a reader — a `TypeError`, a
-/// `StateError`, an `ArchiveException` — is a defect in this package or in a
-/// dependency, and the two are deliberately not merged: a caller that shows
-/// "this file is damaged" for a parser bug hides the bug forever.
+/// readable EPUB*. A ZIP container that fails to decode is one of these:
+/// the reader turns `package:archive`'s `ArchiveException` and zlib's
+/// `FormatException` into [EpubCorruptArchiveException]. Anything else that
+/// escapes a reader — a `TypeError`, a `StateError` — is a defect in this
+/// package or in a dependency, and the two are deliberately not merged: a
+/// caller that shows "this file is damaged" for a parser bug hides the bug
+/// forever.
 ///
 /// The family is `sealed`, so a caller can `switch` on the cause and a new
 /// cause cannot be added without every such `switch` being told about it.
@@ -17,6 +20,16 @@ sealed class EpubException implements Exception {
 
   @override
   String toString() => '$runtimeType: $message';
+}
+
+/// The file is not a ZIP container, or its container is damaged: a
+/// structure `package:archive` cannot parse, or an entry whose deflate
+/// stream zlib rejects.
+///
+/// Raised when the book is opened, whether or not the package document
+/// points at the damaged entry.
+final class EpubCorruptArchiveException extends EpubException {
+  const EpubCorruptArchiveException(super.message);
 }
 
 /// A file the package document points at is absent from the ZIP container.

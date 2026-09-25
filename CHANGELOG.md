@@ -14,11 +14,23 @@ bytes plus its inflated content, each within the limits below.
 | Bytes all entries inflate to | 512 MiB |
 
 - A breach throws **`EpubArchiveTooLargeException`**, a new member of the
-  sealed `EpubException` family. So does an archive whose entries' compressed
-  sizes add up to more than the file: entries that overlap, sharing one
-  stream, would have it inflated once per entry. This is **breaking** for an
-  exhaustive `switch` on `EpubException`, which now has to handle it and
-  `EpubUnsupportedCompressionException` below.
+  sealed `EpubException` family. So does an archive whose entries are given
+  more compressed bytes between them than the file holds: entries that
+  overlap, sharing one stream, would have it inflated once per entry. The
+  bytes counted are the ones each entry is really given, not the sizes its
+  header claims. This is **breaking** for an exhaustive `switch` on
+  `EpubException`, which now has to handle it and the two members below.
+- **A damaged ZIP container now throws the new
+  `EpubCorruptArchiveException`**, a member of the same family, instead of
+  an error the `EpubException` contract counts as a defect:
+  - bytes that are not a ZIP at all, which threw `ArchiveException`;
+  - a container `package:archive` cannot parse (a broken local header, say),
+    which threw `ArchiveException`;
+  - an entry whose deflate stream zlib rejects, which threw
+    `FormatException`.
+
+  `TypeError` and `StateError` still escape unconverted: they mean a defect
+  in this package or `package:archive`, not a damaged book.
 - The limits are private constants. There is nothing to configure and no
   separate check to call: `openBook`, `readBook` and the two new entry points
   all apply them.
@@ -52,8 +64,8 @@ bytes plus its inflated content, each within the limits below.
     `RawZLibFilter`, fed a chunk at a time so the limits stop it part-way.
     Its output is kept as zlib's chunks and joined once at the end, so a
     refused bomb costs at most the 256 MiB entry limit. An invalid stream
-    fails with `FormatException`, as before; one cut short still yields
-    what it holds, without an error.
+    fails with `EpubCorruptArchiveException`; one cut short still yields
+    what it holds, without an error, as before.
   - `EpubArchiveTooLargeException` messages give sizes and limits, never an
     entry's file name, which can carry the book's title.
   - The entries of `EpubBookRef.epubArchive()` carry their name, their
