@@ -5,9 +5,10 @@ cross-platform EPUB reader.
 
 Pure Dart — no Flutter dependency; it uses `dart:io`, so it does not run on
 the web. It reads an EPUB's package document, navigation and content out of
-the ZIP container, either eagerly (`EpubReader.readBook`) or lazily by
-reference (`EpubReader.openBook`); both are instance methods on
-`const EpubReader()`, and each has a variant that takes a file path.
+the ZIP container: `EpubReader.readBook` parses every content file,
+`EpubReader.openBook` only the structure, leaving each content file to be
+parsed when it is read. Both are instance methods on `const EpubReader()`,
+and each has a variant that takes a file path.
 
 ```dart
 import 'package:novel_glide_epub/novel_glide_epub.dart';
@@ -17,7 +18,7 @@ const EpubReader reader = EpubReader();
 // Whole book, content included.
 final EpubBook book = await reader.readBook(bytes);
 
-// Just the structure; each content file is read on demand.
+// Just the structure; each content file is parsed when it is read.
 final EpubBookRef bookRef = await reader.openBook(bytes);
 
 // The same from a file on disk, whose size is checked before it is read.
@@ -31,6 +32,13 @@ inflated per entry, 512 MiB inflated in total. The archive is inflated once,
 while the book is opened, and an entry is abandoned part-way through
 inflating as soon as it crosses a limit, whatever size its header declared.
 The limits cannot be configured.
+
+Either way the whole archive is inflated when the book is opened. An
+`EpubBookRef` holds it for as long as the ref lives: its input bytes plus its
+inflated content, each within the limits above. `readBook` copies the
+content out into the `EpubBook` and keeps neither. An
+entry that cannot be inflated, or that uses a compression method other than
+store or deflate, fails the open, whether or not the book uses it.
 
 ## Origin
 
@@ -56,7 +64,7 @@ Not published to pub.dev; consumed by git reference.
 
 ## Status
 
-**Coverage: 100%** (1435 / 1435 lines, 660 tests), up from 21% at extraction,
+**Coverage: 100%** (1470 / 1470 lines, 665 tests), up from 21% at extraction,
 when the suite was seven test cases written to pin two specific bugs and forty
 of the fifty-five files had never been executed at all.
 

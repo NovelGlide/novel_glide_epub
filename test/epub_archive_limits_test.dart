@@ -28,9 +28,13 @@
 //     of zeros, so a 256 MiB payload compresses to about a quarter of a
 //     megabyte without ever being resident: the canonical bomb.
 //
-// Equivalent mutant, documented rather than chased: in `_inflateDeflate`,
-// the input loop's `start < compressed.length` as `<=`. The one extra pass it
-// allows feeds zlib an empty range, which produces nothing.
+// Equivalent mutants, documented rather than chased:
+//   * In `_inflateDeflate`, the input loop's `start < compressed.length` as
+//     `<=`. The one extra pass it allows feeds zlib an empty range, which
+//     produces nothing.
+//   * In `_centralDirectoryOf`, deleting `input.position = end + 4`. The
+//     search that found the end record last read its signature, which leaves
+//     the position exactly there.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -192,6 +196,70 @@ Uint8List _paddedEmptyZip(int length) {
         centralDirectoryOffset: length - _endOfCentralDirectoryLength,
       ),
     );
+}
+
+/// [count] central-directory records and nothing else: no names, each with
+/// [extraLength] and [commentLength] zero bytes of extra field and comment,
+/// every one pointing at a local header at offset 0. Enough for the count,
+/// which reads nothing of a record but its signature and lengths.
+Uint8List _centralRecords(
+  int count, {
+  int extraLength = 0,
+  int commentLength = 0,
+}) {
+  final int recordLength =
+      _centralFileHeaderLength + extraLength + commentLength;
+  final Uint8List bytes = Uint8List(count * recordLength);
+  final ByteData data = ByteData.sublistView(bytes);
+  for (int at = 0; at < bytes.length; at += recordLength) {
+    data
+      ..setUint32(at, _centralFileHeaderSignature, Endian.little)
+      ..setUint16(at + 30, extraLength, Endian.little)
+      ..setUint16(at + 32, commentLength, Endian.little);
+  }
+  return bytes;
+}
+
+/// [zip], a `_craftZip` result, with its end record in zip64 form: a zip64
+/// end record holding the central directory's count, size and place, the
+/// locator pointing at it, and an end record carrying [disk],
+/// [diskEntries], [size] and [offset]. Any of them at its maximum tells a
+/// reader to take the zip64 record's values instead; by default all are.
+Uint8List _withZip64EndRecord(
+  Uint8List zip, {
+  int disk = 0xFFFF,
+  int diskEntries = 0xFFFF,
+  int size = 0xFFFFFFFF,
+  int offset = 0xFFFFFFFF,
+}) {
+  const int zip64RecordLength = 56;
+  const int locatorLength = 20;
+  final int end = zip.length - _endOfCentralDirectoryLength;
+  final ByteData original = ByteData.sublistView(zip, end);
+  final int entryCount = original.getUint16(10, Endian.little);
+  final ByteData tail =
+      ByteData(zip64RecordLength + locatorLength + _endOfCentralDirectoryLength)
+        ..setUint32(0, 0x06064b50, Endian.little)
+        ..setUint64(4, zip64RecordLength - 12, Endian.little)
+        ..setUint16(12, 45, Endian.little) // version made by
+        ..setUint16(14, 45, Endian.little) // version needed
+        ..setUint64(24, entryCount, Endian.little)
+        ..setUint64(32, entryCount, Endian.little)
+        ..setUint64(40, original.getUint32(12, Endian.little), Endian.little)
+        ..setUint64(48, original.getUint32(16, Endian.little), Endian.little)
+        ..setUint32(zip64RecordLength, 0x07064b50, Endian.little)
+        ..setUint64(zip64RecordLength + 8, end, Endian.little)
+        ..setUint32(zip64RecordLength + 16, 1, Endian.little); // disks
+  const int endRecord = zip64RecordLength + locatorLength;
+  tail
+    ..setUint32(endRecord, _endOfCentralDirectorySignature, Endian.little)
+    ..setUint16(endRecord + 4, disk, Endian.little)
+    ..setUint16(endRecord + 8, diskEntries, Endian.little)
+    ..setUint16(endRecord + 10, diskEntries, Endian.little)
+    ..setUint32(endRecord + 12, size, Endian.little)
+    ..setUint32(endRecord + 16, offset, Endian.little);
+  return Uint8List.fromList(
+      <int>[...zip.sublist(0, end), ...tail.buffer.asUint8List()]);
 }
 
 /// A raw-deflate stream (ZIP's DEFLATE method) inflating to exactly [length]
@@ -449,6 +517,166 @@ void main() {
       expect(reader.openBook(_craftZip(emptyEntries(_maxEntries))),
           _throwsDecodedWithoutContainer);
     });
+
+    // TC-LIM-25 [Error guessing]: the count is taken from the central
+    // directory's records, before `package:archive` reads a single one. The
+    // end record claims one entry, and the first local header is broken so
+    // that reading the entries fails with ArchiveException: 4097 records are
+    // refused as too many before that can happen, and 4096 get as far as it.
+    test(
+        'TC-LIM-25 [Error guessing]: records are counted before any is read, '
+        'whatever count the end record claims', () {
+      Uint8List lyingZip(int count) {
+        final Uint8List zip = _craftZip(emptyEntries(count));
+        ByteData.sublistView(zip)
+          ..setUint32(0, 0, Endian.little)
+          ..setUint16(
+              zip.length - _endOfCentralDirectoryLength + 8, 1, Endian.little)
+          ..setUint16(
+              zip.length - _endOfCentralDirectoryLength + 10, 1, Endian.little);
+        return zip;
+      }
+
+      expect(reader.openBook(lyingZip(_maxEntries + 1)), _throwsTooLarge);
+      expect(reader.openBook(lyingZip(_maxEntries)),
+          throwsA(isA<ArchiveException>()));
+    });
+
+    // TC-LIM-26 [Equivalence partitioning]: a zip64 end record moves the
+    // central directory's place into the zip64 record, and the count follows
+    // it there.
+    test(
+        'TC-LIM-26 [EP]: behind a zip64 end record, 4097 entries are refused '
+        'and 4096 decoded', () {
+      expect(
+          reader.openBook(_withZip64EndRecord(_craftZip(emptyEntries(4097)))),
+          _throwsTooLarge);
+      expect(
+          reader.openBook(_withZip64EndRecord(_craftZip(emptyEntries(4096)))),
+          _throwsDecodedWithoutContainer);
+    });
+
+    // TC-LIM-27 [Error guessing]: an end record marked zip64 with no zip64
+    // record behind it keeps its own values, as `package:archive` does, and
+    // the count still walks the real directory.
+    test(
+        'TC-LIM-27 [Error guessing]: a zip64 marker with no zip64 record '
+        'still has its 4097 entries refused', () {
+      final Uint8List zip = _craftZip(emptyEntries(_maxEntries + 1));
+      ByteData.sublistView(zip).setUint16(
+          zip.length - _endOfCentralDirectoryLength + 8, 0xFFFF, Endian.little);
+
+      expect(reader.openBook(zip), _throwsTooLarge);
+    });
+
+    // TC-LIM-28 [Error guessing]: bytes with no end record have no directory
+    // to count; `package:archive` refuses them as it always has. The bytes
+    // are not zeros, so reading them as an end record would not pass
+    // quietly.
+    test(
+        'TC-LIM-28 [Error guessing]: bytes that are not a ZIP still fail '
+        'with ArchiveException', () {
+      expect(reader.openBook(Uint8List(64)..fillRange(0, 64, 0xAB)),
+          throwsA(isA<ArchiveException>()));
+    });
+
+    // TC-LIM-29 [Error guessing]: a record's extra field and comment are part
+    // of its length. Stepping over them wrongly would lose the next
+    // record's signature and stop the count at one.
+    test(
+        'TC-LIM-29 [Error guessing]: 4097 records with extra fields and '
+        'comments are refused', () {
+      final Uint8List records =
+          _centralRecords(4097, extraLength: 4, commentLength: 3);
+
+      expect(
+          reader.openBook(Uint8List.fromList(<int>[
+            ...records,
+            ..._endOfCentralDirectory(
+              entryCount: 4097,
+              centralDirectoryLength: records.length,
+              centralDirectoryOffset: 0,
+            ),
+          ])),
+          _throwsTooLarge);
+    });
+
+    // TC-LIM-30 [Error guessing]: an end record at the very first byte, with
+    // the records after it. `package:archive` finds it all the same, so the
+    // count has to as well.
+    test(
+        'TC-LIM-30 [Error guessing]: 4097 records behind an end record at '
+        'offset 0 are refused', () {
+      final Uint8List records = _centralRecords(4097);
+
+      expect(
+          reader.openBook(Uint8List.fromList(<int>[
+            ..._endOfCentralDirectory(
+              entryCount: 4097,
+              centralDirectoryLength: records.length,
+              centralDirectoryOffset: _endOfCentralDirectoryLength,
+            ),
+            ...records,
+          ])),
+          _throwsTooLarge);
+    });
+
+    // TC-LIM-31 [Error guessing]: a zip64 locator at the very first byte,
+    // then the end record, the zip64 record, and the records. The locator
+    // counts even there.
+    test(
+        'TC-LIM-31 [Error guessing]: 4097 records behind a zip64 locator at '
+        'offset 0 are refused', () {
+      const int zip64Record = 20 + _endOfCentralDirectoryLength;
+      const int records = zip64Record + 56;
+      final Uint8List directory = _centralRecords(4097);
+      final ByteData head = ByteData(records)
+        ..setUint32(0, 0x07064b50, Endian.little)
+        ..setUint64(8, zip64Record, Endian.little)
+        ..setUint32(16, 1, Endian.little)
+        ..setUint32(20, _endOfCentralDirectorySignature, Endian.little)
+        ..setUint16(20 + 4, 0xFFFF, Endian.little)
+        ..setUint16(20 + 8, 0xFFFF, Endian.little)
+        ..setUint16(20 + 10, 0xFFFF, Endian.little)
+        ..setUint32(20 + 12, 0xFFFFFFFF, Endian.little)
+        ..setUint32(20 + 16, 0xFFFFFFFF, Endian.little)
+        ..setUint32(zip64Record, 0x06064b50, Endian.little)
+        ..setUint64(zip64Record + 4, 44, Endian.little)
+        ..setUint64(zip64Record + 24, 4097, Endian.little)
+        ..setUint64(zip64Record + 32, 4097, Endian.little)
+        ..setUint64(zip64Record + 40, directory.length, Endian.little)
+        ..setUint64(zip64Record + 48, records, Endian.little);
+
+      expect(
+          reader.openBook(Uint8List.fromList(
+              <int>[...head.buffer.asUint8List(), ...directory])),
+          _throwsTooLarge);
+    });
+
+    // TC-LIM-32 [Equivalence partitioning]: any one of the end record's four
+    // fields at its maximum sends a reader to the zip64 record. Here the end
+    // record's own fields describe an empty directory, and only the zip64
+    // record points at the 4097 real ones.
+    final Map<String, Uint8List Function(Uint8List)> zip64ByMarker =
+        <String, Uint8List Function(Uint8List)>{
+      'disk': (Uint8List zip) =>
+          _withZip64EndRecord(zip, diskEntries: 0, size: 0, offset: 0),
+      'entry count': (Uint8List zip) =>
+          _withZip64EndRecord(zip, disk: 0, size: 0, offset: 0),
+      'size': (Uint8List zip) =>
+          _withZip64EndRecord(zip, disk: 0, diskEntries: 0, offset: 0),
+      'offset': (Uint8List zip) =>
+          _withZip64EndRecord(zip, disk: 0, diskEntries: 0, size: 0),
+    };
+    for (final MapEntry<String, Uint8List Function(Uint8List)> marker
+        in zip64ByMarker.entries) {
+      test(
+          'TC-LIM-32 [EP]: an end record whose ${marker.key} alone marks '
+          'zip64 has the zip64 record counted', () {
+        expect(reader.openBook(marker.value(_craftZip(emptyEntries(4097)))),
+            _throwsTooLarge);
+      });
+    }
   });
 
   group('declared sizes, before inflating', () {
@@ -597,42 +825,27 @@ void main() {
           _throwsTooLarge);
     });
 
-    // TC-LIM-18 [Boundary / error guessing]: the inflaters write their output
-    // in different ways — BZIP2 a byte at a time, DEFLATE in zlib's chunks —
-    // and each is counted. Two entries use the whole total; a third,
+    // TC-LIM-18 [Boundary]: two entries use the whole total; a third,
     // declaring nothing, inflates to a single byte, one over what is left.
-    final Map<String, _CraftedZipEntry> oneByteByWriter =
-        <String, _CraftedZipEntry>{
-      'BZIP2': _CraftedZipEntry(
-        name: 'extra.bin',
-        method: _bzip2Method,
-        declaredUncompressedSize: 0,
-        payload: BZip2Encoder().encode(<int>[0x4E]),
-      ),
-      'DEFLATE': _deflateEntry(
-          'extra.bin', _rawDeflateOf(1, block: Uint8List.fromList(<int>[0x4E])),
-          declaredUncompressedSize: 0),
-    };
-    for (final MapEntry<String, _CraftedZipEntry> writer
-        in oneByteByWriter.entries) {
-      test(
-          'TC-LIM-18 [Boundary]: a ${writer.key} entry one byte past what the '
-          'total limit leaves is refused', () {
-        expect(
-            reader.openBook(_craftZip(<_CraftedZipEntry>[
-              for (int i = 0; i < 2; i++)
-                _deflateEntry('half$i.bin', _deflateToEntryLimit,
-                    declaredUncompressedSize: _maxEntryBytes),
-              writer.value,
-            ])),
-            _throwsTooLarge);
-      });
-    }
+    test(
+        'TC-LIM-18 [Boundary]: an entry one byte past what the total limit '
+        'leaves is refused', () {
+      expect(
+          reader.openBook(_craftZip(<_CraftedZipEntry>[
+            for (int i = 0; i < 2; i++)
+              _deflateEntry('half$i.bin', _deflateToEntryLimit,
+                  declaredUncompressedSize: _maxEntryBytes),
+            _deflateEntry('extra.bin',
+                _rawDeflateOf(1, block: Uint8List.fromList(<int>[0x4E])),
+                declaredUncompressedSize: 0),
+          ])),
+          _throwsTooLarge);
+    });
   });
 
   group('the one decode', () {
-    // TC-LIM-19 [Equivalence partitioning]: each compression method the
-    // parser inflates produces the chapter it holds.
+    // TC-LIM-19 [Equivalence partitioning]: each compression method an EPUB
+    // may use produces the chapter it holds.
     final Uint8List chapterBytes = utf8.encode(_chapterXhtml);
     final Map<String, _CraftedZipEntry> chapterByMethod =
         <String, _CraftedZipEntry>{
@@ -640,12 +853,6 @@ void main() {
       'DEFLATE': _deflateEntry(
           _chapterPath, _rawDeflateOf(chapterBytes.length, block: chapterBytes),
           declaredUncompressedSize: chapterBytes.length),
-      'BZIP2': _CraftedZipEntry(
-        name: _chapterPath,
-        method: _bzip2Method,
-        declaredUncompressedSize: chapterBytes.length,
-        payload: BZip2Encoder().encode(chapterBytes),
-      ),
     };
     for (final MapEntry<String, _CraftedZipEntry> method
         in chapterByMethod.entries) {
@@ -658,29 +865,71 @@ void main() {
       });
     }
 
-    // TC-LIM-20 [Equivalence partitioning]: a method the parser cannot
-    // inflate does not stop the book opening; the entry is kept undecoded,
-    // and reading it is what fails.
-    test(
-        'TC-LIM-20 [EP]: an entry in a method with no inflater is kept, and '
-        'fails only when read', () async {
-      final EpubBookRef bookRef = await reader.openBook(_craftBook(
-        chapter:
-            _CraftedZipEntry.stored(_chapterPath, utf8.encode(_chapterXhtml)),
-        extra: const <_CraftedZipEntry>[
-          _CraftedZipEntry(
-            name: 'OEBPS/extra.bin',
-            method: _lzmaMethod,
-            declaredUncompressedSize: 64,
-            payload: <int>[0x4E, 0x47, 0x45],
-          ),
-        ],
-      ));
-      final ArchiveFile extra =
-          bookRef.epubArchive().findFile('OEBPS/extra.bin')!;
+    // TC-LIM-20 [Equivalence partitioning]: an EPUB container may only store
+    // or deflate. Any other method refuses the book when it is opened, even
+    // for an entry nothing in the book points at.
+    final Map<String, int> methodByName = <String, int>{
+      'BZIP2': _bzip2Method,
+      'LZMA': _lzmaMethod,
+    };
+    for (final MapEntry<String, int> method in methodByName.entries) {
+      test(
+          'TC-LIM-20 [EP]: an unused ${method.key} entry refuses the book at '
+          'open', () {
+        expect(
+            reader.openBook(_craftBook(
+              chapter: _CraftedZipEntry.stored(_chapterPath, chapterBytes),
+              extra: <_CraftedZipEntry>[
+                _CraftedZipEntry(
+                  name: 'OEBPS/extra.bin',
+                  method: method.value,
+                  declaredUncompressedSize: 3,
+                  payload: const <int>[0x4E, 0x47, 0x45],
+                ),
+              ],
+            )),
+            throwsA(isA<EpubMissingArchiveEntryException>()));
+      });
+    }
 
-      expect(extra.size, 64);
-      expect(() => extra.content, throwsA(isA<ArchiveException>()));
+    // TC-LIM-23 [Error guessing]: every entry is inflated at open, so a
+    // corrupt one fails the open even when the book never reads it.
+    test(
+        'TC-LIM-23 [Error guessing]: a corrupt DEFLATE entry the book never '
+        'uses fails the open', () {
+      expect(
+          reader.openBook(_craftBook(
+            chapter: _CraftedZipEntry.stored(_chapterPath, chapterBytes),
+            extra: <_CraftedZipEntry>[
+              _deflateEntry(
+                  'OEBPS/unused.bin', Uint8List(16)..fillRange(0, 16, 0xFF),
+                  declaredUncompressedSize: 16),
+            ],
+          )),
+          throwsA(isA<FormatException>()));
+    });
+
+    // TC-LIM-24 [Error guessing]: a DEFLATE stream cut short is accepted as
+    // what it holds, a strict prefix of the whole; zlib reports no error for
+    // it. `package:archive`'s own inflate behaves the same, so books that
+    // opened before still open. Pinned so a change either way is seen.
+    test(
+        'TC-LIM-24 [Error guessing]: a truncated DEFLATE chapter opens with '
+        'the part it holds', () async {
+      final Uint8List whole = Uint8List.fromList(<int>[
+        for (int i = 0; i < 200; i++) ...utf8.encode('NGE-SEED line $i\n'),
+      ]);
+      final Uint8List compressed = _rawDeflateOf(whole.length, block: whole);
+      final EpubBookRef bookRef = await reader.openBook(_craftBook(
+        chapter: _deflateEntry(_chapterPath,
+            Uint8List.sublistView(compressed, 0, compressed.length ~/ 2),
+            declaredUncompressedSize: whole.length),
+      ));
+      final List<int> content =
+          bookRef.epubArchive().findFile(_chapterPath)!.content as List<int>;
+
+      expect(content.length, inInclusiveRange(1, whole.length - 1));
+      expect(content, whole.sublist(0, content.length));
     });
 
     // TC-LIM-21 [Equivalence partitioning]: an entry's declared size is not

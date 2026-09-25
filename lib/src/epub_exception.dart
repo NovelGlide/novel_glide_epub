@@ -19,10 +19,13 @@ sealed class EpubException implements Exception {
   String toString() => '$runtimeType: $message';
 }
 
-/// A file the package document points at is absent from the ZIP container.
+/// A file the package document points at is absent from the ZIP container,
+/// or an entry of the container cannot be read at all.
 ///
 /// The archive is incomplete or truncated: the EPUB says the file is there
-/// and it is not.
+/// and it is not. An entry compressed with a method other than the two an
+/// EPUB container allows (store and deflate) counts as absent too, whether
+/// or not the package document points at it.
 final class EpubMissingArchiveEntryException extends EpubException {
   const EpubMissingArchiveEntryException(super.message);
 }

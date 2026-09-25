@@ -3,7 +3,8 @@
 ## Unreleased
 
 **Archive size limits.** Every entry point now refuses a ZIP container past
-fixed limits, so a decompression bomb cannot exhaust memory:
+fixed limits, so what one book can cost in memory is bounded: its input
+bytes plus its inflated content, each within the limits below.
 
 | Limit | Value |
 |---|---|
@@ -23,8 +24,10 @@ fixed limits, so a decompression bomb cannot exhaust memory:
   compressed limit is refused without being loaded into memory, then decode
   it as `openBook` / `readBook` do. They bring in `dart:io`, so the package no
   longer compiles for the web.
-- **The archive is inflated once, in `openBook`.** The central directory's
-  declared sizes and entry count are checked before anything is inflated.
+- **The archive is inflated once, in `openBook`.** The entries are counted
+  from the central directory's records before `package:archive` builds any
+  of them, whatever count the end record claims, and their declared sizes
+  are checked before anything is inflated.
   Then every entry is inflated once, counting the bytes it really produces,
   and abandoned when they cross the per-entry limit or what the total limit
   has left. A header that under-declares its size gets no further than the
@@ -34,22 +37,31 @@ fixed limits, so a decompression bomb cannot exhaust memory:
   read from those inflated entries without inflating again.
 - **Behaviour changes that come with the one decode:**
   - `openBook` holds every entry inflated, up to 512 MiB, where it used to
-    inflate a content file only when it was read.
+    inflate a content file only when it was read. A stored entry's content
+    is a view of the input bytes, so those stay held as well.
+  - **A corrupt or unsupported entry now fails the open, not the read.**
+    Every entry is inflated in `openBook`, so one that cannot be inflated
+    fails `openBook` and `readBook` even when the book never reads it (a
+    stray `__MACOSX/` file, say); before, it failed only if and when it was
+    read.
   - DEFLATE is still inflated by `dart:io`'s zlib, now through
     `RawZLibFilter`, fed a chunk at a time so the limits stop it part-way.
     Its output is kept as zlib's chunks and joined once at the end, so a
-    refused bomb costs at most the 256 MiB entry limit. A corrupt stream
-    still fails with `FormatException`.
+    refused bomb costs at most the 256 MiB entry limit. An invalid stream
+    fails with `FormatException`, as before; one cut short still yields
+    what it holds, without an error.
   - `EpubArchiveTooLargeException` messages give sizes and limits, never an
     entry's file name, which can carry the book's title.
   - The entries of `EpubBookRef.epubArchive()` carry their name, their
     inflated content, and a `size` that is the inflated length rather than
     the header's claim. They no longer carry the ZIP's CRC, file mode,
     modification time, or directory and symlink flags.
-  - STORE, DEFLATE and BZIP2 entries are inflated. An entry in any other
-    method is kept undecoded, and reading it throws `ArchiveException`, as
-    before. The ZIP encryption flag is ignored; the EPUB container format
-    forbids ZIP encryption.
+  - Only STORE and DEFLATE entries are read, the two methods the EPUB
+    container format allows. An entry in any other method, BZIP2 included,
+    refuses the book at open with `EpubMissingArchiveEntryException`; before,
+    BZIP2 was read and other methods threw `ArchiveException` when read. The
+    ZIP encryption flag is ignored; the EPUB container format forbids ZIP
+    encryption.
 
 **Breaking.**
 
