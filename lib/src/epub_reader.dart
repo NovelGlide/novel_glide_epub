@@ -262,10 +262,7 @@ class EpubReader {
   ///
   /// This is where a ZIP that fails to decode becomes
   /// [EpubCorruptArchiveException]: `package:archive` reports a malformed
-  /// container, and zlib an invalid stream, as a `FormatException`. Every
-  /// stream `package:archive` reads the container through is a
-  /// [_BoundedInputStream], which refuses a read past the end of its bytes
-  /// the same way.
+  /// container, and zlib an invalid stream, as a `FormatException`.
   static Archive _decodeArchive(List<int> bytes) {
     _checkCompressedSize(bytes.length);
     try {
@@ -334,9 +331,7 @@ class EpubReader {
     return headers;
   }
 
-  /// The central directory in the unread [input]: the end record is searched
-  /// for from the last position a whole one fits, where `ZipDirectory.read`
-  /// starts in the last five bytes.
+  /// The central directory in the unread [input].
   static InputStreamBase _centralDirectoryOf(InputStream input) {
     final int end = _endRecordOf(input);
     if (end < 0) {

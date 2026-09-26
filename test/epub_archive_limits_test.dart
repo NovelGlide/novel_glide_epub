@@ -1,17 +1,3 @@
-// The ZIP container limits every `EpubReader` entry point enforces, and the
-// single decode they are enforced in.
-//
-// Four limits, fixed inside the reader: 512 MiB of compressed input, 4096
-// entries, 256 MiB inflated per entry, 512 MiB inflated in total. They are
-// checked in two phases. The central directory's declared sizes and entry
-// count are checked before anything is inflated; then every entry is inflated
-// once, counting the bytes it really produces, and abandoned the moment they
-// cross the per-entry limit or what the whole-archive limit has left. The
-// second phase is what catches a header that lies about its size. A declared
-// size is not held against the entry otherwise: writers get it wrong in good
-// faith, so an entry inflating past what it declared opens when it stays
-// within the limits.
-//
 // The limits are private, so every case goes through a public entry point and
 // reads the outcome off what it throws: `EpubArchiveTooLargeException` for a
 // refusal, and for an archive within the limits the first thing parsing trips

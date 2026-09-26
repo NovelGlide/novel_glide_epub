@@ -9,15 +9,11 @@
 /// caller that shows "this file is damaged" for a parser bug hides the bug
 /// forever.
 ///
-/// One exception to that. The reader hands `package:archive` only streams
-/// that refuse a read past their end as [EpubCorruptArchiveException], but
-/// two of its parsers copy bytes into a stream of their own, which does not:
-/// the extra field of any central-directory record, and the extra field of
-/// a local header whose entry has its encryption flag set. One damaged so
-/// that parsing it reads past its own end throws a `RangeError` from inside
-/// `package:archive`, and it escapes as it is. The file is damaged, not the
-/// parser, but a `RangeError` cannot be told apart from a defect, so it is
-/// not caught.
+/// One exception to that: a ZIP extra field damaged so that
+/// `package:archive` reads past its end while parsing it throws a
+/// `RangeError` from inside `package:archive`, and it escapes as it is. The
+/// file is damaged, not the parser, but a `RangeError` cannot be told apart
+/// from a defect, so it is not caught.
 ///
 /// The family is `sealed`, so a caller can `switch` on the cause and a new
 /// cause cannot be added without every such `switch` being told about it.
