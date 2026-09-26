@@ -15,6 +15,15 @@
 /// file is damaged, not the parser, but a `RangeError` cannot be told apart
 /// from a defect, so it is not caught.
 ///
+/// A book opened from a path adds a third kind: its entries are read from
+/// the file when they are asked for, each read opening the file again, so
+/// any of those reads can throw `dart:io`'s `FileSystemException`, as it is.
+/// That means the file, not the book: gone, moved, or no longer readable.
+///
+/// Entries are inflated when they are read, so the failures of one entry —
+/// damaged, past a limit, compressed a way an EPUB may not be — are thrown
+/// by the call that reads it, not by the one that opens the book.
+///
 /// The family is `sealed`, so a caller can `switch` on the cause and a new
 /// cause cannot be added without every such `switch` being told about it.
 sealed class EpubException implements Exception {
@@ -33,10 +42,9 @@ sealed class EpubException implements Exception {
 /// the end of the file or has a negative length, entries whose compressed
 /// data overlap, or an entry whose deflate stream zlib rejects.
 ///
-/// Raised when the book is opened, whether or not the package document
-/// points at the damaged entry. Raised too when an entry is read after the
-/// book was opened and the container has changed since: the entry is no
-/// longer where it was, or inflates to fewer bytes than it did.
+/// Raised when the book is opened for a damaged directory or local header,
+/// and when an entry is read for damaged data, or data no longer where it
+/// was, the file having been cut short since the book was opened.
 final class EpubCorruptArchiveException extends EpubException {
   const EpubCorruptArchiveException(super.message);
 }
@@ -81,23 +89,20 @@ final class EpubUnresolvedReferenceException extends EpubException {
 /// An entry of the ZIP container is compressed with a method other than the
 /// two an EPUB container allows, store and deflate.
 ///
-/// Raised when the book is opened, whether or not the package document
-/// points at the entry.
+/// Raised when the entry is read.
 final class EpubUnsupportedCompressionException extends EpubException {
   const EpubUnsupportedCompressionException(super.message);
 }
 
 /// The ZIP container is past one of the parser's fixed limits: the file's
-/// compressed size, the number of entries, or the bytes one entry or the
-/// whole archive inflates to.
+/// compressed size, the number of entries, or the sizes its entries declare,
+/// checked when the book is opened; or the bytes one entry, or all the
+/// entries read from one book, inflate to, counted when an entry is read.
 ///
-/// Raised while the book is opened, before any of it is parsed, and at the
-/// latest part-way through inflating the entry that crosses the limit, so a
-/// decompression bomb is refused before it is held in memory. The file may
-/// be a well-formed EPUB that the parser declines to open. Raised too when
-/// an entry is read after the book was opened and now inflates to more
-/// bytes than it did then, the container having changed: the read is
-/// stopped at the size the book was opened with.
+/// A read is stopped part-way through inflating the entry that crosses the
+/// limit, so a decompression bomb is refused before more than the limit is
+/// held. The file may be a well-formed EPUB that the parser declines to
+/// read.
 final class EpubArchiveTooLargeException extends EpubException {
   const EpubArchiveTooLargeException(super.message);
 }

@@ -1,11 +1,12 @@
-// What opening a book costs in memory, measured in a process of its own
-// (`support/archive_memory_probe.dart`): the peak memory a process has
-// reached cannot be reset, so a measurement made alongside other tests would
-// read whatever they left behind. The probe is compiled ahead of time
-// because a process running from source has already peaked at well over a
-// hundred MiB compiling itself, which would hide most of what it measures.
+// What opening a book and reading its entries cost in memory, measured in a
+// process of its own (`support/archive_memory_probe.dart`): the peak memory
+// a process has reached cannot be reset, so a measurement made alongside
+// other tests would read whatever they left behind. The probe is compiled
+// ahead of time because a process running from source has already peaked
+// at well over a hundred MiB compiling itself, which would hide most of
+// what it measures.
 //
-// Each case opens a container with far more data in it than its bound, so a
+// Each case opens or reads more data than its bound allows twice over, so a
 // regression to holding the data shows as a peak of the data's size.
 import 'dart:io';
 
@@ -45,21 +46,24 @@ void main() {
     return int.parse((result.stdout as String).trim());
   }
 
-  // TC-MEM-1 [Scenario]: `openBookFile` reads a file a chunk at a time. A
-  // 128 MiB stored entry is read, and counted, without the file or the entry
-  // being held.
+  // TC-MEM-1 [Scenario]: `openBookFile` reads a file's directory and
+  // headers, never the file whole and no entry it does not parse. A file
+  // with a 128 MiB stored entry is opened without it being held.
   test(
       'TC-MEM-1 [Scenario]: opening a file with a 128 MiB entry does not '
       'hold it', () async {
     expect(await peakGrowthMib('file'), lessThan(32));
   });
 
-  // TC-MEM-2 [Scenario]: validation inflates every entry and keeps none of
-  // it. An entry inflating to the 256 MiB limit is validated in chunks.
-  test(
-      'TC-MEM-2 [Scenario]: validating an entry that inflates to 256 MiB '
-      'does not hold it', () async {
-    expect(await peakGrowthMib('inflate'), lessThan(32));
+  // TC-MEM-2 [Scenario]: a bomb read is stopped at the per-entry limit. An
+  // entry declaring 1 KiB and inflating to 1 GiB may grow the peak by
+  // 300 MiB: what it inflated to by the time it crossed the 256 MiB limit,
+  // and a sixth again for the chunks in flight and the allocator's slack.
+  // An inflater that did not stop would reach the gigabyte; one that grew
+  // its buffer by doubling, 512 MiB.
+  test('TC-MEM-2 [Scenario]: reading a 1 GiB bomb is stopped at the limit',
+      () async {
+    expect(await peakGrowthMib('bomb'), lessThan(300));
   });
 
   // TC-MEM-3 [Scenario]: reading a content file as bytes holds it once. A

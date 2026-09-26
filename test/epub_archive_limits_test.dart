@@ -30,6 +30,12 @@
 // `closeSync`. It leaks a file handle and changes nothing a read returns;
 // counting a process's open handles is not portable, and suites running in
 // the same process at once would make the count unreliable.
+//
+// Not equivalent, and pinned elsewhere: in `_InflatedBytes.add`,
+// `<= _declared.length` as `<`. An honest entry's last chunk then overflows
+// its buffer and the entry is copied whole: the same bytes, held twice.
+// Only memory shows it, and `epub_archive_memory_test.dart`'s TC-MEM-3
+// does, in a process of its own.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -77,6 +83,7 @@ class _CraftedZipEntry {
     required this.declaredUncompressedSize,
     this.payload = const <int>[],
     this.zeroRunLength = 0,
+    this.zip64UncompressedSize,
   });
 
   /// A stored entry whose declared size is the truth.
@@ -84,7 +91,8 @@ class _CraftedZipEntry {
       : method = _storeMethod,
         declaredUncompressedSize = bytes.length,
         payload = bytes,
-        zeroRunLength = 0;
+        zeroRunLength = 0,
+        zip64UncompressedSize = null;
 
   final String name;
   final int method;
@@ -97,7 +105,19 @@ class _CraftedZipEntry {
   /// buffer, so a run of hundreds of MiB costs no copy.
   final int zeroRunLength;
 
+  /// When given, the uncompressed size the central directory declares in a
+  /// zip64 extra field, as its 64 raw bits, instead of
+  /// [declaredUncompressedSize]; `package:archive` reads it back as a signed
+  /// value.
+  final int? zip64UncompressedSize;
+
   int get storedLength => payload.length + zeroRunLength;
+
+  List<int> get zip64Sizes => <int>[
+        if (zip64UncompressedSize case final int size) size,
+      ];
+
+  int get extraLength => zip64Sizes.isEmpty ? 0 : 4 + 8 * zip64Sizes.length;
 }
 
 /// Assembles a ZIP byte for byte into one buffer: local headers and stored
@@ -112,7 +132,8 @@ Uint8List _craftZip(List<_CraftedZipEntry> entries) {
     length += _localFileHeaderLength +
         _centralFileHeaderLength +
         2 * names[i].length +
-        entries[i].storedLength;
+        entries[i].storedLength +
+        entries[i].extraLength;
   }
   final Uint8List bytes = Uint8List(length);
   final ByteData data = ByteData.sublistView(bytes);
@@ -145,12 +166,19 @@ Uint8List _craftZip(List<_CraftedZipEntry> entries) {
       ..setUint16(offset + 6, 20, Endian.little) // version needed
       ..setUint16(offset + 10, entry.method, Endian.little)
       ..setUint32(offset + 20, entry.storedLength, Endian.little)
-      ..setUint32(offset + 24, entry.declaredUncompressedSize, Endian.little)
+      ..setUint32(
+          offset + 24,
+          _zip64Marked(
+              entry.zip64UncompressedSize, entry.declaredUncompressedSize),
+          Endian.little)
       ..setUint16(offset + 28, names[i].length, Endian.little)
+      ..setUint16(offset + 30, entry.extraLength, Endian.little)
       ..setUint32(offset + 42, localHeaderOffsets[i], Endian.little);
     offset += _centralFileHeaderLength;
     bytes.setAll(offset, names[i]);
     offset += names[i].length;
+    _writeZip64Extra(data, offset, entry.zip64Sizes);
+    offset += entry.extraLength;
   }
 
   bytes.setAll(
@@ -580,17 +608,13 @@ void main() {
       return path;
     }
 
-    // TC-LIM-3 [Boundary / error guessing]: a file one byte over the limit is
-    // refused on its size alone. It is made unreadable first, so a reader
-    // that opened it to find out would fail with FileSystemException instead.
+    // TC-LIM-3 [Boundary]: a file one byte over the limit is refused on its
+    // size, which is checked before any of it is read. The file is a readable
+    // ZIP, so only the size can refuse it.
     test(
         'TC-LIM-3 [Boundary]: a file one byte over the compressed-size limit '
-        'is refused without being opened', () {
+        'is refused', () {
       final String path = sparseEmptyZip(_maxCompressedBytes + 1);
-      final ProcessResult chmod = Process.runSync('chmod', <String>['0', path]);
-      expect(chmod.exitCode, 0);
-      // The premise: this process cannot open the file.
-      expect(() => File(path).openSync(), throwsA(isA<FileSystemException>()));
 
       expect(reader.openBookFile(path), _throwsTooLarge);
       expect(reader.readBookFile(path), _throwsTooLarge);
@@ -890,80 +914,131 @@ void main() {
     });
   });
 
-  group('inflated sizes, counted while inflating', () {
+  group('inflated sizes, counted when an entry is read', () {
+    /// A readable book with [extra] entries nothing in it points at.
+    Future<EpubBookRef> openWith(List<_CraftedZipEntry> extra) =>
+        reader.openBook(_craftBook(
+          chapter:
+              _CraftedZipEntry.stored(_chapterPath, utf8.encode(_chapterXhtml)),
+          extra: extra,
+        ));
+
+    List<int> read(EpubBookRef bookRef, String name) =>
+        bookRef.epubArchive().findFile(name)!.content as List<int>;
+
+    /// What is left of the whole-archive limit once a book has been opened
+    /// and one entry at the per-entry limit read: opening inflates the
+    /// documents it parses, which count like any other read. They are the
+    /// same in every book `_craftBook` makes.
+    late final int restLength;
+    late final Uint8List restDeflated;
+
+    setUpAll(() async {
+      final EpubBookRef opened = await openWith(const <_CraftedZipEntry>[]);
+      final int readAtOpen = <String>[
+        'META-INF/container.xml',
+        'OEBPS/content.opf',
+        'OEBPS/toc.ncx',
+      ].fold(0, (int sum, String name) => sum + read(opened, name).length);
+      restLength = _maxTotalBytes - _maxEntryBytes - readAtOpen;
+      restDeflated = _rawDeflateOf(restLength);
+    });
+
+    /// Entries that, read with the documents opening parses, inflate to
+    /// exactly the whole-archive limit, and one byte more.
+    List<_CraftedZipEntry> filledToTheLimit() => <_CraftedZipEntry>[
+          _deflateEntry('half.bin', _deflateToEntryLimit,
+              declaredUncompressedSize: _maxEntryBytes),
+          // Declaring its size would take the declared total past the
+          // limit, refused when the book is opened.
+          _deflateEntry('rest.bin', restDeflated, declaredUncompressedSize: 0),
+          _deflateEntry('one.bin',
+              _rawDeflateOf(1, block: Uint8List.fromList(<int>[0x4E])),
+              declaredUncompressedSize: 1),
+        ];
+
     // TC-LIM-12 [Error guessing]: the lying header. The entry declares 1 KiB,
-    // which the directory check accepts, and inflates to one byte past the
-    // per-entry limit. Only counting during the inflate can see it.
+    // which the directory check accepts, so the book opens; read, it
+    // inflates to one byte past the per-entry limit. Only counting while it
+    // inflates can see it.
     test(
         'TC-LIM-12 [Error guessing]: a DEFLATE entry declaring 1 KiB that '
-        'inflates one byte over the per-entry limit is refused', () {
-      expect(
-          reader.openBook(_craftZip(<_CraftedZipEntry>[
-            _deflateEntry('liar.bin', _deflateOneOverEntryLimit,
-                declaredUncompressedSize: 1024),
-          ])),
-          _throwsTooLarge);
+        'inflates one byte over the per-entry limit is refused when read',
+        () async {
+      final EpubBookRef bookRef = await openWith(<_CraftedZipEntry>[
+        _deflateEntry('liar.bin', _deflateOneOverEntryLimit,
+            declaredUncompressedSize: 1024),
+      ]);
+
+      expect(() => read(bookRef, 'liar.bin'), _throwsTooLarge);
     });
 
     // TC-LIM-13 [Boundary]: inflating to exactly the per-entry limit is
-    // admissible, pinning `>` in the inflate-time count.
+    // admissible, pinning `>` in the count.
     test(
         'TC-LIM-13 [Boundary]: a DEFLATE entry inflating to exactly the '
-        'per-entry limit is decoded', () {
-      expect(
-          reader.openBook(_craftZip(<_CraftedZipEntry>[
-            _deflateEntry('atlimit.bin', _deflateToEntryLimit,
-                declaredUncompressedSize: _maxEntryBytes),
-          ])),
-          _throwsDecodedWithoutContainer);
+        'per-entry limit is read', () async {
+      final EpubBookRef bookRef = await openWith(<_CraftedZipEntry>[
+        _deflateEntry('atlimit.bin', _deflateToEntryLimit,
+            declaredUncompressedSize: _maxEntryBytes),
+      ]);
+
+      expect(read(bookRef, 'atlimit.bin'), hasLength(_maxEntryBytes));
     });
 
     // TC-LIM-14 [Error guessing]: the canonical bomb, zeros declaring 1 KiB
-    // and inflating to twice the per-entry limit, is abandoned once the
-    // count crosses the limit; its tail is never produced.
+    // and inflating to twice the per-entry limit, as the book's chapter.
+    // Opening the book reads no chapter, so it opens; reading the chapter,
+    // or reading the book whole, is abandoned once the count crosses the
+    // limit, the bomb's tail never produced.
     test(
-        'TC-LIM-14 [Error guessing]: a zeros bomb inflating to twice the '
-        'per-entry limit is refused', () {
+        'TC-LIM-14 [Error guessing]: a zeros bomb opens, and is refused when '
+        'it is read', () async {
       final Uint8List bomb = _rawDeflateOf(2 * _maxEntryBytes);
       expect(bomb.length, lessThan(_oneMib));
+      final Uint8List book = _craftBook(
+          chapter: _deflateEntry(_chapterPath, bomb,
+              declaredUncompressedSize: 1024));
 
-      expect(
-          reader.openBook(_craftZip(<_CraftedZipEntry>[
-            _deflateEntry('bomb.bin', bomb, declaredUncompressedSize: 1024),
-          ])),
-          _throwsTooLarge);
+      final EpubBookRef bookRef = await reader.openBook(book);
+      expect(() => read(bookRef, _chapterPath), _throwsTooLarge);
+      expect(reader.readBook(book), _throwsTooLarge);
     });
 
     // TC-LIM-15 [Boundary]: no entry reaches the per-entry limit, but the
-    // third, lying about its size, pushes the running total past the
-    // whole-archive limit. Only the total can refuse it.
+    // third, lying about its size, pushes what the book's reads have
+    // inflated past the whole-archive limit. Only the running total can
+    // refuse it.
     test(
-        'TC-LIM-15 [Boundary]: entries inflating to 656 MiB between them, '
-        'none over the per-entry limit, are refused', () {
-      expect(
-          reader.openBook(_craftZip(<_CraftedZipEntry>[
-            _deflateEntry('a.bin', _deflateToEntryLimit,
-                declaredUncompressedSize: _maxEntryBytes),
-            _deflateEntry('b.bin', _deflateTo200Mib,
-                declaredUncompressedSize: 200 * _oneMib),
-            _deflateEntry('c.bin', _deflateTo200Mib,
-                declaredUncompressedSize: 1024),
-          ])),
-          _throwsTooLarge);
+        'TC-LIM-15 [Boundary]: reads inflating to 656 MiB between them, none '
+        'over the per-entry limit, are refused at the third', () async {
+      final EpubBookRef bookRef = await openWith(<_CraftedZipEntry>[
+        _deflateEntry('a.bin', _deflateToEntryLimit,
+            declaredUncompressedSize: _maxEntryBytes),
+        _deflateEntry('b.bin', _deflateTo200Mib,
+            declaredUncompressedSize: 200 * _oneMib),
+        _deflateEntry('c.bin', _deflateTo200Mib,
+            declaredUncompressedSize: 1024),
+      ]);
+
+      expect(read(bookRef, 'a.bin'), hasLength(_maxEntryBytes));
+      expect(read(bookRef, 'b.bin'), hasLength(200 * _oneMib));
+      expect(() => read(bookRef, 'c.bin'), _throwsTooLarge);
     });
 
-    // TC-LIM-16 [Boundary]: inflating to exactly the total limit is
-    // admissible, pinning `>` against what the total leaves.
+    // TC-LIM-16 [Boundary]: reads inflating to exactly the whole-archive
+    // limit, the documents opening parsed included, are admissible. An
+    // entry read twice is inflated and counted once: its second read is the
+    // bytes kept from the first, and counting it again would push the next
+    // read past the limit.
     test(
-        'TC-LIM-16 [Boundary]: entries inflating to exactly the total limit '
-        'are decoded', () {
-      expect(
-          reader.openBook(_craftZip(<_CraftedZipEntry>[
-            for (int i = 0; i < 2; i++)
-              _deflateEntry('half$i.bin', _deflateToEntryLimit,
-                  declaredUncompressedSize: _maxEntryBytes),
-          ])),
-          _throwsDecodedWithoutContainer);
+        'TC-LIM-16 [Boundary]: reads inflating to exactly the total limit are '
+        'admissible, and a read twice is counted once', () async {
+      final EpubBookRef bookRef = await openWith(filledToTheLimit());
+      final List<int> half = read(bookRef, 'half.bin');
+
+      expect(read(bookRef, 'half.bin'), same(half));
+      expect(read(bookRef, 'rest.bin'), hasLength(restLength));
     });
 
     // TC-LIM-17 [Error guessing]: a stored entry is counted by the bytes it
@@ -971,34 +1046,32 @@ void main() {
     // per-entry limit.
     test(
         'TC-LIM-17 [Error guessing]: a STORE entry declaring 1 KiB that holds '
-        'one byte over the per-entry limit is refused', () {
-      expect(
-          reader.openBook(_craftZip(const <_CraftedZipEntry>[
-            _CraftedZipEntry(
-              name: 'liar.bin',
-              method: _storeMethod,
-              declaredUncompressedSize: 1024,
-              zeroRunLength: _maxEntryBytes + 1,
-            ),
-          ])),
-          _throwsTooLarge);
+        'one byte over the per-entry limit is refused when read', () async {
+      final EpubBookRef bookRef = await openWith(const <_CraftedZipEntry>[
+        _CraftedZipEntry(
+          name: 'liar.bin',
+          method: _storeMethod,
+          declaredUncompressedSize: 1024,
+          zeroRunLength: _maxEntryBytes + 1,
+        ),
+      ]);
+
+      expect(() => read(bookRef, 'liar.bin'), _throwsTooLarge);
     });
 
-    // TC-LIM-18 [Boundary]: two entries use the whole total; a third,
-    // declaring nothing, inflates to a single byte, one over what is left.
+    // TC-LIM-18 [Boundary]: reads have inflated exactly the whole-archive
+    // limit; one more byte is refused. The limit is the book's, counted
+    // across the reads of one `EpubBookRef`: the same entry read from a
+    // book newly opened is read.
     test(
-        'TC-LIM-18 [Boundary]: an entry one byte past what the total limit '
-        'leaves is refused', () {
-      expect(
-          reader.openBook(_craftZip(<_CraftedZipEntry>[
-            for (int i = 0; i < 2; i++)
-              _deflateEntry('half$i.bin', _deflateToEntryLimit,
-                  declaredUncompressedSize: _maxEntryBytes),
-            _deflateEntry('extra.bin',
-                _rawDeflateOf(1, block: Uint8List.fromList(<int>[0x4E])),
-                declaredUncompressedSize: 0),
-          ])),
-          _throwsTooLarge);
+        'TC-LIM-18 [Boundary]: a read one byte past what the total limit '
+        'leaves is refused', () async {
+      final EpubBookRef bookRef = await openWith(filledToTheLimit());
+      read(bookRef, 'half.bin');
+      read(bookRef, 'rest.bin');
+
+      expect(() => read(bookRef, 'one.bin'), _throwsTooLarge);
+      expect(read(await openWith(filledToTheLimit()), 'one.bin'), <int>[0x4E]);
     });
   });
 
@@ -1309,19 +1382,37 @@ void main() {
     }
 
     // TC-LIM-36 [Error guessing]: a zip64 uncompressed size of -1 passes the
-    // declared-size check, which it lies below. The inflate count, which
-    // reads no header, still stops the entry one byte past the limit.
+    // declared-size check, which it lies below, so the book opens. Read, the
+    // entry is still stopped one byte past the limit by the inflate count,
+    // which reads no header; a small one declaring -1 reads whole.
     test(
         'TC-LIM-36 [Error guessing]: an entry declaring -1 bytes through zip64 '
-        'is still stopped at the per-entry limit', () {
-      expect(
-          reader.openBook(_sharedStreamZip(
+        'is still stopped at the per-entry limit', () async {
+      final EpubBookRef bookRef = await reader.openBook(_craftBook(
+        chapter:
+            _CraftedZipEntry.stored(_chapterPath, utf8.encode(_chapterXhtml)),
+        extra: <_CraftedZipEntry>[
+          _CraftedZipEntry(
+            name: 'OEBPS/liar.bin',
             method: _deflateMethod,
+            declaredUncompressedSize: 0,
             payload: _deflateOneOverEntryLimit,
-            compressedSizes: <int>[_deflateOneOverEntryLimit.length],
             zip64UncompressedSize: -1,
-          )),
-          _throwsTooLarge);
+          ),
+          const _CraftedZipEntry(
+            name: 'OEBPS/small.bin',
+            method: _storeMethod,
+            declaredUncompressedSize: 0,
+            payload: <int>[0x4E],
+            zip64UncompressedSize: -1,
+          ),
+        ],
+      ));
+      final Archive archive = bookRef.epubArchive();
+
+      expect(
+          () => archive.findFile('OEBPS/liar.bin')!.content, _throwsTooLarge);
+      expect(archive.findFile('OEBPS/small.bin')!.content, <int>[0x4E]);
     });
   });
 
@@ -1348,46 +1439,52 @@ void main() {
     }
 
     // TC-LIM-20 [Equivalence partitioning]: an EPUB container may only store
-    // or deflate. Any other method refuses the book when it is opened, even
-    // for an entry nothing in the book points at.
+    // or deflate. An entry compressed any other way does not stop the book
+    // opening, and is refused when it is read.
     final Map<String, int> methodByName = <String, int>{
       'BZIP2': _bzip2Method,
       'LZMA': _lzmaMethod,
     };
     for (final MapEntry<String, int> method in methodByName.entries) {
       test(
-          'TC-LIM-20 [EP]: an unused ${method.key} entry refuses the book at '
-          'open', () {
-        expect(
-            reader.openBook(_craftBook(
-              chapter: _CraftedZipEntry.stored(_chapterPath, chapterBytes),
-              extra: <_CraftedZipEntry>[
-                _CraftedZipEntry(
-                  name: 'OEBPS/extra.bin',
-                  method: method.value,
-                  declaredUncompressedSize: 3,
-                  payload: const <int>[0x4E, 0x47, 0x45],
-                ),
-              ],
-            )),
+          'TC-LIM-20 [EP]: a ${method.key} entry opens, and is refused when '
+          'read', () async {
+        final EpubBookRef bookRef = await reader.openBook(_craftBook(
+          chapter: _CraftedZipEntry.stored(_chapterPath, chapterBytes),
+          extra: <_CraftedZipEntry>[
+            _CraftedZipEntry(
+              name: 'OEBPS/extra.bin',
+              method: method.value,
+              declaredUncompressedSize: 3,
+              payload: const <int>[0x4E, 0x47, 0x45],
+            ),
+          ],
+        ));
+
+        expect(() => bookRef.epubArchive().findFile('OEBPS/extra.bin')!.content,
             throwsA(isA<EpubUnsupportedCompressionException>()));
       });
     }
 
-    // TC-LIM-23 [Error guessing]: every entry is inflated at open, so a
-    // corrupt one fails the open even when the book never reads it.
+    // TC-LIM-23 [Error guessing]: an entry is inflated only when it is read,
+    // so a corrupt one the book never reads does not stop it opening, or
+    // being read whole; read itself, it fails as a damaged container.
     test(
         'TC-LIM-23 [Error guessing]: a corrupt DEFLATE entry the book never '
-        'uses fails the open', () {
-      expect(
-          reader.openBook(_craftBook(
-            chapter: _CraftedZipEntry.stored(_chapterPath, chapterBytes),
-            extra: <_CraftedZipEntry>[
-              _deflateEntry(
-                  'OEBPS/unused.bin', Uint8List(16)..fillRange(0, 16, 0xFF),
-                  declaredUncompressedSize: 16),
-            ],
-          )),
+        'uses fails only when it is read', () async {
+      final Uint8List book = _craftBook(
+        chapter: _CraftedZipEntry.stored(_chapterPath, chapterBytes),
+        extra: <_CraftedZipEntry>[
+          _deflateEntry(
+              'OEBPS/unused.bin', Uint8List(16)..fillRange(0, 16, 0xFF),
+              declaredUncompressedSize: 16),
+        ],
+      );
+      final EpubBookRef bookRef = await reader.openBook(book);
+
+      expect((await reader.readBook(book)).chapters.single.htmlContent,
+          _chapterXhtml);
+      expect(() => bookRef.epubArchive().findFile('OEBPS/unused.bin')!.content,
           _throwsCorrupt);
     });
 
@@ -1417,7 +1514,9 @@ void main() {
     // TC-LIM-21 [Equivalence partitioning]: an entry's declared size is not
     // held against it. One declaring less than it inflates to — as
     // `package:archive`'s `ArchiveFile.string` writes non-ASCII text — and
-    // one declaring more both open, holding exactly the bytes produced.
+    // one declaring more both read as exactly the bytes produced. The
+    // entry's `size` is the size it declares, as `package:archive` gives it:
+    // nothing has inflated the entry before it is read.
     final Map<String, int> declaredByCase = <String, int>{
       'less': 1,
       'more': chapterBytes.length + 100,
@@ -1434,7 +1533,7 @@ void main() {
         final ArchiveFile chapter =
             bookRef.epubArchive().findFile(_chapterPath)!;
 
-        expect(chapter.size, chapterBytes.length);
+        expect(chapter.size, declared.value);
         expect(chapter.isCompressed, isFalse);
         expect(chapter.content, chapterBytes);
         expect(await (await bookRef.getChapters()).single.readHtmlContent(),
@@ -1443,18 +1542,22 @@ void main() {
     }
 
     // TC-LIM-22 [Error guessing]: a corrupt DEFLATE stream — first block type
-    // 3, which deflate reserves — fails opening as a corrupt archive, not as
-    // zlib's own FormatException.
+    // 3, which deflate reserves — as the chapter. The book opens, since
+    // opening reads no chapter; reading the chapter, or the book whole, fails
+    // as a corrupt archive, not as zlib's own FormatException.
     test(
-        'TC-LIM-22 [Error guessing]: a corrupt DEFLATE entry fails as a '
-        'corrupt archive', () {
-      expect(
-          reader.openBook(_craftBook(
-            chapter: _deflateEntry(
-                _chapterPath, Uint8List(16)..fillRange(0, 16, 0xFF),
-                declaredUncompressedSize: 16),
-          )),
+        'TC-LIM-22 [Error guessing]: a corrupt DEFLATE chapter fails as a '
+        'corrupt archive when it is read', () async {
+      final Uint8List book = _craftBook(
+        chapter: _deflateEntry(
+            _chapterPath, Uint8List(16)..fillRange(0, 16, 0xFF),
+            declaredUncompressedSize: 16),
+      );
+      final EpubBookRef bookRef = await reader.openBook(book);
+
+      expect((await bookRef.getChapters()).single.readHtmlContent(),
           _throwsCorrupt);
+      expect(reader.readBook(book), _throwsCorrupt);
     });
   });
 
@@ -1491,8 +1594,8 @@ void main() {
     ArchiveFile later(EpubBookRef bookRef) =>
         bookRef.epubArchive().findFile(laterPath)!;
 
-    // TC-LIM-46 [Scenario]: `openBook` validates every entry and keeps none;
-    // an entry is read from the bytes when it is asked for. Changed after
+    // TC-LIM-46 [Scenario]: `openBook` reads no entry it does not parse; an
+    // entry is read from the bytes when it is asked for. Changed after
     // opening, a stored entry reads as it is then.
     test(
         'TC-LIM-46 [Scenario]: an entry is read from the source when it is '
@@ -1506,9 +1609,9 @@ void main() {
       expect(later(bookRef).content, utf8.encode('NGE-SEED-READ-AGAIN'));
     });
 
-    // TC-LIM-47 [Error guessing]: an entry nothing reads is not inflated
-    // after validation. Damaged after opening, it fails no other read, and
-    // fails its own only when it is read.
+    // TC-LIM-47 [Error guessing]: an entry is inflated only when it is read.
+    // Damaged after opening, it fails no other read, and fails its own only
+    // when it is read.
     test(
         'TC-LIM-47 [Error guessing]: an entry damaged after opening fails '
         'only when it is read', () async {
@@ -1522,13 +1625,13 @@ void main() {
           throwsA(isA<EpubCorruptArchiveException>()));
     });
 
-    // TC-LIM-48 [Boundary]: a read is held to exactly what the entry
-    // inflated to when the book was opened. Changed to inflate to fewer
-    // bytes, it is refused as changed; to more, it is stopped at the size
-    // validated, as any entry is stopped at its limit.
+    // TC-LIM-48 [Scenario]: nothing about an entry's content is recorded
+    // when the book is opened, so a read is of the bytes as they are then,
+    // held only to the limits. Changed in place to inflate to fewer bytes,
+    // or to more, the entry reads as it now is.
     test(
-        'TC-LIM-48 [Boundary]: an entry changed to inflate to fewer or more '
-        'bytes than it did when opened is refused', () async {
+        'TC-LIM-48 [Scenario]: an entry changed after opening to inflate to '
+        'fewer or more bytes reads as it now is', () async {
       final Uint8List shrinking = bookWith(deflatedLater(storedBlock(4)));
       final EpubBookRef shrunk = await reader.openBook(shrinking);
       replace(shrinking, storedBlock(4), storedBlock(2));
@@ -1537,10 +1640,8 @@ void main() {
       final EpubBookRef grown = await reader.openBook(growing);
       replace(growing, storedBlock(2), storedBlock(4));
 
-      expect(() => later(shrunk).content,
-          throwsA(isA<EpubCorruptArchiveException>()));
-      expect(() => later(grown).content,
-          throwsA(isA<EpubArchiveTooLargeException>()));
+      expect(later(shrunk).content, utf8.encode('NG'));
+      expect(later(grown).content, utf8.encode('NGE-'));
     });
 
     // TC-LIM-49 [Scenario]: an entry read once is kept, as `package:archive`

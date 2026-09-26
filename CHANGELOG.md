@@ -2,41 +2,47 @@
 
 ## Unreleased
 
-**Archive size limits.** Every entry point now refuses a ZIP container past
-fixed limits. Opening a book validates the whole container against them in
-one pass that keeps nothing; after that, what one read can cost in memory is
-the entry it reads, and what validation can cost in CPU is inflating the
-limits' worth of data.
+**Archive size limits.** This package guards its own decompression: an
+entry is inflated only when it is read, by one inflater that holds every
+read to fixed limits. Opening a book inflates nothing but the documents it
+parses; what a read costs in memory is the entry it reads.
 
-| Limit | Value |
-|---|---|
-| Compressed input (the file, or the bytes passed in) | 512 MiB |
-| Entries in the archive | 4096 |
-| Bytes one entry inflates to | 256 MiB |
-| Bytes all entries inflate to | 512 MiB |
+| Limit | Value | Checked |
+|---|---|---|
+| Compressed input (the file, or the bytes passed in) | 512 MiB | when the book is opened, before any of it is read |
+| Entries in the archive | 4096 | when the book is opened |
+| Sizes the entries declare, each and in total | 256 MiB, 512 MiB | when the book is opened |
+| Bytes one entry inflates to | 256 MiB | while it is read |
+| Bytes the entries read from one book inflate to between them | 512 MiB | while each is read |
 
 - A breach throws **`EpubArchiveTooLargeException`**, a new member of the
   sealed `EpubException` family. This is **breaking** for an exhaustive
   `switch` on `EpubException`, which now has to handle it and the two
   members below.
+- The limits are private constants. There is nothing to configure, no
+  separate check to call and no way to skip one: every read of an entry, by
+  any entry point, goes through the same inflater. The package has no
+  validation or import API; what a caller does with the bytes it reads, a
+  WebView's own ZIP reader say, is the caller's to guard.
 - **A damaged ZIP container now throws the new
   `EpubCorruptArchiveException`**, a member of the same family:
   - bytes that are not a ZIP at all, or whose end-of-central-directory
     record is cut short, which threw `ArchiveException` or a `RangeError`;
   - any ZIP structure that reaches past the end of the file or has a
     negative length: a central directory, zip64 record, directory record or
-    local header placed or sized past the end,
-    an entry's compressed data or its data descriptor (bit 3, as streaming
-    writers set) running off it. These threw a `RangeError`, or were read
-    short without an error. `package:archive` reads the container only
-    through a stream that checks every read against its end;
+    local header placed or sized past the end, an entry's compressed data or
+    its data descriptor (bit 3, as streaming writers set) running off it.
+    These threw a `RangeError`, or were read short without an error.
+    `package:archive` reads the container only through a stream that checks
+    every read against its end;
   - a container `package:archive` cannot parse (a broken local header, say),
     which threw `ArchiveException`;
   - an entry whose deflate stream zlib rejects, which threw
     `FormatException`;
   - entries given more compressed bytes between them than the file holds,
-    which is new: entries that overlap, sharing one stream, would have it
-    inflated once per entry. The bytes counted are the ones each entry is
+    counted from their local headers when the book is opened, which is new:
+    entries that overlap, sharing one stream, would have it inflated once per
+    entry by a book read whole. The bytes counted are the ones each entry is
     really given, not the sizes its header claims.
 
   `TypeError` and `StateError` still escape unconverted: they mean a defect
@@ -46,57 +52,55 @@ limits' worth of data.
   the extra field of a local header whose entry has its encryption flag
   set, when one is damaged so that parsing it reads past its own end: it
   cannot be told apart from a defect, so it is not caught.
-- The limits are private constants. There is nothing to configure and no
-  separate check to call: `openBook`, `readBook` and the two new entry points
-  all apply them.
 - **New: `openBookFile(String path)` and `readBookFile(String path)`.** They
-  check the file's size before opening it, so a file past the compressed
-  limit is refused without being read, then read the file a 64 KiB chunk at
-  a time; it is never loaded whole. They bring in `dart:io`, so the package no
-  longer compiles for the web.
+  read the file a chunk at a time; it is never loaded whole. A file past the
+  compressed limit is refused before any of it is read. They bring in
+  `dart:io`, so the package no longer compiles for the web.
 - **No new obligation to close anything.** An `EpubBookRef` from
   `openBookFile` holds the path, not an open file: each later read opens the
-  file, reads the one entry, and closes it. A file removed by then fails that
-  read with `FileSystemException`.
+  file, reads the one entry through the same limits, and closes it. What the
+  caller sees if the file changes in between: a file removed, or no longer
+  readable, fails that read with `FileSystemException`; one cut short so the
+  entry is no longer in it, or whose entry no longer inflates, with
+  `EpubCorruptArchiveException`; one whose entry now inflates past a limit,
+  with `EpubArchiveTooLargeException`. Bytes changed in place within the
+  limits are read as they are then: nothing records an entry's content when
+  the book is opened, so nothing checks it against that.
 - The `archive` dependency now requires `^3.6.1`: the decode uses its public
   `ZipFileHeader`, `readLocalFileHeader` and `InputStream` API as of that
   version.
-- **Opening a book validates the whole container, and keeps nothing.** The
+- **Opening a book reads its directory and the documents it parses.** The
   central directory is read here, record by record, rather than by
   `package:archive`'s `ZipDirectory.read`, so the entries are counted as
   they are read, whatever count the end record claims, and the one past the
-  limit is refused before it is built. Their declared sizes are checked
-  before anything is inflated. Then every entry is inflated once, counting
-  the bytes it really produces, and abandoned when they cross the per-entry
-  limit or what the total limit has left. A header that under-declares its
-  size gets no further than the limit; within the limits an entry that
-  inflates past its declared size still opens, since writers misstate it in
-  good faith (`package:archive`'s `ArchiveFile.string` declares a text's
-  UTF-16 length). This validation discards what it inflates: its memory is a
-  64 KiB chunk of input and one of output, whatever the book's size. It is
-  part of opening; there is no separate check to call and no way to skip it.
-- **`openBook` and `openBookFile` inflate an entry again when it is read,
-  and only then.** An entry nothing reads is never held. A read is held to
-  exactly the bytes the entry inflated to when the book was opened, so an
-  entry whose bytes changed since (a file rewritten on disk, a list the
-  caller changed) is refused: with `EpubCorruptArchiveException` if it
-  inflates to fewer bytes, or stopped at that size with
-  `EpubArchiveTooLargeException` if more. What a read costs is the entry it
-  reads, held once; `ArchiveFile` keeps it for as long as the `EpubBookRef`
-  lives, as `package:archive` always did. So every entry read after opening
-  is inflated twice, once to validate and once to read; that includes the
-  container document, package document and navigation document `openBook`
-  itself parses.
-- **`readBook` and `readBookFile` inflate each entry once.** They need every
-  entry, so validating the container and keeping its content are the same
-  pass: the same inflater, the same limits, with the output kept. What they
-  cost is the `EpubBook` they return, plus, for a moment, a second copy of
-  the entry being inflated.
-- **Behaviour changes that come with validating at open:**
+  limit is refused before it is built. Their declared sizes are checked,
+  each entry's local header read, and only the container, package and
+  navigation documents inflated. No other entry's data is read.
+- **An entry is inflated when it is read, once.** The inflater counts the
+  bytes it really produces and abandons the entry as soon as they cross the
+  per-entry limit or what the book's whole-archive limit has left. A header
+  that under-declares its size gets no further than the limit; within the
+  limits an entry that inflates past its declared size is read, since
+  writers misstate it in good faith (`package:archive`'s `ArchiveFile.string`
+  declares a text's UTF-16 length). An entry is inflated into a buffer of the
+  size it declares, capped at what the limits leave: an honest entry is held
+  once, and one that inflates past its declared size keeps its chunks and is
+  joined once at the end. What a read costs is the entry, and one read
+  refused part-way the limit it crossed. `ArchiveFile` keeps an entry read
+  for as long as the `EpubBookRef` lives, as `package:archive` always did,
+  and it counts once towards the whole-archive limit.
+- **`readBook` and `readBookFile` read the book through the same reads.**
+  Each entry the `EpubBook` holds is inflated once, by the same inflater
+  under the same limits; what they cost is the `EpubBook` they return.
+- **Behaviour changes that come with inflating on read:**
+  - **A damaged, too large or unsupported entry fails when it is read, not
+    when the book is opened.** A book whose bad entry nothing reads, a stray
+    `__MACOSX/` file say, opens and reads; `readBook` fails for one the
+    book holds. Before, a damaged entry failed when it was read too, but a
+    decompression bomb was not refused at all.
   - `openBook` holds the bytes it was given, and reads each content file
-    from them when asked; it no longer holds any inflated entry it was not
-    asked for. A content file used to be inflated on first read and kept,
-    and still is.
+    from them when asked. A content file is inflated on first read and kept,
+    as before.
   - **Reading a content file holds it once.**
     `EpubContentFileRef.openContentStream` and `getContentStream` return the
     bytes the archive entry holds, a `Uint8List` (they returned
@@ -109,30 +113,23 @@ limits' worth of data.
     the same entry, so a caller that changes them copies them first. The
     narrower return type is source-compatible for callers; a subclass that
     overrides either method returning `List<int>` no longer compiles.
-  - **A corrupt or unsupported entry now fails the open, not the read.**
-    Every entry is inflated in validation, so one that cannot be inflated
-    fails `openBook` and `readBook` even when the book never reads it (a
-    stray `__MACOSX/` file, say); before, it failed only if and when it was
-    read.
   - DEFLATE is still inflated by `dart:io`'s zlib, now through
-    `RawZLibFilter`, fed a chunk at a time so the limits stop it part-way. A
-    refused bomb costs a chunk, not the 256 MiB it was stopped at. An invalid
-    stream fails with `EpubCorruptArchiveException`; one cut short still
-    yields what it holds, without an error, as before.
+    `RawZLibFilter`, fed a chunk at a time so the limits stop it part-way. An
+    invalid stream fails with `EpubCorruptArchiveException`; one cut short
+    still yields what it holds, without an error, as before.
   - `EpubArchiveTooLargeException` messages give sizes and limits, never an
     entry's file name, which can carry the book's title.
   - The entries of `EpubBookRef.epubArchive()` carry their name, their
-    inflated content, and a `size` that is the inflated length rather than
-    the header's claim. They no longer carry the ZIP's CRC, file mode,
+    content, inflated when it is first asked for, and the `size` their header
+    declares, as before. They no longer carry the ZIP's CRC, file mode,
     modification time, or directory and symlink flags.
   - Only STORE and DEFLATE entries are read, the two methods the EPUB
-    container format allows. An entry in any other method, BZIP2 included,
-    refuses the book at open with the new
-    **`EpubUnsupportedCompressionException`**; before, BZIP2 was read and
-    other methods threw `ArchiveException` when read. The
+    container format allows. Reading an entry in any other method, BZIP2
+    included, throws the new **`EpubUnsupportedCompressionException`**;
+    before, BZIP2 was read and other methods threw `ArchiveException`. The
     ZIP encryption flag is ignored; the EPUB container format forbids ZIP
     encryption. An entry with the flag set but its bytes in the clear now
-    opens, where it used to throw `FormatException`.
+    reads, where it used to throw `FormatException`.
   - The end record is searched for from the last position a whole one
     fits. A valid ZIP whose comment ends with the end-record signature now
     opens, where `ZipDirectory.read` matched that signature first and threw

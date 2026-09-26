@@ -112,9 +112,9 @@ Uint8List _deflatedZeros(int length) {
   return out.takeBytes();
 }
 
-/// A readable one-chapter book with a 200 MiB stored audio file in its
+/// A readable one-chapter book with [audio] as `OEBPS/audio.mp3` in its
 /// manifest.
-List<_ProbeEntry> _bookWithAudio() {
+List<_ProbeEntry> _bookWithAudio(_ProbeEntry audio) {
   _ProbeEntry text(String name, String content) =>
       _ProbeEntry(name, utf8.encode(content));
   return <_ProbeEntry>[
@@ -148,7 +148,7 @@ List<_ProbeEntry> _bookWithAudio() {
             '</navLabel><content src="chapter1.xhtml"/></navPoint></navMap>'
             '</ncx>'),
     text('OEBPS/chapter1.xhtml', '<html><body><p>NGE-SEED</p></body></html>'),
-    _ProbeEntry('OEBPS/audio.mp3', _randomMib(), repeat: 200),
+    audio,
   ];
 }
 
@@ -161,17 +161,22 @@ Future<Future<Object?> Function()> _prepare(
       _writeZip(
           path, <_ProbeEntry>[_ProbeEntry('x', _randomMib(), repeat: 128)]);
       return () => const EpubReader().openBookFile(path);
-    // An entry inflating to the 256 MiB limit, opened from bytes.
-    case 'inflate':
-      final Uint8List deflated = _deflatedZeros(256 * _oneMib);
-      _writeZip(path, <_ProbeEntry>[
-        _ProbeEntry('x', deflated, method: 8, uncompressedSize: 256 * _oneMib),
-      ]);
-      final Uint8List bytes = File(path).readAsBytesSync();
-      return () => const EpubReader().openBook(bytes);
-    // The 200 MiB audio file of an opened book, read as bytes.
+    // An audio file declaring 1 KiB and inflating to 1 GiB of zeros, read as
+    // bytes from an opened book.
+    case 'bomb':
+      _writeZip(
+          path,
+          _bookWithAudio(_ProbeEntry(
+              'OEBPS/audio.mp3', _deflatedZeros(1024 * _oneMib),
+              method: 8, uncompressedSize: 1024)));
+      final EpubBookRef bookRef = await const EpubReader().openBookFile(path);
+      return () => bookRef.content.allFiles['audio.mp3']!.readContentAsBytes();
+    // A 200 MiB stored audio file, read as bytes from an opened book.
     default:
-      _writeZip(path, _bookWithAudio());
+      _writeZip(
+          path,
+          _bookWithAudio(
+              _ProbeEntry('OEBPS/audio.mp3', _randomMib(), repeat: 200)));
       final EpubBookRef bookRef = await const EpubReader().openBookFile(path);
       return () => bookRef.content.allFiles['audio.mp3']!.readContentAsBytes();
   }
@@ -184,7 +189,10 @@ Future<void> main(List<String> args) async {
   try {
     await measured();
   } on EpubMissingArchiveEntryException catch (expected) {
-    // The archive is valid but holds no book; opening it got that far.
+    // An archive that holds no book, read as far as its missing container.
+    stderr.writeln(expected);
+  } on EpubArchiveTooLargeException catch (expected) {
+    // The bomb, refused part-way.
     stderr.writeln(expected);
   }
   stdout.writeln((ProcessInfo.maxRss - before) ~/ _oneMib);
