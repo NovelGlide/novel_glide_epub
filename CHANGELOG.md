@@ -39,11 +39,12 @@ parses; what a read costs in memory is the entry it reads.
     which threw `ArchiveException`;
   - an entry whose deflate stream zlib rejects, which threw
     `FormatException`;
-  - entries given more compressed bytes between them than the file holds,
-    counted from their local headers when the book is opened, which is new:
-    entries that overlap, sharing one stream, would have it inflated once per
-    entry by a book read whole. The bytes counted are the ones each entry is
-    really given, not the sizes its header claims.
+  - a central directory whose entries declare more compressed bytes between
+    them than the file holds, or any size below zero (`package:archive`
+    reads a zip64 size as a signed value), checked when the book is opened,
+    which is new: entries that overlap, sharing one stream, would have it
+    inflated once per entry by a book read whole. A negative size is refused
+    rather than added, so no entry can pull the total back down.
 
   `TypeError` and `StateError` still escape unconverted: they mean a defect
   in this package or `package:archive`, not a damaged book. So does a
@@ -67,15 +68,17 @@ parses; what a read costs in memory is the entry it reads.
   limits are read as they are then: nothing records an entry's content when
   the book is opened, so nothing checks it against that.
 - The `archive` dependency now requires `^3.6.1`: the decode uses its public
-  `ZipFileHeader`, `readLocalFileHeader` and `InputStream` API as of that
-  version.
+  `ZipFileHeader`, `ZipFile` and `InputStream` API as of that version.
 - **Opening a book reads its directory and the documents it parses.** The
   central directory is read here, record by record, rather than by
   `package:archive`'s `ZipDirectory.read`, so the entries are counted as
   they are read, whatever count the end record claims, and the one past the
-  limit is refused before it is built. Their declared sizes are checked,
-  each entry's local header read, and only the container, package and
-  navigation documents inflated. No other entry's data is read.
+  limit is refused before it is built. Their declared sizes are checked, and
+  of the entries only the container, package and navigation documents are
+  read. No other entry is touched, neither its local header nor its data:
+  opening costs one pass over the directory's records, whatever the entries
+  hold. `ZipDirectory.read` parsed every entry's local header as well,
+  keeping a copy of each one's extra field.
 - **An entry is inflated when it is read, once.** The inflater counts the
   bytes it really produces and abandons the entry as soon as they cross the
   per-entry limit or what the book's whole-archive limit has left. A header
@@ -94,10 +97,12 @@ parses; what a read costs in memory is the entry it reads.
   under the same limits; what they cost is the `EpubBook` they return.
 - **Behaviour changes that come with inflating on read:**
   - **A damaged, too large or unsupported entry fails when it is read, not
-    when the book is opened.** A book whose bad entry nothing reads, a stray
-    `__MACOSX/` file say, opens and reads; `readBook` fails for one the
-    book holds. Before, a damaged entry failed when it was read too, but a
-    decompression bomb was not refused at all.
+    when the book is opened**, a damaged local header included. A book
+    whose bad entry nothing reads, a stray `__MACOSX/` file say, opens and
+    reads; `readBook` fails for one the book holds. Before, an entry with a
+    broken local header failed the book when it was opened, one with
+    damaged data when it was read, and a decompression bomb was not refused
+    at all.
   - `openBook` holds the bytes it was given, and reads each content file
     from them when asked. A content file is inflated on first read and kept,
     as before.

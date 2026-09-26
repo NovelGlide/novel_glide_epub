@@ -152,6 +152,31 @@ List<_ProbeEntry> _bookWithAudio(_ProbeEntry audio) {
   ];
 }
 
+/// 4096 central-directory records written to [path], every one of an empty
+/// entry whose local header is the one at offset 0, with a name and an
+/// extra field of 65,535 bytes each.
+void _writeSharedLocalHeaderZip(String path) {
+  const int fieldLength = 0xFFFF;
+  const int records = 4096;
+  const int directory = 30 + 2 * fieldLength;
+  const int end = directory + 46 * records;
+  final Uint8List bytes = Uint8List(end + 22)..fillRange(30, directory, 0x4E);
+  final ByteData data = ByteData.sublistView(bytes)
+    ..setUint32(0, 0x04034b50, Endian.little)
+    ..setUint16(4, 20, Endian.little)
+    ..setUint16(26, fieldLength, Endian.little)
+    ..setUint16(28, fieldLength, Endian.little)
+    ..setUint32(end, 0x06054b50, Endian.little)
+    ..setUint16(end + 8, records, Endian.little)
+    ..setUint16(end + 10, records, Endian.little)
+    ..setUint32(end + 12, 46 * records, Endian.little)
+    ..setUint32(end + 16, directory, Endian.little);
+  for (int record = directory; record < end; record += 46) {
+    data.setUint32(record, 0x02014b50, Endian.little);
+  }
+  File(path).writeAsBytesSync(bytes);
+}
+
 /// The call [probeCase] measures, its fixture already built at [path].
 Future<Future<Object?> Function()> _prepare(
     String probeCase, String path) async {
@@ -160,6 +185,10 @@ Future<Future<Object?> Function()> _prepare(
     case 'file':
       _writeZip(
           path, <_ProbeEntry>[_ProbeEntry('x', _randomMib(), repeat: 128)]);
+      return () => const EpubReader().openBookFile(path);
+    // 4096 records sharing one 128 KiB local header, opened from its file.
+    case 'shared':
+      _writeSharedLocalHeaderZip(path);
       return () => const EpubReader().openBookFile(path);
     // An audio file declaring 1 KiB and inflating to 1 GiB of zeros, read as
     // bytes from an opened book.

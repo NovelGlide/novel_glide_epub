@@ -15,9 +15,8 @@
 //     megabyte without ever being resident: the canonical bomb.
 //
 // Equivalent mutants, documented rather than chased:
-//   * In `_FileBytes`, `index < _windowStart` as `<=`, and
-//     `_windowStart + _window.length` as `-`. Either reloads the window more
-//     often than needed, from the same file, and returns the same bytes.
+//   * In `_FileBytes`, `index < _windowStart` as `<=`. It reloads the window
+//     more often than needed, from the same file, and returns the same bytes.
 //   * In `_centralDirectoryOf`, deleting `input.position = end + 4`. The
 //     search that found the end record last read its signature, which leaves
 //     the position exactly there.
@@ -32,7 +31,7 @@
 // the same process at once would make the count unreliable.
 //
 // Not equivalent, and pinned elsewhere: in `_InflatedBytes.add`,
-// `<= _declared.length` as `<`. An honest entry's last chunk then overflows
+// `<= _buffer.length` as `<`. An honest entry's last chunk then overflows
 // its buffer and the entry is copied whole: the same bytes, held twice.
 // Only memory shows it, and `epub_archive_memory_test.dart`'s TC-MEM-3
 // does, in a process of its own.
@@ -83,7 +82,7 @@ class _CraftedZipEntry {
     required this.declaredUncompressedSize,
     this.payload = const <int>[],
     this.zeroRunLength = 0,
-    this.zip64UncompressedSize,
+    this.zip64LocalHeaderOffset,
   });
 
   /// A stored entry whose declared size is the truth.
@@ -92,7 +91,7 @@ class _CraftedZipEntry {
         declaredUncompressedSize = bytes.length,
         payload = bytes,
         zeroRunLength = 0,
-        zip64UncompressedSize = null;
+        zip64LocalHeaderOffset = null;
 
   final String name;
   final int method;
@@ -105,16 +104,15 @@ class _CraftedZipEntry {
   /// buffer, so a run of hundreds of MiB costs no copy.
   final int zeroRunLength;
 
-  /// When given, the uncompressed size the central directory declares in a
-  /// zip64 extra field, as its 64 raw bits, instead of
-  /// [declaredUncompressedSize]; `package:archive` reads it back as a signed
-  /// value.
-  final int? zip64UncompressedSize;
+  /// When given, where the central directory says the local header is, in a
+  /// zip64 extra field, as its 64 raw bits, instead of where `_craftZip`
+  /// wrote it; `package:archive` reads it back as a signed value.
+  final int? zip64LocalHeaderOffset;
 
   int get storedLength => payload.length + zeroRunLength;
 
   List<int> get zip64Sizes => <int>[
-        if (zip64UncompressedSize case final int size) size,
+        if (zip64LocalHeaderOffset case final int offset) offset,
       ];
 
   int get extraLength => zip64Sizes.isEmpty ? 0 : 4 + 8 * zip64Sizes.length;
@@ -166,14 +164,13 @@ Uint8List _craftZip(List<_CraftedZipEntry> entries) {
       ..setUint16(offset + 6, 20, Endian.little) // version needed
       ..setUint16(offset + 10, entry.method, Endian.little)
       ..setUint32(offset + 20, entry.storedLength, Endian.little)
-      ..setUint32(
-          offset + 24,
-          _zip64Marked(
-              entry.zip64UncompressedSize, entry.declaredUncompressedSize),
-          Endian.little)
+      ..setUint32(offset + 24, entry.declaredUncompressedSize, Endian.little)
       ..setUint16(offset + 28, names[i].length, Endian.little)
       ..setUint16(offset + 30, entry.extraLength, Endian.little)
-      ..setUint32(offset + 42, localHeaderOffsets[i], Endian.little);
+      ..setUint32(
+          offset + 42,
+          _zip64Marked(entry.zip64LocalHeaderOffset, localHeaderOffsets[i]),
+          Endian.little);
     offset += _centralFileHeaderLength;
     bytes.setAll(offset, names[i]);
     offset += names[i].length;
@@ -284,23 +281,20 @@ int _sharedStreamZipLength(int payloadLength, int recordCount) =>
 /// Each record declares 0 bytes uncompressed, so no declared-size limit can
 /// react.
 ///
-/// Given [zip64UncompressedSize], [zip64CompressedSize] or
-/// [zip64LocalHeaderOffset], every record carries that value in a zip64
-/// extra field instead, its 32-bit field set to 0xFFFFFFFF. A zip64 value is
-/// written as its 64 raw bits, and `package:archive` reads it back as a
-/// signed value.
+/// Given [zip64UncompressedSize] or [zip64CompressedSize], every record
+/// carries that value in a zip64 extra field instead, its 32-bit field set
+/// to 0xFFFFFFFF. A zip64 value is written as its 64 raw bits, and
+/// `package:archive` reads it back as a signed value.
 Uint8List _sharedStreamZip({
   required int method,
   required List<int> payload,
   required List<int> compressedSizes,
   int? zip64UncompressedSize,
   int? zip64CompressedSize,
-  int? zip64LocalHeaderOffset,
 }) {
   final List<int> zip64Sizes = <int>[
     if (zip64UncompressedSize != null) zip64UncompressedSize,
     if (zip64CompressedSize != null) zip64CompressedSize,
-    if (zip64LocalHeaderOffset != null) zip64LocalHeaderOffset,
   ];
   final int extraLength = zip64Sizes.isEmpty ? 0 : 4 + 8 * zip64Sizes.length;
   final Uint8List bytes = Uint8List(
@@ -330,8 +324,7 @@ Uint8List _sharedStreamZip({
           at + 24, _zip64Marked(zip64UncompressedSize, 0), Endian.little)
       ..setUint16(at + 28, 1, Endian.little) // name length
       ..setUint16(at + 30, extraLength, Endian.little)
-      ..setUint32(
-          at + 42, _zip64Marked(zip64LocalHeaderOffset, 0), Endian.little);
+      ..setUint32(at + 42, 0, Endian.little);
     bytes[at + _centralFileHeaderLength] = 0x78;
     at += _centralFileHeaderLength + 1;
     _writeZip64Extra(data, at, zip64Sizes);
@@ -352,6 +345,59 @@ Uint8List _sharedStreamZip({
 /// given, which sends a reader to the zip64 extra field for it.
 int _zip64Marked(int? zip64Value, int plain) =>
     zip64Value == null ? plain : 0xFFFFFFFF;
+
+/// Where the central-directory record of the entry [name] is in [zip], a
+/// `_craftZip` result.
+int _recordOf(Uint8List zip, String name) {
+  final ByteData data = ByteData.sublistView(zip);
+  final List<int> nameBytes = utf8.encode(name);
+  int record = data.getUint32(
+      zip.length - _endOfCentralDirectoryLength + 16, Endian.little);
+  while (data.getUint16(record + 28, Endian.little) != nameBytes.length ||
+      !const ListEquality<int>().equals(
+          Uint8List.sublistView(zip, record + _centralFileHeaderLength,
+              record + _centralFileHeaderLength + nameBytes.length),
+          nameBytes)) {
+    record += _centralFileHeaderLength +
+        data.getUint16(record + 28, Endian.little) +
+        data.getUint16(record + 30, Endian.little) +
+        data.getUint16(record + 32, Endian.little);
+  }
+  return record;
+}
+
+/// Where the local header the central-directory [record] points at is in
+/// [zip].
+int _localHeaderOf(Uint8List zip, int record) =>
+    ByteData.sublistView(zip).getUint32(record + 42, Endian.little);
+
+/// [count] central-directory records, every one of an empty entry whose
+/// local header is the one at offset 0, which has a name and an extra field
+/// of 65,535 bytes each: a third of a MiB of file, whose local header costs
+/// 128 KiB to parse each time a record leads to it.
+Uint8List _sharedLocalHeaderZip(int count) {
+  const int fieldLength = 0xFFFF;
+  const int localLength = _localFileHeaderLength + 2 * fieldLength;
+  final Uint8List records = _centralRecords(count);
+  final Uint8List bytes =
+      Uint8List(localLength + records.length + _endOfCentralDirectoryLength)
+        ..fillRange(_localFileHeaderLength, localLength, 0x4E)
+        ..setAll(localLength, records)
+        ..setAll(
+          localLength + records.length,
+          _endOfCentralDirectory(
+            entryCount: count,
+            centralDirectoryLength: records.length,
+            centralDirectoryOffset: localLength,
+          ),
+        );
+  ByteData.sublistView(bytes)
+    ..setUint32(0, _localFileHeaderSignature, Endian.little)
+    ..setUint16(4, 20, Endian.little) // version needed
+    ..setUint16(26, fieldLength, Endian.little)
+    ..setUint16(28, fieldLength, Endian.little);
+  return bytes;
+}
 
 /// [zip], a `_craftZip` result, with [tail] added to the end of its central
 /// directory, and the end record's directory size grown to take it in.
@@ -667,12 +713,11 @@ void main() {
     });
 
     // TC-LIM-25 [Error guessing]: the count is taken from the central
-    // directory's records, before `package:archive` reads a single one. The
-    // end record claims one entry, and the first local header is broken so
-    // that reading the entries fails as a corrupt archive: 4097 records are
-    // refused as too many before that can happen, and 4096 get as far as it.
+    // directory's records, whatever count the end record claims: here one.
+    // The first local header is broken too, which opening does not read, so
+    // 4097 records are refused as too many and 4096 decode.
     test(
-        'TC-LIM-25 [Error guessing]: records are counted before any is read, '
+        'TC-LIM-25 [Error guessing]: records are counted as they are read, '
         'whatever count the end record claims', () {
       Uint8List lyingZip(int count) {
         final Uint8List zip = _craftZip(emptyEntries(count));
@@ -686,7 +731,8 @@ void main() {
       }
 
       expect(reader.openBook(lyingZip(_maxEntries + 1)), _throwsTooLarge);
-      expect(reader.openBook(lyingZip(_maxEntries)), _throwsCorrupt);
+      expect(reader.openBook(lyingZip(_maxEntries)),
+          _throwsDecodedWithoutContainer);
     });
 
     // TC-LIM-26 [Equivalence partitioning]: a zip64 end record moves the
@@ -1008,10 +1054,12 @@ void main() {
     // TC-LIM-15 [Boundary]: no entry reaches the per-entry limit, but the
     // third, lying about its size, pushes what the book's reads have
     // inflated past the whole-archive limit. Only the running total can
-    // refuse it.
+    // refuse it. The refused read adds nothing to the total, so a read that
+    // fits in what is left is still read.
     test(
         'TC-LIM-15 [Boundary]: reads inflating to 656 MiB between them, none '
-        'over the per-entry limit, are refused at the third', () async {
+        'over the per-entry limit, are refused at the third, which uses up '
+        'none of what is left', () async {
       final EpubBookRef bookRef = await openWith(<_CraftedZipEntry>[
         _deflateEntry('a.bin', _deflateToEntryLimit,
             declaredUncompressedSize: _maxEntryBytes),
@@ -1019,11 +1067,13 @@ void main() {
             declaredUncompressedSize: 200 * _oneMib),
         _deflateEntry('c.bin', _deflateTo200Mib,
             declaredUncompressedSize: 1024),
+        _CraftedZipEntry.stored('d.bin', const <int>[0x4E]),
       ]);
 
       expect(read(bookRef, 'a.bin'), hasLength(_maxEntryBytes));
       expect(read(bookRef, 'b.bin'), hasLength(200 * _oneMib));
       expect(() => read(bookRef, 'c.bin'), _throwsTooLarge);
+      expect(read(bookRef, 'd.bin'), <int>[0x4E]);
     });
 
     // TC-LIM-16 [Boundary]: reads inflating to exactly the whole-archive
@@ -1209,26 +1259,6 @@ void main() {
           _throwsDecodedWithoutContainer);
     });
 
-    // TC-LIM-44 [Error guessing]: a streaming writer sets bit 3 of an entry's
-    // flags and puts its sizes in a data descriptor after the data, which
-    // `package:archive` reads after the compressed bytes. A compressed size
-    // reaching past the end of the file is refused before either read runs
-    // off it.
-    test(
-        'TC-LIM-44 [Error guessing]: a bit-3 entry whose compressed size '
-        'reaches past the file fails as a corrupt archive', () {
-      final Uint8List zip = _craftZip(oneEntry());
-      final int directory =
-          ByteData.sublistView(zip, zip.length - _endOfCentralDirectoryLength)
-              .getUint32(16, Endian.little);
-      ByteData.sublistView(zip)
-        ..setUint16(6, 0x08, Endian.little) // local header flags
-        ..setUint16(directory + 8, 0x08, Endian.little) // record flags
-        ..setUint32(directory + 20, zip.length, Endian.little);
-
-      expect(reader.openBook(zip), _throwsCorrupt);
-    });
-
     // TC-LIM-40 [Error guessing]: a central directory that ends in a few
     // stray bytes, too few for another record's signature, is read to its
     // last whole record and no further.
@@ -1265,30 +1295,65 @@ void main() {
             tail.value);
       });
     }
+  });
+
+  group('local headers, read with their entry', () {
+    const String extraPath = 'OEBPS/extra.bin';
+
+    /// A readable book with [extra] added, which nothing in it points at.
+    Uint8List bookWith(_CraftedZipEntry extra) => _craftBook(
+          chapter:
+              _CraftedZipEntry.stored(_chapterPath, utf8.encode(_chapterXhtml)),
+          extra: <_CraftedZipEntry>[extra],
+        );
+
+    /// The entry [name] of [book], opened and not yet read.
+    Future<ArchiveFile> opened(Uint8List book, String name) async =>
+        (await reader.openBook(book)).epubArchive().findFile(name)!;
+
+    // TC-LIM-53 [Error guessing]: opening a book reads no entry's local
+    // header, so a broken one in an entry the book never uses, a stray
+    // `__MACOSX/` file here, neither stops the book opening nor stops it
+    // being read whole. Read itself, the entry fails as a damaged container.
+    test(
+        'TC-LIM-53 [Error guessing]: a broken local header the book never '
+        'uses fails only its own entry', () async {
+      const String strayPath = '__MACOSX/OEBPS/._chapter1.xhtml';
+      final Uint8List book = bookWith(
+          _CraftedZipEntry.stored(strayPath, utf8.encode('NGE-SEED-STRAY')));
+      ByteData.sublistView(book).setUint32(
+          _localHeaderOf(book, _recordOf(book, strayPath)), 0, Endian.little);
+
+      final ArchiveFile stray = await opened(book, strayPath);
+      expect((await reader.readBook(book)).chapters.single.htmlContent,
+          _chapterXhtml);
+      expect(() => stray.content, _throwsCorrupt);
+    });
 
     // TC-LIM-43 [Boundary]: the local header a record points at has to fit
     // in the file, its fixed 30 bytes at least. Negative, or with its
-    // signature there but one byte short, is refused; the last place it
-    // fits is read.
+    // signature there but one byte short, fails the entry's read; the last
+    // place it fits is read. The book opens either way.
     test(
         'TC-LIM-43 [Boundary]: a local header placed where it does not fit '
-        'fails as a corrupt archive', () {
-      expect(
-          reader.openBook(_sharedStreamZip(
+        'fails its entry when it is read', () async {
+      final ArchiveFile negative = await opened(
+          bookWith(const _CraftedZipEntry(
+            name: extraPath,
             method: _storeMethod,
-            payload: const <int>[0x4E],
-            compressedSizes: const <int>[1],
+            declaredUncompressedSize: 0,
             zip64LocalHeaderOffset: -1,
           )),
-          _throwsCorrupt);
+          extraPath);
+      expect(() => negative.content, _throwsCorrupt);
 
       Uint8List localHeaderAtEnd(int missing) {
-        // An end record whose comment is an empty local header, less its
-        // last [missing] bytes, and a record pointing at it. With none
-        // missing it is the last place a local header fits; with one, its
-        // signature is there but not its whole fixed part.
-        final Uint8List zip = _craftZip(oneEntry());
-        final int end = zip.length - _endOfCentralDirectoryLength;
+        // The end record given a comment that is an empty local header, less
+        // its last [missing] bytes, and the empty entry's record pointing at
+        // it. With none missing it is the last place a local header fits;
+        // with one, its signature is there but not its whole fixed part.
+        final Uint8List zip =
+            bookWith(_CraftedZipEntry.stored(extraPath, const <int>[]));
         final ByteData localHeader = ByteData(_localFileHeaderLength)
           ..setUint32(0, _localFileHeaderSignature, Endian.little)
           ..setUint16(4, 20, Endian.little);
@@ -1297,30 +1362,80 @@ void main() {
           ...localHeader.buffer
               .asUint8List(0, _localFileHeaderLength - missing),
         ]);
-        final int directory =
-            ByteData.sublistView(zip, end).getUint32(16, Endian.little);
         ByteData.sublistView(file)
-          ..setUint16(end + 20, _localFileHeaderLength - missing, Endian.little)
-          // An empty entry: no data follows the local header.
-          ..setUint32(directory + 20, 0, Endian.little)
-          ..setUint32(directory + 24, 0, Endian.little)
-          ..setUint32(directory + 42, zip.length, Endian.little);
+          ..setUint16(
+              zip.length - 2, _localFileHeaderLength - missing, Endian.little)
+          ..setUint32(
+              _recordOf(zip, extraPath) + 42, zip.length, Endian.little);
         return file;
       }
 
-      expect(
-          reader.openBook(localHeaderAtEnd(0)), _throwsDecodedWithoutContainer);
-      expect(reader.openBook(localHeaderAtEnd(1)), _throwsCorrupt);
+      expect((await opened(localHeaderAtEnd(0), extraPath)).content, isEmpty);
+      final ArchiveFile cut = await opened(localHeaderAtEnd(1), extraPath);
+      expect(() => cut.content, _throwsCorrupt);
+    });
+
+    // TC-LIM-44 [Error guessing]: a streaming writer sets bit 3 of an entry's
+    // flags and puts its sizes in a data descriptor after the data, which
+    // `package:archive` reads after the compressed bytes. Compressed data
+    // ending the file leaves the descriptor running off it; one byte longer,
+    // the data itself does. Either fails the entry's read, before any read
+    // runs past the end.
+    final Map<String, int> overrunByCase = <String, int>{
+      'ends the file': 0,
+      'runs one byte past it': 1,
+    };
+    for (final MapEntry<String, int> overrun in overrunByCase.entries) {
+      test(
+          'TC-LIM-44 [Error guessing]: a bit-3 entry whose data '
+          '${overrun.key} fails when it is read', () async {
+        final Uint8List book =
+            bookWith(_CraftedZipEntry.stored(extraPath, const <int>[0x4E]));
+        final int record = _recordOf(book, extraPath);
+        final int localHeader = _localHeaderOf(book, record);
+        final int data = localHeader +
+            _localFileHeaderLength +
+            utf8.encode(extraPath).length;
+        ByteData.sublistView(book)
+          ..setUint16(localHeader + 6, 0x08, Endian.little)
+          ..setUint16(record + 8, 0x08, Endian.little)
+          ..setUint32(
+              record + 20, book.length - data + overrun.value, Endian.little);
+
+        final ArchiveFile extra = await opened(book, extraPath);
+        expect(() => extra.content, _throwsCorrupt);
+      });
+    }
+
+    // TC-LIM-54 [Error guessing]: 4096 records sharing one local header whose
+    // name and extra field are 64 KiB each, in a file of a third of a MiB.
+    // Opening reads no local header, so it costs the directory alone, a few
+    // milliseconds; parsed once for each record, that header would cost a
+    // third of a second and hundreds of MiB. TC-MEM-4, in
+    // `epub_archive_memory_test.dart`, pins the memory.
+    test(
+        'TC-LIM-54 [Error guessing]: 4096 records sharing one 128 KiB local '
+        'header open at the cost of the directory', () async {
+      final Directory tempDir =
+          Directory.systemTemp.createTempSync('nge_seed_shared_');
+      addTearDown(() => tempDir.deleteSync(recursive: true));
+      final String path = '${tempDir.path}/shared.zip';
+      File(path).writeAsBytesSync(_sharedLocalHeaderZip(_maxEntries));
+
+      final Stopwatch opening = Stopwatch()..start();
+      await expectLater(
+          reader.openBookFile(path), _throwsDecodedWithoutContainer);
+      expect(opening.elapsed, lessThan(const Duration(milliseconds: 100)));
     });
   });
 
   group('overlapping entries', () {
     // TC-LIM-33 [Error guessing]: the overlapping-entry bomb. 4096 records
     // share one 64 KiB DEFLATE stream of empty blocks, which inflates to
-    // nothing, so no size limit reacts; only their compressed bytes adding
-    // up to far more than the file can. Overlapping entries are a damaged
-    // container, not a large one. Without that check the stream is inflated
-    // 4096 times and the book opens.
+    // nothing, so no size limit reacts; only the compressed sizes their
+    // records declare, adding up to far more than the file, can. Overlapping
+    // entries are a damaged container, not a large one. Without that check
+    // the book opens, and a book read whole inflates the stream 4096 times.
     test(
         'TC-LIM-33 [Error guessing]: 4096 records sharing one stream are '
         'refused', () {
@@ -1335,10 +1450,11 @@ void main() {
           _throwsCorrupt);
     });
 
-    // TC-LIM-34 [Boundary]: compressed bytes adding up to exactly the file's
-    // length are admissible, one byte more is not. Both stored records start
-    // at the one entry's data; the second runs from there to the end of the
-    // file, and the first claims the local header's length or one byte more.
+    // TC-LIM-34 [Boundary]: compressed sizes adding up to exactly the file's
+    // length are admissible, one byte more is not. Both stored records point
+    // at the one entry; the second declares the bytes from its data to the
+    // end of the file, and the first the local header's length or one byte
+    // more.
     test(
         'TC-LIM-34 [Boundary]: compressed bytes adding up to the file length '
         'are decoded, one byte more refused', () {
@@ -1357,9 +1473,9 @@ void main() {
 
     // TC-LIM-35 [Error guessing]: the same bomb with each record's compressed
     // size in a zip64 extra field, which `package:archive` reads as a signed
-    // value. -1 gives each record the whole rest of the file; 4096 × 2^62
-    // wraps to 0. Claimed sizes would add up to nothing past the file; the
-    // bytes each record is really given do, from the second record on.
+    // value: -1, and 2^62, which 4096 times over wraps to 0. Added up, either
+    // would come to nothing past the file. A negative size is refused, and
+    // 2^62 is past the file on its own, compared before it is added.
     final Map<String, int> zip64SizeByName = <String, int>{
       '-1': -1,
       '2^62': 1 << 62,
@@ -1381,39 +1497,35 @@ void main() {
       }, timeout: const Timeout(Duration(seconds: 10)));
     }
 
-    // TC-LIM-36 [Error guessing]: a zip64 uncompressed size of -1 passes the
-    // declared-size check, which it lies below, so the book opens. Read, the
-    // entry is still stopped one byte past the limit by the inflate count,
-    // which reads no header; a small one declaring -1 reads whole.
-    test(
-        'TC-LIM-36 [Error guessing]: an entry declaring -1 bytes through zip64 '
-        'is still stopped at the per-entry limit', () async {
-      final EpubBookRef bookRef = await reader.openBook(_craftBook(
-        chapter:
-            _CraftedZipEntry.stored(_chapterPath, utf8.encode(_chapterXhtml)),
-        extra: <_CraftedZipEntry>[
-          _CraftedZipEntry(
-            name: 'OEBPS/liar.bin',
-            method: _deflateMethod,
-            declaredUncompressedSize: 0,
-            payload: _deflateOneOverEntryLimit,
-            zip64UncompressedSize: -1,
-          ),
-          const _CraftedZipEntry(
-            name: 'OEBPS/small.bin',
+    // TC-LIM-36 [Boundary]: a zip64 size is read as a signed value, so a
+    // record can declare a negative one, which would pull a total down and
+    // let the rest of the directory declare more. Compressed or uncompressed,
+    // -1 is refused as a damaged directory when the book is opened; 0 through
+    // the same zip64 field is not.
+    final Map<String, Uint8List Function(int)> zipBySize =
+        <String, Uint8List Function(int)>{
+      'compressed': (int size) => _sharedStreamZip(
             method: _storeMethod,
-            declaredUncompressedSize: 0,
-            payload: <int>[0x4E],
-            zip64UncompressedSize: -1,
+            payload: const <int>[],
+            compressedSizes: const <int>[0],
+            zip64CompressedSize: size,
           ),
-        ],
-      ));
-      final Archive archive = bookRef.epubArchive();
-
-      expect(
-          () => archive.findFile('OEBPS/liar.bin')!.content, _throwsTooLarge);
-      expect(archive.findFile('OEBPS/small.bin')!.content, <int>[0x4E]);
-    });
+      'uncompressed': (int size) => _sharedStreamZip(
+            method: _storeMethod,
+            payload: const <int>[],
+            compressedSizes: const <int>[0],
+            zip64UncompressedSize: size,
+          ),
+    };
+    for (final MapEntry<String, Uint8List Function(int)> size
+        in zipBySize.entries) {
+      test(
+          'TC-LIM-36 [Boundary]: a record declaring an ${size.key} size of -1 '
+          'through zip64 is refused when the book is opened', () {
+        expect(reader.openBook(size.value(0)), _throwsDecodedWithoutContainer);
+        expect(reader.openBook(size.value(-1)), _throwsCorrupt);
+      });
+    }
   });
 
   group('the one decode', () {

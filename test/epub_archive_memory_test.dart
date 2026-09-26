@@ -46,13 +46,24 @@ void main() {
     return int.parse((result.stdout as String).trim());
   }
 
-  // TC-MEM-1 [Scenario]: `openBookFile` reads a file's directory and
-  // headers, never the file whole and no entry it does not parse. A file
+  // TC-MEM-1 [Scenario]: `openBookFile` reads a file's directory, never the
+  // file whole and no entry it does not parse. A file
   // with a 128 MiB stored entry is opened without it being held.
   test(
       'TC-MEM-1 [Scenario]: opening a file with a 128 MiB entry does not '
       'hold it', () async {
     expect(await peakGrowthMib('file'), lessThan(32));
+  });
+
+  // TC-MEM-4 [Scenario]: opening reads no entry's local header. 4096
+  // records sharing one whose name and extra field are 64 KiB each take a
+  // third of a MiB of file, and may grow the peak by 32 MiB. Parsed for
+  // each record, with each parse kept, that header would take it past
+  // 300 MiB.
+  test(
+      'TC-MEM-4 [Scenario]: opening 4096 records that share one 128 KiB '
+      'local header does not parse it', () async {
+    expect(await peakGrowthMib('shared'), lessThan(32));
   });
 
   // TC-MEM-2 [Scenario]: a bomb read is stopped at the per-entry limit. An

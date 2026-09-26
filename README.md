@@ -38,10 +38,12 @@ deflate fails when it is read, not when the book is opened.
 
 What that costs in memory:
 
-- **`openBook` / `openBookFile`** read the ZIP directory and the documents
-  they parse to open the book, and no other entry. An entry is inflated when
-  it is read, into memory, held once, and kept for as long as the
-  `EpubBookRef` lives; one never read is never inflated. `openBook` holds the
+- **`openBook` / `openBookFile`** read the ZIP's end record and central
+  directory, one pass over its records, and of the entries only the
+  documents they parse to open the book: no other entry's local header or
+  data. An entry is read when it is asked for, local header and all,
+  inflated into memory, held once, and kept for as long as the
+  `EpubBookRef` lives; one never asked for is never read. `openBook` holds the
   bytes it was given; an `EpubBookRef` from `openBookFile` holds only the
   path, opening the file for each read and closing it after, so there is
   nothing to close.
@@ -72,7 +74,7 @@ Not published to pub.dev; consumed by git reference.
 
 ## Status
 
-**Coverage: 100%** (1552 / 1552 lines, 704 tests), up from 21% at extraction,
+**Coverage: 100%** (1556 / 1556 lines, 709 tests), up from 21% at extraction,
 when the suite was seven test cases written to pin two specific bugs and forty
 of the fifty-five files had never been executed at all.
 

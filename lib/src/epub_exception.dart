@@ -39,12 +39,14 @@ sealed class EpubException implements Exception {
 
 /// The file is not a ZIP container, or its container is damaged: a
 /// structure `package:archive` cannot parse, a structure that reaches past
-/// the end of the file or has a negative length, entries whose compressed
-/// data overlap, or an entry whose deflate stream zlib rejects.
+/// the end of the file or has a negative length or size, entries declaring
+/// more compressed bytes between them than the file holds, or an entry
+/// whose deflate stream zlib rejects.
 ///
-/// Raised when the book is opened for a damaged directory or local header,
-/// and when an entry is read for damaged data, or data no longer where it
-/// was, the file having been cut short since the book was opened.
+/// Raised when the book is opened for a damaged end record or central
+/// directory, and when an entry is read for a damaged local header or data,
+/// or data no longer where it was, the file having been cut short since the
+/// book was opened.
 final class EpubCorruptArchiveException extends EpubException {
   const EpubCorruptArchiveException(super.message);
 }

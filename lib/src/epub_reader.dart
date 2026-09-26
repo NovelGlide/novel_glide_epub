@@ -66,7 +66,8 @@ class EpubReader {
   static const int _chunkBytes = 64 * 1024;
 
   /// What a file is read in when `package:archive` reads a header from it a
-  /// few bytes at a time: a page, so a header costs one small read.
+  /// few bytes at a time: a page, so an entry's local header, read with the
+  /// entry wherever it is in the file, costs one small read.
   static const int _windowBytes = 4 * 1024;
 
   /// An end-of-central-directory record without its comment.
@@ -81,11 +82,11 @@ class EpubReader {
   /// [EpubBookRef] holds [bytes], and reads each content file from them when
   /// asked for it.
   ///
-  /// This reads the ZIP container's directory and each entry's local
-  /// header, and inflates only the container, package and navigation
-  /// documents it parses. Every other entry is inflated when it is read,
-  /// into memory, and kept for as long as the [EpubBookRef] lives; one never
-  /// read is never inflated.
+  /// This reads the ZIP container's end record and central directory, and
+  /// of its entries only the container, package and navigation documents it
+  /// parses. Every other entry, its local header included, is read when it
+  /// is asked for, inflated into memory, and kept for as long as the
+  /// [EpubBookRef] lives; one never asked for is never read.
   ///
   /// This is a convenient way to get the most important information
   /// about the book, notably the [EpubBookRef.title] and
@@ -243,49 +244,34 @@ class EpubReader {
     return result;
   }
 
-  /// The ZIP container in [source], its entries left to be inflated when
-  /// they are read, by [_LazyZipFile].
+  /// The ZIP container in [source], its entries left to be read when they
+  /// are asked for, by [_LazyZipFile].
   ///
-  /// This reads the container's directory and each entry's local header,
-  /// and no entry's data. The entry count, and the sizes the central
-  /// directory declares, are checked here; the declared uncompressed sizes
-  /// are the archive's own claim, which a decompression bomb lies in, so a
-  /// read also counts the bytes an entry really produces.
-  ///
-  /// The compressed bytes each entry is given are counted from their local
-  /// headers: a well-formed ZIP's entries each hold their own bytes, so
-  /// together they fit in the file. More means entries overlap, which is a
-  /// damaged container: one stream shared by thousands would be inflated
-  /// thousands of times by a book read whole, a cost the output limits do
-  /// not bound when the stream inflates to little or nothing.
+  /// This reads the container's end record and its central directory, one
+  /// pass over the records, and no entry: neither its local header nor its
+  /// data. What the directory declares is checked here, by
+  /// [_checkDeclaredSizes]; an entry's local header is read, and can fail,
+  /// only with the entry.
   static Archive _openContainer(_ArchiveSource source) {
     return _decodingZip(() => source.read((_BoundedInputStream input) {
           final int fileLength = input.length;
           _checkCompressedSize(fileLength);
           final List<ZipFileHeader> headers = _readCentralDirectory(input);
-          _checkDeclaredSizes(headers);
+          _checkDeclaredSizes(headers, fileLength);
 
           final Archive archive = Archive();
           final _ArchiveReadTotal readTotal = _ArchiveReadTotal();
-          int consumed = 0;
           for (final ZipFileHeader header in headers) {
-            header.readLocalFileHeader(input, null);
-            final ZipFile file =
-                header.file ?? (throw StateError('No ZipFile for a header'));
-            final _BoundedInputStream raw =
-                file.rawContent as _BoundedInputStream;
-            consumed += raw.length;
-            if (consumed > fileLength) {
-              throw EpubCorruptArchiveException('The entries hold $consumed '
-                  'compressed bytes between them, more than the file\'s '
-                  '$fileLength: they overlap.');
-            }
-            final int declared = header.uncompressedSize ?? 0;
+            final int declared = _recorded(header.uncompressedSize);
             archive.addFile(ArchiveFile(
-                file.filename,
+                header.filename,
                 declared,
-                _LazyZipFile(source, readTotal, raw.start, raw.length,
-                    file.compressionMethod, declared)));
+                _LazyZipFile(
+                    source,
+                    readTotal,
+                    _recorded(header.localHeaderOffset),
+                    _recorded(header.compressedSize),
+                    declared)));
           }
           return archive;
         }));
@@ -403,20 +389,43 @@ class EpubReader {
     return input.readUint32();
   }
 
-  /// Refuses [headers] whose declared sizes are past the limits.
+  /// Refuses [headers] declaring sizes that no container of [fileLength]
+  /// bytes holds, or that are past the limits.
   ///
-  /// Only an early refusal: a zip64 size is read as a signed 64-bit value,
-  /// so a declared size can be negative and pull the total down. What
-  /// bounds an entry is the count of the bytes it really inflates to.
-  static void _checkDeclaredSizes(List<ZipFileHeader> headers) {
+  /// A zip64 size is read as a signed 64-bit value, so a record can declare
+  /// a negative one, which only a damaged directory does; refused, it cannot
+  /// pull either total down.
+  ///
+  /// The compressed sizes are the data each read takes, so an entry holding
+  /// its own bytes fits them in the file with the others. More between them
+  /// means entries overlap: one stream shared by thousands would be inflated
+  /// thousands of times by a book read whole, a cost the output limits do
+  /// not bound when the stream inflates to little or nothing.
+  ///
+  /// The uncompressed sizes are only refused early here. They are the
+  /// archive's own claim, which a decompression bomb lies in; what bounds
+  /// an entry is the count of the bytes it really inflates to.
+  static void _checkDeclaredSizes(List<ZipFileHeader> headers, int fileLength) {
+    int compressedTotal = 0;
     int total = 0;
     for (final ZipFileHeader header in headers) {
-      final int declared =
-          header.uncompressedSize ?? (throw StateError('No uncompressed size'));
+      final int compressed = _recorded(header.compressedSize);
+      final int declared = _recorded(header.uncompressedSize);
+      if (compressed < 0 || declared < 0) {
+        throw EpubCorruptArchiveException('An entry declares a negative size: '
+            '$compressed compressed, $declared uncompressed.');
+      }
       if (declared > _maxEntryBytes) {
         throw EpubArchiveTooLargeException('An entry declares $declared '
             'bytes; the limit is $_maxEntryBytes.');
       }
+      // Compared before adding, so a zip64 size near 2^63 cannot wrap it.
+      if (compressed > fileLength - compressedTotal) {
+        throw EpubCorruptArchiveException('The entries declare more '
+            'compressed bytes between them than the file\'s $fileLength: '
+            'they overlap, or run past its end.');
+      }
+      compressedTotal += compressed;
       total += declared;
     }
     if (total > _maxTotalBytes) {
@@ -425,9 +434,13 @@ class EpubReader {
     }
   }
 
+  /// A value `ZipFileHeader` reads from every record it is built from, so
+  /// one missing is a defect in `package:archive`, not a damaged book.
+  static int _recorded(int? value) => value ?? (throw StateError('Unread'));
+
   /// An entry's [raw] bytes, stored or deflated by [method], inflated a
-  /// chunk at a time into [_InflatedBytes] sized for [declaredSize], and
-  /// refused as soon as the output passes [limit].
+  /// chunk at a time into [_InflatedBytes] made for [declaredSize], as far as
+  /// [limit] allows, and refused as soon as the output passes [limit].
   ///
   /// The one inflater: every read of an entry goes through it. zlib inflates
   /// only as far as each `processed` call asks, 64 KiB at a time, and each
@@ -437,10 +450,11 @@ class EpubReader {
   /// holds, as `package:archive`'s own inflate does.
   ///
   /// An EPUB container may only store or deflate its entries (EPUB OCF), so
-  /// any other compression method refuses the book. The ZIP encryption flag
-  /// is not honoured: the EPUB container format forbids ZIP encryption, and
-  /// decrypting without a password would only produce other bytes to
-  /// inflate.
+  /// an entry compressed any other way is refused with
+  /// [EpubUnsupportedCompressionException] when it is read. The ZIP
+  /// encryption flag is not honoured: the EPUB container format forbids ZIP
+  /// encryption, and decrypting without a password would only produce other
+  /// bytes to inflate.
   static Uint8List _inflate(
       _BoundedInputStream raw, int method, int limit, int declaredSize) {
     final RawZLibFilter? inflater = switch (method) {
@@ -449,8 +463,7 @@ class EpubReader {
       _ => throw EpubUnsupportedCompressionException('An entry uses ZIP '
           'compression method $method; an EPUB may only store or deflate.'),
     };
-    final _InflatedBytes inflated =
-        _InflatedBytes(min(max(0, declaredSize), limit));
+    final _InflatedBytes inflated = _InflatedBytes(min(declaredSize, limit));
     void take(List<int> chunk) {
       _checkInflatedSize(inflated.length + chunk.length, limit);
       inflated.add(chunk);
@@ -639,11 +652,11 @@ final class _FileBytes extends UnmodifiableListView<int> {
   Uint8List sublist(int start, [int? end]) {
     final Uint8List bytes = Uint8List((end ?? length) - start);
     _file.setPositionSync(start);
-    return _file.readIntoSync(bytes) == bytes.length ? bytes : throw _cut;
+    return _file.readIntoSync(bytes) == bytes.length
+        ? bytes
+        : throw const EpubCorruptArchiveException(
+            'The file is shorter than it was opened.');
   }
-
-  static const EpubCorruptArchiveException _cut =
-      EpubCorruptArchiveException('The file is shorter than it was opened.');
 }
 
 /// What the entries of one container have inflated to between them, each
@@ -659,18 +672,20 @@ final class _ArchiveReadTotal {
 /// of anything else implementing `package:archive`'s unexported
 /// `FileContent`, unread until it is asked for.
 ///
-/// A read is held to the per-entry limit and to what [_readTotal] has left
-/// of the whole-archive limit, and adds what it inflated to it. [_source] is
-/// read as it is then, whatever it held when the book was opened.
+/// A read parses the entry's local header, then inflates the
+/// [_compressedSize] bytes after it, held to the per-entry limit and to what
+/// [_readTotal] has left of the whole-archive limit, and adds what it
+/// inflated to it. A read refused adds nothing: what it inflated is dropped
+/// with it. [_source] is read as it is then, whatever it held when the book
+/// was opened.
 final class _LazyZipFile extends ZipFile {
-  _LazyZipFile(this._source, this._readTotal, this._start, this._length,
-      this._method, this._declaredSize);
+  _LazyZipFile(this._source, this._readTotal, this._localHeaderOffset,
+      this._compressedSize, this._declaredSize);
 
   final _ArchiveSource _source;
   final _ArchiveReadTotal _readTotal;
-  final int _start;
-  final int _length;
-  final int _method;
+  final int _localHeaderOffset;
+  final int _compressedSize;
   final int _declaredSize;
 
   @override
@@ -679,9 +694,15 @@ final class _LazyZipFile extends ZipFile {
   @override
   List<int> get content => EpubReader._decodingZip(() => _source.read(
         (_BoundedInputStream input) {
+          // What `ZipFileHeader.readLocalFileHeader` does, less keeping the
+          // parsed header, and the copy of its extra field, in a
+          // `ZipFileHeader` for as long as the book lives.
+          input.position = _localHeaderOffset;
+          final ZipFile local =
+              ZipFile(input, ZipFileHeader()..compressedSize = _compressedSize);
           final Uint8List content = EpubReader._inflate(
-              input.subset(_start, _length),
-              _method,
+              local.rawContent as _BoundedInputStream,
+              local.compressionMethod,
               min(EpubReader._maxEntryBytes,
                   EpubReader._maxTotalBytes - _readTotal.bytes),
               _declaredSize);
@@ -691,21 +712,22 @@ final class _LazyZipFile extends ZipFile {
       ));
 }
 
-/// An entry's inflated bytes, collected into a buffer of the size the entry
-/// declares and, past that, as the inflater's chunks.
+/// An entry's inflated bytes, collected into a buffer of the [capacity]
+/// the entry is expected to fill and, past that, as the inflater's chunks.
 ///
 /// An honest entry is held once: inflated into its buffer, returned as it
-/// is. The declared size may be wrong in either direction, in good faith
+/// is. The capacity is the entry's declared size, capped at its limit, and
+/// the declared size may be wrong in either direction, in good faith
 /// (`package:archive`'s `ArchiveFile.string` declares a text's UTF-16
-/// length) or not, and the inflater's limit is what bounds the entry, so
-/// the buffer is only a first guess. An entry inflating past it keeps its
+/// length) or not; the inflater's limit is what bounds the entry, so the
+/// buffer is only a first guess. An entry inflating past it keeps its
 /// chunks and is joined once at the end, holding it twice for that moment
 /// at most; one inflating to less is copied out of it, so a buffer larger
 /// than the entry is not kept. Nothing grows by reallocating.
 final class _InflatedBytes {
-  _InflatedBytes(int declaredSize) : _declared = Uint8List(declaredSize);
+  _InflatedBytes(int capacity) : _buffer = Uint8List(capacity);
 
-  final Uint8List _declared;
+  final Uint8List _buffer;
   int _filled = 0;
   BytesBuilder? _overflow;
 
@@ -716,19 +738,19 @@ final class _InflatedBytes {
     final BytesBuilder? overflow = _overflow;
     if (overflow != null) {
       overflow.add(chunk);
-    } else if (_filled + chunk.length <= _declared.length) {
-      _declared.setAll(_filled, chunk);
+    } else if (_filled + chunk.length <= _buffer.length) {
+      _buffer.setAll(_filled, chunk);
       _filled += chunk.length;
     } else {
       _overflow = BytesBuilder(copy: false)
-        ..add(Uint8List.sublistView(_declared, 0, _filled))
+        ..add(Uint8List.sublistView(_buffer, 0, _filled))
         ..add(chunk);
     }
   }
 
   Uint8List takeBytes() =>
       _overflow?.takeBytes() ??
-      (_filled == _declared.length
-          ? _declared
-          : Uint8List.fromList(Uint8List.sublistView(_declared, 0, _filled)));
+      (_filled == _buffer.length
+          ? _buffer
+          : Uint8List.fromList(Uint8List.sublistView(_buffer, 0, _filled)));
 }
