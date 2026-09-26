@@ -15,9 +15,9 @@
 //     megabyte without ever being resident: the canonical bomb.
 //
 // Equivalent mutants, documented rather than chased:
-//   * In `_inflateDeflate`, the input loop's `start < compressed.length` as
-//     `<=`. The one extra pass it allows feeds zlib an empty range, which
-//     produces nothing.
+//   * In `_FileBytes`, `index < _windowStart` as `<=`, and
+//     `_windowStart + _window.length` as `-`. Either reloads the window more
+//     often than needed, from the same file, and returns the same bytes.
 //   * In `_centralDirectoryOf`, deleting `input.position = end + 4`. The
 //     search that found the end record last read its signature, which leaves
 //     the position exactly there.
@@ -25,12 +25,18 @@
 //     refusing a position exactly at the end. Every position set here, by
 //     the reader or by `package:archive`, is read from at once, and that
 //     read is refused at the end either way.
+//
+// Not equivalent, and not pinned: deleting `_ArchiveFileSource`'s
+// `closeSync`. It leaks a file handle and changes nothing a read returns;
+// counting a process's open handles is not portable, and suites running in
+// the same process at once would make the count unreliable.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
+import 'package:collection/collection.dart' show ListEquality;
 import 'package:novel_glide_epub/novel_glide_epub.dart';
 import 'package:test/test.dart';
 
@@ -1451,4 +1457,190 @@ void main() {
           _throwsCorrupt);
     });
   });
+
+  group('reads after opening', () {
+    const String laterPath = 'OEBPS/later.bin';
+
+    /// A final stored deflate block of [length] of the four bytes after it:
+    /// the same nine bytes inflate to 2 or 4 bytes as [length] says, so an
+    /// entry can be changed in place to inflate to another size.
+    List<int> storedBlock(int length) => <int>[
+          0x01, length, 0x00, 0xFF - length, 0xFF, //
+          0x4E, 0x47, 0x45, 0x2D, // NGE-
+        ];
+
+    /// A readable book with one more entry, [later], that nothing in it
+    /// points at.
+    Uint8List bookWith(_CraftedZipEntry later) => _craftBook(
+          chapter:
+              _CraftedZipEntry.stored(_chapterPath, utf8.encode(_chapterXhtml)),
+          extra: <_CraftedZipEntry>[later],
+        );
+
+    _CraftedZipEntry deflatedLater(List<int> payload) =>
+        _deflateEntry(laterPath, Uint8List.fromList(payload),
+            declaredUncompressedSize: 0);
+
+    /// [bytes] with [from], which occurs in it once, replaced by [to].
+    void replace(Uint8List bytes, List<int> from, List<int> to) {
+      final int at = _indexOf(bytes, from);
+      expect(_indexOf(bytes, from, at + 1), -1);
+      bytes.setAll(at, to);
+    }
+
+    ArchiveFile later(EpubBookRef bookRef) =>
+        bookRef.epubArchive().findFile(laterPath)!;
+
+    // TC-LIM-46 [Scenario]: `openBook` validates every entry and keeps none;
+    // an entry is read from the bytes when it is asked for. Changed after
+    // opening, a stored entry reads as it is then.
+    test(
+        'TC-LIM-46 [Scenario]: an entry is read from the source when it is '
+        'asked for, not when the book is opened', () async {
+      final Uint8List bytes = bookWith(_CraftedZipEntry.stored(
+          laterPath, utf8.encode('NGE-SEED-READ-LATER')));
+      final EpubBookRef bookRef = await reader.openBook(bytes);
+      replace(bytes, utf8.encode('NGE-SEED-READ-LATER'),
+          utf8.encode('NGE-SEED-READ-AGAIN'));
+
+      expect(later(bookRef).content, utf8.encode('NGE-SEED-READ-AGAIN'));
+    });
+
+    // TC-LIM-47 [Error guessing]: an entry nothing reads is not inflated
+    // after validation. Damaged after opening, it fails no other read, and
+    // fails its own only when it is read.
+    test(
+        'TC-LIM-47 [Error guessing]: an entry damaged after opening fails '
+        'only when it is read', () async {
+      final Uint8List bytes = bookWith(deflatedLater(storedBlock(4)));
+      final EpubBookRef bookRef = await reader.openBook(bytes);
+      replace(bytes, storedBlock(4), List<int>.filled(9, 0xFF));
+
+      expect(await (await bookRef.getChapters()).single.readHtmlContent(),
+          _chapterXhtml);
+      expect(() => later(bookRef).content,
+          throwsA(isA<EpubCorruptArchiveException>()));
+    });
+
+    // TC-LIM-48 [Boundary]: a read is held to exactly what the entry
+    // inflated to when the book was opened. Changed to inflate to fewer
+    // bytes, it is refused as changed; to more, it is stopped at the size
+    // validated, as any entry is stopped at its limit.
+    test(
+        'TC-LIM-48 [Boundary]: an entry changed to inflate to fewer or more '
+        'bytes than it did when opened is refused', () async {
+      final Uint8List shrinking = bookWith(deflatedLater(storedBlock(4)));
+      final EpubBookRef shrunk = await reader.openBook(shrinking);
+      replace(shrinking, storedBlock(4), storedBlock(2));
+
+      final Uint8List growing = bookWith(deflatedLater(storedBlock(2)));
+      final EpubBookRef grown = await reader.openBook(growing);
+      replace(growing, storedBlock(2), storedBlock(4));
+
+      expect(() => later(shrunk).content,
+          throwsA(isA<EpubCorruptArchiveException>()));
+      expect(() => later(grown).content,
+          throwsA(isA<EpubArchiveTooLargeException>()));
+    });
+
+    // TC-LIM-49 [Scenario]: an entry read once is kept, as `package:archive`
+    // keeps it: read again, it is not read from the source again.
+    test('TC-LIM-49 [Scenario]: an entry read once is not read again',
+        () async {
+      final Uint8List bytes = bookWith(deflatedLater(storedBlock(4)));
+      final EpubBookRef bookRef = await reader.openBook(bytes);
+      expect(later(bookRef).content, utf8.encode('NGE-'));
+      replace(bytes, storedBlock(4), List<int>.filled(9, 0xFF));
+
+      expect(later(bookRef).content, utf8.encode('NGE-'));
+    });
+
+    group('from a file', () {
+      late Directory tempDir;
+      late String path;
+
+      setUp(() {
+        tempDir = Directory.systemTemp.createTempSync('nge_seed_later_');
+        path = '${tempDir.path}/book.epub';
+      });
+
+      tearDown(() {
+        tempDir.deleteSync(recursive: true);
+      });
+
+      // TC-LIM-50 [Error guessing]: a book file holds no handle once it is
+      // open; each read opens the file again. Cut short by then, an entry
+      // past the new end fails as a damaged container; gone, it fails as
+      // the file system reports it.
+      test(
+          'TC-LIM-50 [Error guessing]: a file cut short or removed after '
+          'opening fails the reads it breaks', () async {
+        final Uint8List book = bookWith(deflatedLater(storedBlock(4)));
+        File(path).writeAsBytesSync(book);
+        final EpubBookRef cut = await reader.openBookFile(path);
+        File(path).openSync(mode: FileMode.append)
+          ..truncateSync(book.length ~/ 2)
+          ..closeSync();
+
+        expect(() => later(cut).content,
+            throwsA(isA<EpubCorruptArchiveException>()));
+
+        File(path).writeAsBytesSync(book);
+        final EpubBookRef removed = await reader.openBookFile(path);
+        File(path).deleteSync();
+        expect(
+            () => later(removed).content, throwsA(isA<FileSystemException>()));
+      });
+
+      // TC-LIM-51 [Scenario]: a file is read a window at a time, so headers
+      // far apart, and an end record behind a long comment, are reached by
+      // moving the window forwards and backwards. The book reads the same
+      // from the file as from its bytes.
+      test(
+          'TC-LIM-51 [Scenario]: a book with headers far apart in its file '
+          'reads as it does from its bytes', () async {
+        final Random random = Random(0x4E47);
+        final Uint8List big = Uint8List.fromList(
+            List<int>.generate(300 * 1024, (int i) => random.nextInt(256)));
+        final Uint8List zip = bookWith(_CraftedZipEntry.stored(laterPath, big));
+        // A 60,000-byte comment the end record's signature cannot occur in.
+        final Uint8List bytes =
+            Uint8List.fromList(<int>[...zip, ...List<int>.filled(60000, 0x4E)]);
+        ByteData.sublistView(bytes)
+            .setUint16(zip.length - 2, 60000, Endian.little);
+        File(path).writeAsBytesSync(bytes);
+
+        final EpubBookRef fromFile = await reader.openBookFile(path);
+        expect(fromFile, await reader.openBook(bytes));
+        expect(later(fromFile).content, big);
+        expect(await reader.readBookFile(path), await reader.readBook(bytes));
+      });
+
+      // TC-LIM-52 [Scenario]: a central directory of 4096 records, over
+      // 200 KiB, is read from a file record by record, running across the
+      // end of one window into the next many times. It decodes as it does
+      // from bytes (TC-LIM-7).
+      test(
+          'TC-LIM-52 [Scenario]: a central directory spanning many windows '
+          'of its file is read whole', () {
+        File(path).writeAsBytesSync(_craftZip(<_CraftedZipEntry>[
+          for (int i = 0; i < _maxEntries; i++)
+            _CraftedZipEntry.stored('NGE-SEED-$i.txt', const <int>[]),
+        ]));
+
+        expect(reader.openBookFile(path), _throwsDecodedWithoutContainer);
+      });
+    });
+  });
+}
+
+/// Where [pattern] first occurs in [bytes] from [start]; -1 when it does not.
+int _indexOf(List<int> bytes, List<int> pattern, [int start = 0]) {
+  for (int at = start; at <= bytes.length - pattern.length; at++) {
+    if (const ListEquality<int>()
+        .equals(bytes.sublist(at, at + pattern.length), pattern)) {
+      return at;
+    }
+  }
+  return -1;
 }

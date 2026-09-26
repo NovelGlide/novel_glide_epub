@@ -34,7 +34,9 @@ sealed class EpubException implements Exception {
 /// data overlap, or an entry whose deflate stream zlib rejects.
 ///
 /// Raised when the book is opened, whether or not the package document
-/// points at the damaged entry.
+/// points at the damaged entry. Raised too when an entry is read after the
+/// book was opened and the container has changed since: the entry is no
+/// longer where it was, or inflates to fewer bytes than it did.
 final class EpubCorruptArchiveException extends EpubException {
   const EpubCorruptArchiveException(super.message);
 }
@@ -89,10 +91,13 @@ final class EpubUnsupportedCompressionException extends EpubException {
 /// compressed size, the number of entries, or the bytes one entry or the
 /// whole archive inflates to.
 ///
-/// Raised before any of the book is parsed, and at the latest part-way
-/// through inflating the entry that crosses the limit, so a decompression
-/// bomb is refused before it is held in memory. The file may be a
-/// well-formed EPUB that the parser declines to open.
+/// Raised while the book is opened, before any of it is parsed, and at the
+/// latest part-way through inflating the entry that crosses the limit, so a
+/// decompression bomb is refused before it is held in memory. The file may
+/// be a well-formed EPUB that the parser declines to open. Raised too when
+/// an entry is read after the book was opened and now inflates to more
+/// bytes than it did then, the container having changed: the read is
+/// stopped at the size the book was opened with.
 final class EpubArchiveTooLargeException extends EpubException {
   const EpubArchiveTooLargeException(super.message);
 }

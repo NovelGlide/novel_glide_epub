@@ -21,24 +21,33 @@ final EpubBook book = await reader.readBook(bytes);
 // Just the structure; each content file is parsed when it is read.
 final EpubBookRef bookRef = await reader.openBook(bytes);
 
-// The same from a file on disk, whose size is checked before it is read.
+// The same from a file on disk, read a chunk at a time, never whole.
 final EpubBook fromFile = await reader.readBookFile(path);
 final EpubBookRef refFromFile = await reader.openBookFile(path);
 ```
 
 Every entry point refuses a ZIP container past fixed limits by throwing
 `EpubArchiveTooLargeException`: 512 MiB compressed, 4096 entries, 256 MiB
-inflated per entry, 512 MiB inflated in total. The archive is inflated once,
-while the book is opened, and an entry is abandoned part-way through
-inflating as soon as it crosses a limit, whatever size its header declared.
-The limits cannot be configured.
+inflated per entry, 512 MiB inflated in total. The limits cannot be
+configured, and there is no separate check to call: opening a book validates
+the whole container against them, inflating every entry and abandoning one
+part-way as soon as it crosses a limit, whatever size its header declared.
+An entry that cannot be inflated, or that uses a compression method other
+than store or deflate, fails the open, whether or not the book uses it.
 
-Either way the whole archive is inflated when the book is opened. An
-`EpubBookRef` holds it for as long as the ref lives: its input bytes plus its
-inflated content, each within the limits above. `readBook` copies the
-content out into the `EpubBook` and keeps neither. An
-entry that cannot be inflated, or that uses a compression method other than
-store or deflate, fails the open, whether or not the book uses it.
+What that costs in memory:
+
+- **`openBook` / `openBookFile`** validate by inflating every entry into a
+  64 KiB buffer and discarding it, so opening holds no entry, whatever the
+  book's size. An entry is inflated again, into memory, when it is read, and
+  then kept for as long as the `EpubBookRef` lives; one never read is never
+  held. So an entry read after opening is inflated twice, the documents
+  `openBook` parses to open the book among them. `openBook` holds the bytes
+  it was given; an `EpubBookRef` from `openBookFile` holds only the path,
+  opening the file for each read and closing it after, so there is nothing
+  to close.
+- **`readBook` / `readBookFile`** validate and read in the same pass, each
+  entry inflated once, into the `EpubBook` they return.
 
 ## Origin
 
@@ -64,7 +73,7 @@ Not published to pub.dev; consumed by git reference.
 
 ## Status
 
-**Coverage: 100%** (1509 / 1509 lines, 693 tests), up from 21% at extraction,
+**Coverage: 100%** (1554 / 1554 lines, 704 tests), up from 21% at extraction,
 when the suite was seven test cases written to pin two specific bugs and forty
 of the fifty-five files had never been executed at all.
 

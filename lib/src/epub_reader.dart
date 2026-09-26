@@ -1,6 +1,7 @@
 import 'dart:async';
-import 'dart:io' show File, RawZLibFilter;
-import 'dart:math' show min;
+import 'dart:collection' show UnmodifiableListView;
+import 'dart:io' show File, RandomAccessFile, RawZLibFilter;
+import 'dart:math' show max, min;
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -29,14 +30,16 @@ import 'utils/unmodifiable_iterable.dart';
 /// The primary interface for reading an EPUB file.
 ///
 /// [openBook] parses the structure and text metadata only, leaving each
-/// content file to be read on demand, though the whole archive is inflated;
-/// [readBook] also reads every content file.
-/// [openBookFile] and [readBookFile] do the same for a file on disk.
+/// content file to be inflated and read on demand; [readBook] also reads
+/// every content file. [openBookFile] and [readBookFile] do the same for a
+/// file on disk, reading it a chunk at a time.
 /// This package's entry point, called by name from the NovelGlide app.
 ///
 /// Every entry point refuses, with [EpubArchiveTooLargeException], a ZIP
-/// container past the limits below. The limits are fixed rather than
-/// configurable, so there is no way to open a book without them.
+/// container past the limits below, having validated the whole container
+/// against them before it returns. The limits are fixed rather than
+/// configurable, and validation is part of opening, so there is no way to
+/// open a book without them.
 ///
 /// ```dart
 /// // Read the basic metadata.
@@ -54,7 +57,10 @@ class EpubReader {
   static const int _maxEntries = 4096;
   static const int _maxEntryBytes = 256 * 1024 * 1024;
   static const int _maxTotalBytes = 512 * 1024 * 1024;
-  static const int _inflateInputChunkBytes = 64 * 1024;
+
+  /// What the container is read and inflated in: a chunk of input, a chunk
+  /// of output, a window of a file.
+  static const int _chunkBytes = 64 * 1024;
 
   /// An end-of-central-directory record without its comment.
   static const int _endRecordLength = 22;
@@ -62,16 +68,18 @@ class EpubReader {
   /// Loads basics metadata.
   ///
   /// Opens the book asynchronously without parsing its content files.
-  /// Holds the handle to the EPUB file.
   ///
   /// Argument [bytes] should be the bytes of the epub file; for a file on
-  /// disk, [openBookFile] checks its size before reading it.
+  /// disk, [openBookFile] reads it without loading it whole. The returned
+  /// [EpubBookRef] holds [bytes], and reads each content file from them when
+  /// asked for it.
   ///
-  /// Every entry of the archive is inflated here, once, within the limits
-  /// [EpubReader] sets, and held in memory with [bytes] for as long as the
-  /// returned [EpubBookRef] is; a content file is read from its inflated
-  /// entry on demand, without inflating it again. An entry that cannot be
-  /// inflated fails this call, whether or not the book uses it.
+  /// Every entry of the archive is inflated here once, to be counted and
+  /// discarded, so that one past the limits [EpubReader] sets, or one that
+  /// cannot be inflated, fails this call whether or not the book uses it.
+  /// An entry is inflated again, into memory, when it is read; one never
+  /// read is never held. The container, package and navigation documents
+  /// this call parses are therefore inflated twice within it.
   ///
   /// This is a convenient way to get the most important information
   /// about the book, notably the [EpubBookRef.title] and
@@ -79,14 +87,13 @@ class EpubReader {
   /// [EpubBookRef.schema] property such as the Epub version, publishers,
   /// languages and more.
   Future<EpubBookRef> openBook(FutureOr<List<int>> bytes) async {
-    List<int> loadedBytes;
-    if (bytes is Future) {
-      loadedBytes = await bytes;
-    } else {
-      loadedBytes = bytes;
-    }
+    final _ArchiveSource source = _ArchiveBytesSource(await bytes);
+    return _openBook(source, _laterRead(source));
+  }
 
-    final Archive epubArchive = _decodeArchive(loadedBytes);
+  Future<EpubBookRef> _openBook(
+      _ArchiveSource source, _ArchiveEntryDecoder decodeEntry) async {
+    final Archive epubArchive = _openContainer(source, decodeEntry);
     final EpubSchema schema =
         await const SchemaReader().readSchema(epubArchive);
     final EpubMetadata metadata = schema.package.metadata;
@@ -103,15 +110,16 @@ class EpubReader {
   }
 
   /// Opens the book asynchronously and reads all of its content into the memory. Does not hold the handle to the EPUB file.
+  ///
+  /// Every entry is inflated once, into memory, within the limits
+  /// [EpubReader] sets: validating the container and reading its content are
+  /// the same pass.
   Future<EpubBook> readBook(FutureOr<List<int>> bytes) async {
-    List<int> loadedBytes;
-    if (bytes is Future) {
-      loadedBytes = await bytes;
-    } else {
-      loadedBytes = bytes;
-    }
+    return _readBook(
+        await _openBook(_ArchiveBytesSource(await bytes), _keptInMemory));
+  }
 
-    final EpubBookRef epubBookRef = await openBook(loadedBytes);
+  Future<EpubBook> _readBook(EpubBookRef epubBookRef) async {
     return EpubBook(
       schema: epubBookRef.schema,
       title: epubBookRef.title,
@@ -123,19 +131,30 @@ class EpubReader {
     );
   }
 
-  /// [openBook] for the EPUB file at [path].
+  /// [openBook] for the EPUB file at [path], read from the file a chunk at a
+  /// time, never loaded whole.
   ///
-  /// The file's size is checked before any of it is read, so a file past the
+  /// The file's size is checked before it is opened, so a file past the
   /// compressed-size limit is refused with [EpubArchiveTooLargeException]
-  /// without being loaded into memory.
+  /// without being read.
+  ///
+  /// The returned [EpubBookRef] holds [path], not an open file: each content
+  /// file is read by opening the file again, reading that entry, and closing
+  /// it, so there is nothing to close afterwards. A file that is gone by then
+  /// fails that read with `FileSystemException`; one that changed fails it
+  /// with [EpubCorruptArchiveException] when the entry no longer inflates to
+  /// what it did when the book was opened.
   Future<EpubBookRef> openBookFile(String path) async {
-    return openBook(await _readArchiveFile(path));
+    _checkCompressedSize(await File(path).length());
+    final _ArchiveSource source = _ArchiveFileSource(path);
+    return _openBook(source, _laterRead(source));
   }
 
-  /// [readBook] for the EPUB file at [path], with the size check
-  /// [openBookFile] makes.
+  /// [readBook] for the EPUB file at [path], read a chunk at a time as
+  /// [openBookFile] reads it, each entry inflated once, into memory.
   Future<EpubBook> readBookFile(String path) async {
-    return readBook(await _readArchiveFile(path));
+    _checkCompressedSize(await File(path).length());
+    return _readBook(await _openBook(_ArchiveFileSource(path), _keptInMemory));
   }
 
   Future<EpubContent> readContent(EpubContentRef contentRef) async {
@@ -226,72 +245,94 @@ class EpubReader {
     return result;
   }
 
-  static Future<Uint8List> _readArchiveFile(String path) async {
-    final File file = File(path);
-    final int size = await file.length();
-    _checkCompressedSize(size);
-
-    // Read up to the length just checked and no further, so a file that grows
-    // between the check and the read is not read past the limit.
-    final Uint8List bytes = Uint8List(size);
-    int filled = 0;
-    await for (final List<int> chunk in file.openRead(0, size)) {
-      bytes.setAll(filled, chunk);
-      filled += chunk.length;
-    }
-    return Uint8List.sublistView(bytes, 0, filled);
-  }
-
-  /// Decodes [bytes] as a ZIP archive whose every entry is already inflated.
+  /// The ZIP container in [source], validated whole in one pass, each entry
+  /// made by [decodeEntry] from its bytes and the most it may inflate to.
   ///
   /// The entry count, and the sizes the central directory declares, are
   /// checked before anything is inflated. The declared uncompressed sizes are
   /// the archive's own claim, which a decompression bomb lies in, and which
   /// some writers get wrong in good faith (`package:archive`'s
   /// `ArchiveFile.string` declares a text's UTF-16 length, short of its UTF-8
-  /// bytes). So each entry is then inflated counting the bytes it really
-  /// produces, and abandoned as soon as they cross a limit.
+  /// bytes). So every entry is then inflated by [decodeEntry], counting the
+  /// bytes it really produces, and abandoned as soon as they cross a limit.
   ///
   /// The compressed bytes are counted the same way, as each entry is given
   /// them: a well-formed ZIP's entries each hold their own bytes, so
   /// together they fit in the file. More means entries overlap, which is a
-  /// damaged container, and is refused before the overlap is inflated: every
-  /// entry is inflated here, and one stream shared by thousands would be
-  /// inflated thousands of times, a cost the output limits do not bound when
-  /// the stream inflates to little or nothing.
+  /// damaged container, and is refused before the overlap is inflated: one
+  /// stream shared by thousands would be inflated thousands of times, a cost
+  /// the output limits do not bound when the stream inflates to little or
+  /// nothing.
+  static Archive _openContainer(
+      _ArchiveSource source, _ArchiveEntryDecoder decodeEntry) {
+    return _decodingZip(() => source.read((_BoundedInputStream input) {
+          final int fileLength = input.length;
+          _checkCompressedSize(fileLength);
+          final List<ZipFileHeader> headers = _readCentralDirectory(input);
+          _checkDeclaredSizes(headers);
+
+          final Archive archive = Archive();
+          int total = 0;
+          int consumed = 0;
+          for (final ZipFileHeader header in headers) {
+            header.readLocalFileHeader(input, null);
+            final ZipFile file =
+                header.file ?? (throw StateError('No ZipFile for a header'));
+            final _BoundedInputStream raw =
+                file.rawContent as _BoundedInputStream;
+            consumed += raw.length;
+            if (consumed > fileLength) {
+              throw EpubCorruptArchiveException('The entries hold $consumed '
+                  'compressed bytes between them, more than the file\'s '
+                  '$fileLength: they overlap.');
+            }
+            final ArchiveFile entry = decodeEntry(
+                file, raw, min(_maxEntryBytes, _maxTotalBytes - total));
+            total += entry.size;
+            archive.addFile(entry);
+          }
+          return archive;
+        }));
+  }
+
+  /// Decodes each entry of the container in [source] to be inflated again
+  /// when it is read, keeping nothing now: validation's memory is a chunk of
+  /// input and a chunk of output, whatever the entry's size.
   ///
-  /// This is where a ZIP that fails to decode becomes
+  /// Each entry records the bytes it inflated to, which is then also the
+  /// most it may inflate to when it is read, so what validation measured
+  /// bounds every later read, whatever [source] holds by then.
+  static _ArchiveEntryDecoder _laterRead(_ArchiveSource source) =>
+      (ZipFile file, _BoundedInputStream raw, int limit) {
+        final int start = raw.start;
+        final int compressed = raw.length;
+        final int size =
+            _inflate(raw, file.compressionMethod, limit, (List<int> _) {});
+        return ArchiveFile(
+            file.filename,
+            size,
+            _LazyZipFile(
+                source, start, compressed, file.compressionMethod, size));
+      };
+
+  /// Decodes an entry by inflating it into memory, where it stays.
+  ///
+  /// Its size is not known until it is inflated, so the chunks are collected
+  /// and joined, which for a moment holds the entry twice.
+  static ArchiveFile _keptInMemory(
+      ZipFile file, _BoundedInputStream raw, int limit) {
+    final BytesBuilder inflated = BytesBuilder(copy: false);
+    _inflate(raw, file.compressionMethod, limit, inflated.add);
+    final Uint8List content = inflated.takeBytes();
+    return ArchiveFile(file.filename, content.length, content);
+  }
+
+  /// [decode], with a ZIP that fails to decode turned into
   /// [EpubCorruptArchiveException]: `package:archive` reports a malformed
   /// container, and zlib an invalid stream, as a `FormatException`.
-  static Archive _decodeArchive(List<int> bytes) {
-    _checkCompressedSize(bytes.length);
+  static T _decodingZip<T>(T Function() decode) {
     try {
-      final InputStream input = _BoundedInputStream(bytes);
-      final List<ZipFileHeader> headers = _readCentralDirectory(input);
-      _checkDeclaredSizes(headers);
-
-      final Archive archive = Archive();
-      int total = 0;
-      int consumed = 0;
-      for (final ZipFileHeader header in headers) {
-        header.readLocalFileHeader(input, null);
-        final ZipFile file =
-            header.file ?? (throw StateError('No ZipFile for a header'));
-        final Uint8List raw =
-            (file.rawContent ?? (throw StateError('No raw content')))
-                .toUint8List();
-        consumed += raw.length;
-        if (consumed > bytes.length) {
-          throw EpubCorruptArchiveException('The entries hold $consumed '
-              'compressed bytes between them, more than the file\'s '
-              '${bytes.length}: they overlap.');
-        }
-        final Uint8List content = _inflateEntry(file.compressionMethod, raw,
-            min(_maxEntryBytes, _maxTotalBytes - total));
-        total += content.length;
-        archive.addFile(ArchiveFile(file.filename, content.length, content));
-      }
-      return archive;
+      return decode();
     } on FormatException catch (error, stackTrace) {
       Error.throwWithStackTrace(
           EpubCorruptArchiveException(error.message), stackTrace);
@@ -420,54 +461,51 @@ class EpubReader {
     }
   }
 
-  /// An entry's [raw] bytes, stored or deflated by [method], inflated into
-  /// at most [limit] bytes.
+  /// An entry's [raw] bytes, stored or deflated by [method], inflated a
+  /// chunk at a time, each chunk of output handed to [emit] and refused once
+  /// the output passes [limit]. Returns the bytes inflated.
+  ///
+  /// The one inflater: validation discards what it emits, a read collects
+  /// it. zlib inflates only as far as each `processed` call asks, 64 KiB at
+  /// a time, and each call returns all the output the input so far allows,
+  /// so no end-of-stream call is needed to collect the rest. A stream that
+  /// is not valid deflate throws `FormatException`; one cut short yields
+  /// what it holds, as `package:archive`'s own inflate does.
   ///
   /// An EPUB container may only store or deflate its entries (EPUB OCF), so
-  /// any other compression method refuses the book.
-  ///
-  /// The ZIP encryption flag is not honoured: the EPUB container format
-  /// forbids ZIP encryption, and decrypting without a password would only
-  /// produce other bytes to inflate.
-  static Uint8List _inflateEntry(int method, Uint8List raw, int limit) {
-    switch (method) {
-      case ZipFile.zipCompressionStore:
-        _checkInflatedSize(raw.length, limit);
-        return raw;
-      case ZipFile.zipCompressionDeflate:
-        return _inflateDeflate(raw, limit);
-      default:
-        throw EpubUnsupportedCompressionException('An entry uses ZIP '
-            'compression method $method; an EPUB may only store or deflate.');
+  /// any other compression method refuses the book. The ZIP encryption flag
+  /// is not honoured: the EPUB container format forbids ZIP encryption, and
+  /// decrypting without a password would only produce other bytes to
+  /// inflate.
+  static int _inflate(_BoundedInputStream raw, int method, int limit,
+      void Function(List<int> chunk) emit) {
+    final RawZLibFilter? inflater = switch (method) {
+      ZipFile.zipCompressionStore => null,
+      ZipFile.zipCompressionDeflate => RawZLibFilter.inflateFilter(raw: true),
+      _ => throw EpubUnsupportedCompressionException('An entry uses ZIP '
+          'compression method $method; an EPUB may only store or deflate.'),
+    };
+    int inflated = 0;
+    void take(List<int> chunk) {
+      inflated += chunk.length;
+      _checkInflatedSize(inflated, limit);
+      emit(chunk);
     }
-  }
 
-  /// Inflates the raw-deflate stream [compressed] into at most [limit]
-  /// bytes, a chunk of input at a time.
-  ///
-  /// zlib inflates only as far as each `processed` call asks, 64 KiB at a
-  /// time, and each call returns all the output the input so far allows, so
-  /// no end-of-stream call is needed to collect the rest. The chunks are kept
-  /// as they come and joined once at the end, so an entry refused part-way
-  /// never costs more than [limit], and one within it is copied only once.
-  /// A stream that is not valid deflate throws `FormatException`; one cut
-  /// short yields what it holds, as `package:archive`'s own inflate does.
-  static Uint8List _inflateDeflate(Uint8List compressed, int limit) {
-    final RawZLibFilter filter = RawZLibFilter.inflateFilter(raw: true);
-    final BytesBuilder inflated = BytesBuilder(copy: false);
-    for (int start = 0;
-        start < compressed.length;
-        start += _inflateInputChunkBytes) {
-      filter.process(compressed, start,
-          min(start + _inflateInputChunkBytes, compressed.length));
-      for (List<int>? chunk = filter.processed();
-          chunk != null;
-          chunk = filter.processed()) {
-        _checkInflatedSize(inflated.length + chunk.length, limit);
-        inflated.add(chunk);
+    while (!raw.isEOS) {
+      final List<int> chunk = raw._readChunk(_chunkBytes);
+      if (inflater == null) {
+        take(chunk);
+      } else {
+        inflater.process(chunk, 0, chunk.length);
+        for (List<int>? output = inflater.processed();
+            output != null;
+            output = inflater.processed()) {
+          take(output);
+        }
       }
     }
-    return inflated.takeBytes();
+    return inflated;
   }
 
   static void _checkInflatedSize(int size, int limit) {
@@ -483,12 +521,14 @@ class EpubReader {
 /// past the end of its bytes, and a negative length, before it happens.
 ///
 /// `InputStream` checks no bounds: it reads past its end with a RangeError.
-/// Every stream `package:archive` reads the container through is this one or
-/// derives from it by [subset], which `readBytes` and `peekBytes` go through
-/// and which keeps returning this type. The members bounded are the ones
-/// `package:archive` 3.6.1's `ZipFileHeader` and `ZipFile`, and
-/// [EpubReader], call on these streams; `readByte` and `readUint24` are
-/// called by neither.
+/// Every stream the container is read through, by `package:archive` or by
+/// [EpubReader], at open or at a later read, from bytes or from a file, is
+/// this one or derives from it by [subset], which `readBytes` and
+/// `peekBytes` go through and which keeps returning this type. Its bytes are
+/// a list: the caller's, or a [_FileBytes] reading an open file. The members
+/// bounded are the ones `package:archive` 3.6.1's `ZipFileHeader` and
+/// `ZipFile`, and [EpubReader], call on these streams; `readByte` and
+/// `readUint24` are called by neither.
 ///
 /// Two paths in `package:archive` copy bytes into an `InputStream` of their
 /// own, which this does not reach: `ZipFileHeader` parses every
@@ -536,7 +576,7 @@ class _BoundedInputStream extends InputStream {
   }
 
   @override
-  InputStreamBase subset([int? position, int? length]) {
+  _BoundedInputStream subset([int? position, int? length]) {
     if (length != null && length < 0) {
       throw EpubCorruptArchiveException(
           'A ZIP structure has a negative length, $length.');
@@ -550,10 +590,144 @@ class _BoundedInputStream extends InputStream {
     return _BoundedInputStream._of(part);
   }
 
+  /// The next [max] bytes, or as many as are left.
+  List<int> _readChunk(int max) {
+    final int end = offset + min(max, length);
+    final List<int> chunk = buffer.sublist(offset, end);
+    offset = end;
+    return chunk;
+  }
+
   void _require(int count) {
     if (count > length) {
       throw EpubCorruptArchiveException('A ZIP structure needs $count bytes '
           'at $position, where $length are left.');
     }
   }
+}
+
+/// Makes an archive entry from a validated [file], its [raw] bytes and the
+/// most they may inflate to; the only part of opening a container that
+/// differs between [EpubReader.openBook] and [EpubReader.readBook].
+typedef _ArchiveEntryDecoder = ArchiveFile Function(
+    ZipFile file, _BoundedInputStream raw, int limit);
+
+/// Where a container's bytes are, each time they are read.
+sealed class _ArchiveSource {
+  /// [read] run on a stream over the container's bytes as they are now.
+  T read<T>(T Function(_BoundedInputStream input) read);
+}
+
+/// A container the caller holds in memory: its bytes are read in place.
+final class _ArchiveBytesSource extends _ArchiveSource {
+  _ArchiveBytesSource(this._bytes);
+
+  final List<int> _bytes;
+
+  @override
+  T read<T>(T Function(_BoundedInputStream input) read) =>
+      read(_BoundedInputStream(_bytes));
+}
+
+/// A container in a file, opened for each read and closed after it, so that
+/// no handle outlives the call that needed it.
+final class _ArchiveFileSource extends _ArchiveSource {
+  _ArchiveFileSource(this._path);
+
+  final String _path;
+
+  @override
+  T read<T>(T Function(_BoundedInputStream input) read) {
+    final RandomAccessFile file = File(_path).openSync();
+    try {
+      return read(_BoundedInputStream(_FileBytes(file)));
+    } finally {
+      file.closeSync();
+    }
+  }
+}
+
+/// The bytes of an open [RandomAccessFile], as a list `InputStream` can read.
+///
+/// An index is read from a window of the file, loaded around it when it
+/// falls outside, since `package:archive` reads a header a few bytes at a
+/// time; a [sublist] is read from the file in one piece. The length is the
+/// file's when this is made. A file cut shorter while it is read reads as
+/// zeros past its new end.
+final class _FileBytes extends UnmodifiableListView<int> {
+  _FileBytes(this._file)
+      : length = _file.lengthSync(),
+        super(const <int>[]);
+
+  final RandomAccessFile _file;
+
+  @override
+  final int length;
+
+  int _windowStart = 0;
+  Uint8List _window = Uint8List(0);
+
+  @override
+  int operator [](int index) {
+    if (index < _windowStart || index >= _windowStart + _window.length) {
+      _windowStart = max(0, index - EpubReader._chunkBytes ~/ 2);
+      _window = sublist(
+          _windowStart, min(length, _windowStart + EpubReader._chunkBytes));
+    }
+    return _window[index - _windowStart];
+  }
+
+  @override
+  Uint8List sublist(int start, [int? end]) {
+    final Uint8List bytes = Uint8List((end ?? length) - start);
+    _file
+      ..setPositionSync(start)
+      ..readIntoSync(bytes);
+    return bytes;
+  }
+}
+
+/// An entry of a container, inflated from [_source] each time `ArchiveFile`
+/// asks for its content, which it asks for once and keeps.
+///
+/// A `ZipFile` because `ArchiveFile` leaves the content of a `ZipFile`, or
+/// of anything else implementing `package:archive`'s unexported
+/// `FileContent`, unread until it is asked for.
+///
+/// [_size] is what the entry inflated to when the container was validated,
+/// and the read is held to exactly that: [_source] may have changed since,
+/// a file on disk most of all, and an entry that inflates to anything else
+/// is refused rather than returned. Being known, it is also the buffer the
+/// entry is inflated into, so a read holds the entry once.
+final class _LazyZipFile extends ZipFile {
+  _LazyZipFile(
+      this._source, this._start, this._length, this._method, this._size);
+
+  final _ArchiveSource _source;
+  final int _start;
+  final int _length;
+  final int _method;
+  final int _size;
+
+  @override
+  InputStreamBase? get rawContent => null;
+
+  @override
+  List<int> get content => EpubReader._decodingZip(() => _source.read(
+        (_BoundedInputStream input) {
+          final Uint8List content = Uint8List(_size);
+          int filled = 0;
+          final int inflated = EpubReader._inflate(
+              input.subset(_start, _length), _method, _size, (List<int> chunk) {
+            content.setAll(filled, chunk);
+            filled += chunk.length;
+          });
+          if (inflated != _size) {
+            throw EpubCorruptArchiveException('An entry inflates to $inflated '
+                'bytes, not the $_size it did when the book was opened: the '
+                'container has changed.');
+          }
+          return content;
+        },
+      ));
 }
