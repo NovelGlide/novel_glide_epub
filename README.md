@@ -3,10 +3,12 @@
 EPUB parser for Dart. Used by [NovelGlide](https://github.com/NovelGlide), a
 cross-platform EPUB reader.
 
-Pure Dart — no Flutter dependency. It reads an EPUB's package document,
-navigation and content out of the ZIP container, either eagerly
-(`EpubReader.readBook`) or lazily by reference (`EpubReader.openBook`); both
-are instance methods on `const EpubReader()`.
+Pure Dart — no Flutter dependency; it uses `dart:io`, so it does not run on
+the web. It reads an EPUB's package document, navigation and content out of
+the ZIP container: `EpubReader.readBook` parses every content file,
+`EpubReader.openBook` only the structure, leaving each content file to be
+parsed when it is read. Both are instance methods on `const EpubReader()`,
+and each has a variant that takes a file path.
 
 ```dart
 import 'package:novel_glide_epub/novel_glide_epub.dart';
@@ -16,9 +18,38 @@ const EpubReader reader = EpubReader();
 // Whole book, content included.
 final EpubBook book = await reader.readBook(bytes);
 
-// Just the structure; each content file is read on demand.
+// Just the structure; each content file is parsed when it is read.
 final EpubBookRef bookRef = await reader.openBook(bytes);
+
+// The same from a file on disk, read a chunk at a time, never whole.
+final EpubBook fromFile = await reader.readBookFile(path);
+final EpubBookRef refFromFile = await reader.openBookFile(path);
 ```
+
+What this package guards is its own decompression. An entry is inflated
+only when it is read, by one inflater that throws
+`EpubArchiveTooLargeException` as soon as the entry passes 256 MiB, or the
+entries read from one book pass 512 MiB between them, whatever size their
+headers declared. Opening a book refuses one over 512 MiB compressed or
+over 4096 entries; what sizes the entries declare is not held against it.
+The limits cannot be configured, and there is no separate check to call.
+An entry that
+is damaged, too large, or compressed with a method other than store or
+deflate fails when it is read, not when the book is opened.
+
+What that costs in memory:
+
+- **`openBook` / `openBookFile`** read the ZIP's end record and central
+  directory, one pass over its records, and of the entries only the
+  documents they parse to open the book: no other entry's local header or
+  data. An entry is read when it is asked for, local header and all,
+  inflated into memory, held once, and kept for as long as the
+  `EpubBookRef` lives; one never asked for is never read. `openBook` holds the
+  bytes it was given; an `EpubBookRef` from `openBookFile` holds only the
+  path, opening the file for each read and closing it after, so there is
+  nothing to close.
+- **`readBook` / `readBookFile`** read every entry the `EpubBook` holds
+  through the same inflater, each once, into the `EpubBook` they return.
 
 ## Origin
 
@@ -44,7 +75,7 @@ Not published to pub.dev; consumed by git reference.
 
 ## Status
 
-**Coverage: 100%** (1364 / 1364 lines, 634 tests), up from 21% at extraction,
+**Coverage: 100%** (1546 / 1546 lines, 708 tests), up from 21% at extraction,
 when the suite was seven test cases written to pin two specific bugs and forty
 of the fifty-five files had never been executed at all.
 

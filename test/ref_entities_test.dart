@@ -637,6 +637,30 @@ void main() {
         ),
       );
     });
+
+    // TC-REF-26 [Equivalence partitioning]: `openContentStream` returns the
+    // bytes an entry holds, not a copy: an entry this package decoded holds
+    // a `Uint8List`, returned as the same object every time and by
+    // `readContentAsBytes` too. An entry a caller built on a plain
+    // `List<int>` is copied into a `Uint8List`.
+    test(
+        'TC-REF-26 [EP]: an entry\'s bytes are returned as they are, or '
+        'copied once when they are not a Uint8List', () async {
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(seedArchive());
+      final EpubTextContentFileRef chapter =
+          bookRef.content.html['chapter1.xhtml']!;
+      final ArchiveFile decoded = chapter.getContentFileEntry();
+
+      expect(chapter.openContentStream(decoded), same(decoded.content));
+      expect(await chapter.readContentAsBytes(), same(decoded.content));
+
+      final List<int> plain = <int>[0x4E, 0x47, 0x45];
+      final Uint8List copied = chapter.openContentStream(
+          ArchiveFile('OEBPS/chapter1.xhtml', plain.length, plain));
+      expect(copied, plain);
+      expect(copied, isNot(same(plain)));
+    });
   });
 
   group('EpubChapterRef', () {
