@@ -275,8 +275,7 @@ class EpubReader {
   /// The uncompressed sizes are the archive's own claim, which a
   /// decompression bomb lies in, so no limit is held against them: what
   /// bounds an entry is the count of the bytes it really inflates to when
-  /// it is read. An entry declaring more than the limits is refused then,
-  /// if it is read at all.
+  /// it is read.
   static Archive _archiveOf(
       _ArchiveSource source, List<ZipFileHeader> headers, int fileLength) {
     final Archive archive = Archive();

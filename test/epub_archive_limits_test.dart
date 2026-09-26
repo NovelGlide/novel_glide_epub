@@ -83,6 +83,7 @@ class _CraftedZipEntry {
     required this.declaredUncompressedSize,
     this.payload = const <int>[],
     this.zeroRunLength = 0,
+    this.zip64UncompressedSize,
     this.zip64LocalHeaderOffset,
   });
 
@@ -92,6 +93,7 @@ class _CraftedZipEntry {
         declaredUncompressedSize = bytes.length,
         payload = bytes,
         zeroRunLength = 0,
+        zip64UncompressedSize = null,
         zip64LocalHeaderOffset = null;
 
   final String name;
@@ -105,6 +107,11 @@ class _CraftedZipEntry {
   /// buffer, so a run of hundreds of MiB costs no copy.
   final int zeroRunLength;
 
+  /// When given, the uncompressed size the central directory declares in a
+  /// zip64 extra field, as its 64 raw bits, instead of
+  /// [declaredUncompressedSize].
+  final int? zip64UncompressedSize;
+
   /// When given, where the central directory says the local header is, in a
   /// zip64 extra field, as its 64 raw bits, instead of where `_craftZip`
   /// wrote it; `package:archive` reads it back as a signed value.
@@ -112,7 +119,9 @@ class _CraftedZipEntry {
 
   int get storedLength => payload.length + zeroRunLength;
 
+  /// The zip64 extra field's values, in the order the field holds them.
   List<int> get zip64Sizes => <int>[
+        if (zip64UncompressedSize case final int size) size,
         if (zip64LocalHeaderOffset case final int offset) offset,
       ];
 
@@ -165,7 +174,11 @@ Uint8List _craftZip(List<_CraftedZipEntry> entries) {
       ..setUint16(offset + 6, 20, Endian.little) // version needed
       ..setUint16(offset + 10, entry.method, Endian.little)
       ..setUint32(offset + 20, entry.storedLength, Endian.little)
-      ..setUint32(offset + 24, entry.declaredUncompressedSize, Endian.little)
+      ..setUint32(
+          offset + 24,
+          _zip64Marked(
+              entry.zip64UncompressedSize, entry.declaredUncompressedSize),
+          Endian.little)
       ..setUint16(offset + 28, names[i].length, Endian.little)
       ..setUint16(offset + 30, entry.extraLength, Endian.little)
       ..setUint32(
@@ -279,8 +292,7 @@ int _sharedStreamZipLength(int payloadLength, int recordCount) =>
 /// One entry's [payload] at the start of the file, and one central-directory
 /// record for each of [compressedSizes], every record pointing at that one
 /// entry and claiming its own compressed size: the overlapping-entry shape.
-/// Each record declares 0 bytes uncompressed, so no declared-size limit can
-/// react.
+/// Each record declares 0 bytes uncompressed.
 ///
 /// Given [zip64UncompressedSize] or [zip64CompressedSize], every record
 /// carries that value in a zip64 extra field instead, its 32-bit field set
@@ -975,20 +987,22 @@ void main() {
 
     // TC-LIM-9 [Boundary]: a declared size is only how large a buffer to
     // inflate into, and no larger than the limit allows. An entry declaring
-    // 4 GiB and holding one byte opens, and reads as that byte.
+    // 1 TiB through zip64 and holding one byte opens, and reads as that
+    // byte; a buffer of the size it declares could not be allocated.
     test(
-        'TC-LIM-9 [Boundary]: an entry declaring 4 GiB that holds one byte '
+        'TC-LIM-9 [Boundary]: an entry declaring 1 TiB that holds one byte '
         'reads as that byte', () async {
       final EpubBookRef bookRef = await openWith(const <_CraftedZipEntry>[
         _CraftedZipEntry(
           name: 'big.bin',
           method: _storeMethod,
-          declaredUncompressedSize: 0xFFFFFFFE,
+          declaredUncompressedSize: 0,
           payload: <int>[0x4E],
+          zip64UncompressedSize: 1 << 40,
         ),
       ]);
 
-      expect(bookRef.epubArchive().findFile('big.bin')!.size, 0xFFFFFFFE);
+      expect(bookRef.epubArchive().findFile('big.bin')!.size, 1 << 40);
       expect(read(bookRef, 'big.bin'), <int>[0x4E]);
     });
 
