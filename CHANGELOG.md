@@ -11,9 +11,13 @@ parses; what a read costs in memory is the entry it reads.
 |---|---|---|
 | Compressed input (the file, or the bytes passed in) | 512 MiB | when the book is opened, before any of it is read |
 | Entries in the archive | 4096 | when the book is opened |
-| Sizes the entries declare, each and in total | 256 MiB, 512 MiB | when the book is opened |
 | Bytes one entry inflates to | 256 MiB | while it is read |
 | Bytes the entries read from one book inflate to between them | 512 MiB | while each is read |
+
+The sizes the entries declare are not held against the limits: they are
+the archive's own claim, which a decompression bomb lies in. A book with an
+entry honestly declaring 300 MiB opens, and that entry is refused if it is
+read.
 
 - A breach throws **`EpubArchiveTooLargeException`**, a new member of the
   sealed `EpubException` family. This is **breaking** for an exhaustive
@@ -43,8 +47,9 @@ parses; what a read costs in memory is the entry it reads.
     them than the file holds, or any size below zero (`package:archive`
     reads a zip64 size as a signed value), checked when the book is opened,
     which is new: entries that overlap, sharing one stream, would have it
-    inflated once per entry by a book read whole. A negative size is refused
-    rather than added, so no entry can pull the total back down.
+    inflated once per entry by a book read whole. A negative size, which no
+    entry can really have, is refused rather than added, so no entry can pull
+    the total back down.
 
   `TypeError` and `StateError` still escape unconverted: they mean a defect
   in this package or `package:archive`, not a damaged book. So does a
@@ -73,9 +78,9 @@ parses; what a read costs in memory is the entry it reads.
   central directory is read here, record by record, rather than by
   `package:archive`'s `ZipDirectory.read`, so the entries are counted as
   they are read, whatever count the end record claims, and the one past the
-  limit is refused before it is built. Their declared sizes are checked, and
-  of the entries only the container, package and navigation documents are
-  read. No other entry is touched, neither its local header nor its data:
+  limit is refused before it is built. Their declared sizes are checked
+  against the file, as above, and of the entries only the container,
+  package and navigation documents are read. No other entry is touched, neither its local header nor its data:
   opening costs one pass over the directory's records, whatever the entries
   hold. `ZipDirectory.read` parsed every entry's local header as well,
   keeping a copy of each one's extra field.
@@ -86,7 +91,8 @@ parses; what a read costs in memory is the entry it reads.
   limits an entry that inflates past its declared size is read, since
   writers misstate it in good faith (`package:archive`'s `ArchiveFile.string`
   declares a text's UTF-16 length). An entry is inflated into a buffer of the
-  size it declares, capped at what the limits leave: an honest entry is held
+  size it declares, capped at what the limits leave, the one use made of that
+  size: an honest entry is held
   once, and one that inflates past its declared size keeps its chunks and is
   joined once at the end. What a read costs is the entry, and one read
   refused part-way the limit it crossed. `ArchiveFile` keeps an entry read

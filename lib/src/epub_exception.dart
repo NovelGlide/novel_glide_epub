@@ -97,9 +97,11 @@ final class EpubUnsupportedCompressionException extends EpubException {
 }
 
 /// The ZIP container is past one of the parser's fixed limits: the file's
-/// compressed size, the number of entries, or the sizes its entries declare,
-/// checked when the book is opened; or the bytes one entry, or all the
-/// entries read from one book, inflate to, counted when an entry is read.
+/// compressed size, or the number of entries, checked when the book is
+/// opened; or the bytes one entry, or all the entries read from one book,
+/// inflate to, counted when an entry is read. The sizes entries declare are
+/// not held against the limits, so an entry declaring more than they allow
+/// is refused only if it is read.
 ///
 /// A read is stopped part-way through inflating the entry that crosses the
 /// limit, so a decompression bomb is refused before more than the limit is

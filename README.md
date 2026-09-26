@@ -30,9 +30,10 @@ What this package guards is its own decompression. An entry is inflated
 only when it is read, by one inflater that throws
 `EpubArchiveTooLargeException` as soon as the entry passes 256 MiB, or the
 entries read from one book pass 512 MiB between them, whatever size their
-headers declared. Opening a book refuses one over 512 MiB compressed, over
-4096 entries, or whose entries declare more than those sizes. The limits
-cannot be configured, and there is no separate check to call. An entry that
+headers declared. Opening a book refuses one over 512 MiB compressed or
+over 4096 entries; what sizes the entries declare is not held against it.
+The limits cannot be configured, and there is no separate check to call.
+An entry that
 is damaged, too large, or compressed with a method other than store or
 deflate fails when it is read, not when the book is opened.
 
@@ -74,7 +75,7 @@ Not published to pub.dev; consumed by git reference.
 
 ## Status
 
-**Coverage: 100%** (1556 / 1556 lines, 709 tests), up from 21% at extraction,
+**Coverage: 100%** (1546 / 1546 lines, 708 tests), up from 21% at extraction,
 when the suite was seven test cases written to pin two specific bugs and forty
 of the fifty-five files had never been executed at all.
 

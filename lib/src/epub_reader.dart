@@ -249,32 +249,60 @@ class EpubReader {
   ///
   /// This reads the container's end record and its central directory, one
   /// pass over the records, and no entry: neither its local header nor its
-  /// data. What the directory declares is checked here, by
-  /// [_checkDeclaredSizes]; an entry's local header is read, and can fail,
-  /// only with the entry.
+  /// data. An entry's local header is read, and can fail, only with the
+  /// entry.
   static Archive _openContainer(_ArchiveSource source) {
     return _decodingZip(() => source.read((_BoundedInputStream input) {
           final int fileLength = input.length;
           _checkCompressedSize(fileLength);
-          final List<ZipFileHeader> headers = _readCentralDirectory(input);
-          _checkDeclaredSizes(headers, fileLength);
-
-          final Archive archive = Archive();
-          final _ArchiveReadTotal readTotal = _ArchiveReadTotal();
-          for (final ZipFileHeader header in headers) {
-            final int declared = _recorded(header.uncompressedSize);
-            archive.addFile(ArchiveFile(
-                header.filename,
-                declared,
-                _LazyZipFile(
-                    source,
-                    readTotal,
-                    _recorded(header.localHeaderOffset),
-                    _recorded(header.compressedSize),
-                    declared)));
-          }
-          return archive;
+          return _archiveOf(source, _readCentralDirectory(input), fileLength);
         }));
+  }
+
+  /// The entries [headers] describe, each read from [source] when it is
+  /// asked for, [headers] checked for what no container of [fileLength]
+  /// bytes holds as each is added.
+  ///
+  /// A zip64 size is read as a signed 64-bit value, so a record can declare
+  /// a negative one, which only a damaged directory does.
+  ///
+  /// The compressed sizes are the data each read takes, so an entry holding
+  /// its own bytes fits them in the file with the others. More between them
+  /// means entries overlap: one stream shared by thousands would be inflated
+  /// thousands of times by a book read whole, a cost the output limits do
+  /// not bound when the stream inflates to little or nothing.
+  ///
+  /// The uncompressed sizes are the archive's own claim, which a
+  /// decompression bomb lies in, so no limit is held against them: what
+  /// bounds an entry is the count of the bytes it really inflates to when
+  /// it is read. An entry declaring more than the limits is refused then,
+  /// if it is read at all.
+  static Archive _archiveOf(
+      _ArchiveSource source, List<ZipFileHeader> headers, int fileLength) {
+    final Archive archive = Archive();
+    final _ArchiveReadTotal readTotal = _ArchiveReadTotal();
+    int compressedTotal = 0;
+    for (final ZipFileHeader header in headers) {
+      final int compressed = _recorded(header.compressedSize);
+      final int declared = _recorded(header.uncompressedSize);
+      if (compressed < 0 || declared < 0) {
+        throw EpubCorruptArchiveException('An entry declares a negative size: '
+            '$compressed compressed, $declared uncompressed.');
+      }
+      // Compared before adding, so a zip64 size near 2^63 cannot wrap it.
+      if (compressed > fileLength - compressedTotal) {
+        throw EpubCorruptArchiveException('The entries declare more '
+            'compressed bytes between them than the file\'s $fileLength: '
+            'they overlap, or run past its end.');
+      }
+      compressedTotal += compressed;
+      archive.addFile(ArchiveFile(
+          header.filename,
+          declared,
+          _LazyZipFile(source, readTotal, _recorded(header.localHeaderOffset),
+              compressed, declared)));
+    }
+    return archive;
   }
 
   /// [decode], with a ZIP that fails to decode turned into
@@ -387,51 +415,6 @@ class EpubReader {
   static int _uint32At(InputStream input, int position) {
     input.position = position;
     return input.readUint32();
-  }
-
-  /// Refuses [headers] declaring sizes that no container of [fileLength]
-  /// bytes holds, or that are past the limits.
-  ///
-  /// A zip64 size is read as a signed 64-bit value, so a record can declare
-  /// a negative one, which only a damaged directory does; refused, it cannot
-  /// pull either total down.
-  ///
-  /// The compressed sizes are the data each read takes, so an entry holding
-  /// its own bytes fits them in the file with the others. More between them
-  /// means entries overlap: one stream shared by thousands would be inflated
-  /// thousands of times by a book read whole, a cost the output limits do
-  /// not bound when the stream inflates to little or nothing.
-  ///
-  /// The uncompressed sizes are only refused early here. They are the
-  /// archive's own claim, which a decompression bomb lies in; what bounds
-  /// an entry is the count of the bytes it really inflates to.
-  static void _checkDeclaredSizes(List<ZipFileHeader> headers, int fileLength) {
-    int compressedTotal = 0;
-    int total = 0;
-    for (final ZipFileHeader header in headers) {
-      final int compressed = _recorded(header.compressedSize);
-      final int declared = _recorded(header.uncompressedSize);
-      if (compressed < 0 || declared < 0) {
-        throw EpubCorruptArchiveException('An entry declares a negative size: '
-            '$compressed compressed, $declared uncompressed.');
-      }
-      if (declared > _maxEntryBytes) {
-        throw EpubArchiveTooLargeException('An entry declares $declared '
-            'bytes; the limit is $_maxEntryBytes.');
-      }
-      // Compared before adding, so a zip64 size near 2^63 cannot wrap it.
-      if (compressed > fileLength - compressedTotal) {
-        throw EpubCorruptArchiveException('The entries declare more '
-            'compressed bytes between them than the file\'s $fileLength: '
-            'they overlap, or run past its end.');
-      }
-      compressedTotal += compressed;
-      total += declared;
-    }
-    if (total > _maxTotalBytes) {
-      throw EpubArchiveTooLargeException('The entries declare $total bytes '
-          'in total; the limit is $_maxTotalBytes.');
-    }
   }
 
   /// A value `ZipFileHeader` reads from every record it is built from, so

@@ -15,8 +15,9 @@
 //     megabyte without ever being resident: the canonical bomb.
 //
 // Equivalent mutants, documented rather than chased:
-//   * In `_FileBytes`, `index < _windowStart` as `<=`. It reloads the window
-//     more often than needed, from the same file, and returns the same bytes.
+//   * In `_FileBytes`, `index < _windowStart` as `<=`, and
+//     `_windowStart + _window.length` as `-`. Either reloads the window more
+//     often than needed, from the same file, and returns the same bytes.
 //   * In `_centralDirectoryOf`, deleting `input.position = end + 4`. The
 //     search that found the end record last read its signature, which leaves
 //     the position exactly there.
@@ -495,8 +496,7 @@ _CraftedZipEntry _deflateEntry(
   );
 }
 
-/// An entry that declares [declaredUncompressedSize] and stores nothing, for
-/// the cases only the central directory is meant to see.
+/// An entry that declares [declaredUncompressedSize] and stores nothing.
 _CraftedZipEntry _declaringEntry(String name, int declaredUncompressedSize) {
   return _CraftedZipEntry(
     name: name,
@@ -908,58 +908,6 @@ void main() {
     }
   });
 
-  group('declared sizes, before inflating', () {
-    // TC-LIM-8 [Boundary]: an entry declaring one byte past the per-entry
-    // limit and storing nothing. There is nothing to inflate, so only the
-    // central directory check can refuse it.
-    test(
-        'TC-LIM-8 [Boundary]: an entry declaring one byte over the per-entry '
-        'limit is refused', () {
-      expect(
-          reader.openBook(_craftZip(<_CraftedZipEntry>[
-            _declaringEntry('big.bin', _maxEntryBytes + 1),
-          ])),
-          _throwsTooLarge);
-    });
-
-    // TC-LIM-9 [Boundary]: exactly the per-entry limit is admissible.
-    test(
-        'TC-LIM-9 [Boundary]: an entry declaring exactly the per-entry limit '
-        'is decoded', () {
-      expect(
-          reader.openBook(_craftZip(<_CraftedZipEntry>[
-            _declaringEntry('big.bin', _maxEntryBytes),
-          ])),
-          _throwsDecodedWithoutContainer);
-    });
-
-    // TC-LIM-10 [Boundary]: entries each well inside the per-entry limit
-    // whose declared sizes add up past the total, so only the sum can refuse.
-    test(
-        'TC-LIM-10 [Boundary]: entries declaring 600 MiB between them are '
-        'refused', () {
-      expect(
-          reader.openBook(_craftZip(<_CraftedZipEntry>[
-            for (int i = 0; i < 3; i++)
-              _declaringEntry('part$i.bin', 200 * _oneMib),
-          ])),
-          _throwsTooLarge);
-    });
-
-    // TC-LIM-11 [Boundary]: a declared total of exactly the limit is
-    // admissible.
-    test(
-        'TC-LIM-11 [Boundary]: entries declaring exactly the total limit '
-        'between them are decoded', () {
-      expect(
-          reader.openBook(_craftZip(<_CraftedZipEntry>[
-            for (int i = 0; i < 2; i++)
-              _declaringEntry('half$i.bin', _maxTotalBytes ~/ 2),
-          ])),
-          _throwsDecodedWithoutContainer);
-    });
-  });
-
   group('inflated sizes, counted when an entry is read', () {
     /// A readable book with [extra] entries nothing in it points at.
     Future<EpubBookRef> openWith(List<_CraftedZipEntry> extra) =>
@@ -995,16 +943,74 @@ void main() {
     List<_CraftedZipEntry> filledToTheLimit() => <_CraftedZipEntry>[
           _deflateEntry('half.bin', _deflateToEntryLimit,
               declaredUncompressedSize: _maxEntryBytes),
-          // Declaring its size would take the declared total past the
-          // limit, refused when the book is opened.
-          _deflateEntry('rest.bin', restDeflated, declaredUncompressedSize: 0),
+          _deflateEntry('rest.bin', restDeflated,
+              declaredUncompressedSize: restLength),
           _deflateEntry('one.bin',
               _rawDeflateOf(1, block: Uint8List.fromList(<int>[0x4E])),
               declaredUncompressedSize: 1),
         ];
 
+    // TC-LIM-8 [Error guessing]: the sizes entries declare are not held
+    // against the limits, only the bytes they inflate to when read. A book
+    // whose media entry honestly declares 300 MiB, which nothing in the book
+    // points at, opens and reads whole; the entry itself is refused when it
+    // is read.
+    test(
+        'TC-LIM-8 [Error guessing]: an entry honestly declaring 300 MiB does '
+        'not stop the book, and is refused when it is read', () async {
+      final Uint8List book = _craftBook(
+        chapter:
+            _CraftedZipEntry.stored(_chapterPath, utf8.encode(_chapterXhtml)),
+        extra: <_CraftedZipEntry>[
+          _deflateEntry('OEBPS/film.bin', _rawDeflateOf(300 * _oneMib),
+              declaredUncompressedSize: 300 * _oneMib),
+        ],
+      );
+
+      final EpubBookRef bookRef = await reader.openBook(book);
+      expect((await reader.readBook(book)).chapters.single.htmlContent,
+          _chapterXhtml);
+      expect(() => read(bookRef, 'OEBPS/film.bin'), _throwsTooLarge);
+    });
+
+    // TC-LIM-9 [Boundary]: a declared size is only how large a buffer to
+    // inflate into, and no larger than the limit allows. An entry declaring
+    // 4 GiB and holding one byte opens, and reads as that byte.
+    test(
+        'TC-LIM-9 [Boundary]: an entry declaring 4 GiB that holds one byte '
+        'reads as that byte', () async {
+      final EpubBookRef bookRef = await openWith(const <_CraftedZipEntry>[
+        _CraftedZipEntry(
+          name: 'big.bin',
+          method: _storeMethod,
+          declaredUncompressedSize: 0xFFFFFFFE,
+          payload: <int>[0x4E],
+        ),
+      ]);
+
+      expect(bookRef.epubArchive().findFile('big.bin')!.size, 0xFFFFFFFE);
+      expect(read(bookRef, 'big.bin'), <int>[0x4E]);
+    });
+
+    // TC-LIM-10 [Boundary]: entries each inside the per-entry limit whose
+    // declared sizes add up to 600 MiB, past the whole-archive limit, and
+    // which hold nothing. Nothing sums what they declare: the book opens,
+    // and each reads as the nothing it holds.
+    test(
+        'TC-LIM-10 [Boundary]: entries declaring 600 MiB between them open '
+        'and read as what they hold', () async {
+      final EpubBookRef bookRef = await openWith(<_CraftedZipEntry>[
+        for (int i = 0; i < 3; i++)
+          _declaringEntry('part$i.bin', 200 * _oneMib),
+      ]);
+
+      for (int i = 0; i < 3; i++) {
+        expect(read(bookRef, 'part$i.bin'), isEmpty);
+      }
+    });
+
     // TC-LIM-12 [Error guessing]: the lying header. The entry declares 1 KiB,
-    // which the directory check accepts, so the book opens; read, it
+    // and nothing checks a declared size, so the book opens; read, it
     // inflates to one byte past the per-entry limit. Only counting while it
     // inflates can see it.
     test(
@@ -1408,24 +1414,18 @@ void main() {
     }
 
     // TC-LIM-54 [Error guessing]: 4096 records sharing one local header whose
-    // name and extra field are 64 KiB each, in a file of a third of a MiB.
-    // Opening reads no local header, so it costs the directory alone, a few
-    // milliseconds; parsed once for each record, that header would cost a
-    // third of a second and hundreds of MiB. TC-MEM-4, in
-    // `epub_archive_memory_test.dart`, pins the memory.
+    // name and extra field are 64 KiB each, the header's signature zeroed.
+    // Opening reads no local header, so it gets as far as the missing
+    // container; parsing that header, once or once for each record, would
+    // fail it as a damaged container. TC-MEM-4, in
+    // `epub_archive_memory_test.dart`, pins what opening it costs.
     test(
-        'TC-LIM-54 [Error guessing]: 4096 records sharing one 128 KiB local '
-        'header open at the cost of the directory', () async {
-      final Directory tempDir =
-          Directory.systemTemp.createTempSync('nge_seed_shared_');
-      addTearDown(() => tempDir.deleteSync(recursive: true));
-      final String path = '${tempDir.path}/shared.zip';
-      File(path).writeAsBytesSync(_sharedLocalHeaderZip(_maxEntries));
+        'TC-LIM-54 [Error guessing]: 4096 records sharing one broken 128 KiB '
+        'local header open without it being parsed', () {
+      final Uint8List zip = _sharedLocalHeaderZip(_maxEntries);
+      ByteData.sublistView(zip).setUint32(0, 0, Endian.little);
 
-      final Stopwatch opening = Stopwatch()..start();
-      await expectLater(
-          reader.openBookFile(path), _throwsDecodedWithoutContainer);
-      expect(opening.elapsed, lessThan(const Duration(milliseconds: 100)));
+      expect(reader.openBook(zip), _throwsDecodedWithoutContainer);
     });
   });
 
@@ -1498,10 +1498,11 @@ void main() {
     }
 
     // TC-LIM-36 [Boundary]: a zip64 size is read as a signed value, so a
-    // record can declare a negative one, which would pull a total down and
-    // let the rest of the directory declare more. Compressed or uncompressed,
-    // -1 is refused as a damaged directory when the book is opened; 0 through
-    // the same zip64 field is not.
+    // record can declare a negative one, which no entry can really have and
+    // which would pull the compressed total down, letting the rest of the
+    // directory claim more of the file. Compressed or uncompressed, -1 is
+    // refused as a damaged directory when the book is opened; 0 through the
+    // same zip64 field is not.
     final Map<String, Uint8List Function(int)> zipBySize =
         <String, Uint8List Function(int)>{
       'compressed': (int size) => _sharedStreamZip(
