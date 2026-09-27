@@ -40,8 +40,7 @@ class BookCoverReader {
 
     final Uint8List coverImageContent =
         await coverImageContentFileRef.readContentAsBytes();
-    final images.Image? retval =
-        images.decodeImage(Uint8List.fromList(coverImageContent));
+    final images.Image? retval = images.decodeImage(coverImageContent);
     return retval;
   }
 

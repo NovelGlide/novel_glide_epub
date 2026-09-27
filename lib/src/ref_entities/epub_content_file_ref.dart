@@ -59,29 +59,34 @@ abstract class EpubContentFileRef {
     return contentFileEntry;
   }
 
-  List<int> getContentStream() {
+  /// This file's bytes, as [openContentStream] gives them.
+  Uint8List getContentStream() {
     return openContentStream(getContentFileEntry());
   }
 
-  List<int> openContentStream(ArchiveFile contentFileEntry) {
-    final List<int> contentStream = <int>[];
-    if (contentFileEntry.content == null) {
-      throw EpubMissingArchiveEntryException(
-          'Incorrect EPUB file: content file "$fileName" specified in manifest is not found.');
-    }
-    contentStream.addAll(contentFileEntry.content);
-    return contentStream;
+  /// [contentFileEntry]'s bytes: the ones `ArchiveFile` holds for it, not a
+  /// copy. They are shared with every other read of the entry, so a caller
+  /// that changes them copies them first.
+  ///
+  /// An entry this package decoded holds a `Uint8List`, returned as it is;
+  /// one a caller built on a plain `List<int>` is copied into one, once.
+  Uint8List openContentStream(ArchiveFile contentFileEntry) {
+    final Object? content = contentFileEntry.content;
+    return switch (content) {
+      Uint8List() => content,
+      List<int>() => Uint8List.fromList(content),
+      _ => throw EpubMissingArchiveEntryException(
+          'Incorrect EPUB file: content file "$fileName" specified in '
+          'manifest is not found.'),
+    };
   }
 
+  /// This file's bytes, as [openContentStream] gives them.
   Future<Uint8List> readContentAsBytes() async {
-    final ArchiveFile contentFileEntry = getContentFileEntry();
-    final List<int> content = openContentStream(contentFileEntry);
-    return Uint8List.fromList(content);
+    return getContentStream();
   }
 
   Future<String> readContentAsText() async {
-    final List<int> contentStream = getContentStream();
-    final String result = convert.utf8.decode(contentStream);
-    return result;
+    return convert.utf8.decode(getContentStream());
   }
 }
