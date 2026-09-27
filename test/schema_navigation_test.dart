@@ -737,10 +737,10 @@ void main() {
     test(
         'TC-NSC-29 [Scenario]: two reads of one NCX yield equal navigation '
         'graphs', () async {
-      final EpubBookRef first =
-          await const EpubReader().openBook(build('NGE-SEED S1'));
-      final EpubBookRef second =
-          await const EpubReader().openBook(build('NGE-SEED S1'));
+      final EpubBookRef first = await const EpubReader()
+          .openBook(build('NGE-SEED S1'), maxEntryBytes: null);
+      final EpubBookRef second = await const EpubReader()
+          .openBook(build('NGE-SEED S1'), maxEntryBytes: null);
 
       final EpubNavigation a = first.schema.navigation;
       final EpubNavigation b = second.schema.navigation;
@@ -771,10 +771,10 @@ void main() {
     test(
         'TC-NSC-30 [Equivalence partitioning]: a nested label change makes '
         'the graphs unequal', () async {
-      final EpubBookRef first =
-          await const EpubReader().openBook(build('NGE-SEED S1'));
-      final EpubBookRef second =
-          await const EpubReader().openBook(build('NGE-SEED S2'));
+      final EpubBookRef first = await const EpubReader()
+          .openBook(build('NGE-SEED S1'), maxEntryBytes: null);
+      final EpubBookRef second = await const EpubReader()
+          .openBook(build('NGE-SEED S2'), maxEntryBytes: null);
 
       final EpubNavigation a = first.schema.navigation;
       final EpubNavigation b = second.schema.navigation;

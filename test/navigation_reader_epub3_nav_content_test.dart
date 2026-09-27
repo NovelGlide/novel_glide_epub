@@ -61,6 +61,7 @@ void main() {
             '</li></ol></li>'
             '<li><a href="chapter2.xhtml">NGE-SEED Chapter Two</a></li>',
           ),
+          maxEntryBytes: null,
         );
 
         final EpubNavigation navigation = bookRef.schema.navigation;
@@ -96,6 +97,7 @@ void main() {
             '</ol></li>'
             '<li><a href="chapter2.xhtml">NGE-SEED Chapter Two</a></li>',
           ),
+          maxEntryBytes: null,
         );
 
         final EpubNavigationPoint span =
@@ -122,6 +124,7 @@ void main() {
         expect(
           () => const EpubReader().openBook(
             _epub3With('<li><p>NGE-SEED orphan text</p></li>'),
+            maxEntryBytes: null,
           ),
           throwsA(
             isA<Exception>().having(
@@ -145,6 +148,7 @@ void main() {
             '<div>NGE-SEED stray</div>'
             '<li><a href="chapter1.xhtml">NGE-SEED Chapter One</a></li>',
           ),
+          maxEntryBytes: null,
         );
 
         expect(bookRef.schema.navigation.navMap.points, hasLength(1));
@@ -162,6 +166,7 @@ void main() {
             '<li><a id="toc-1" href="chapter1.xhtml">NGE-SEED Chapter One</a>'
             '</li>',
           ),
+          maxEntryBytes: null,
         );
 
         final EpubNavigationPoint point =
@@ -185,6 +190,7 @@ void main() {
             '<ol><li><a href="chapter1.xhtml#sec-1">NGE-SEED Section 1</a>'
             '</li></ol></li>',
           ),
+          maxEntryBytes: null,
         );
 
         final EpubNavigation navigation = bookRef.schema.navigation;
@@ -217,6 +223,7 @@ void main() {
             '<li><a>NGE-SEED Unlinked</a></li>'
             '<li><a href="chapter2.xhtml">NGE-SEED Chapter Two</a></li>',
           ),
+          maxEntryBytes: null,
         );
 
         final EpubNavigationPoint unlinked =

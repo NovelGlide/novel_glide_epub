@@ -140,8 +140,8 @@ void main() {
     // refs, since each of them is a text format.
     test('TC-CNT-4 [Scenario]: text items are bucketed into html and css',
         () async {
-      final EpubBookRef bookRef =
-          await const EpubReader().openBook(_buildBookWithEveryMediaType());
+      final EpubBookRef bookRef = await const EpubReader()
+          .openBook(_buildBookWithEveryMediaType(), maxEntryBytes: null);
       final EpubContentRef content = bookRef.content;
 
       expect(content.html.keys, <String>[
@@ -171,8 +171,8 @@ void main() {
     // allFiles only.
     test('TC-CNT-5 [Scenario]: byte items are bucketed into images and fonts',
         () async {
-      final EpubBookRef bookRef =
-          await const EpubReader().openBook(_buildBookWithEveryMediaType());
+      final EpubBookRef bookRef = await const EpubReader()
+          .openBook(_buildBookWithEveryMediaType(), maxEntryBytes: null);
       final EpubContentRef content = bookRef.content;
 
       expect(
@@ -203,8 +203,8 @@ void main() {
     test(
         'TC-CNT-6 [Boundary]: a percent-encoded href keys and names the file '
         'decoded', () async {
-      final EpubBookRef bookRef =
-          await const EpubReader().openBook(_buildBookWithEveryMediaType());
+      final EpubBookRef bookRef = await const EpubReader()
+          .openBook(_buildBookWithEveryMediaType(), maxEntryBytes: null);
 
       expect(bookRef.content.html['ch one.xhtml']!.fileName, 'ch one.xhtml');
       expect(bookRef.content.html.containsKey('ch%20one.xhtml'), isFalse);
@@ -220,8 +220,8 @@ void main() {
     // exactly once, whichever branch it took.
     test('TC-CNT-7 [Scenario]: allFiles holds one entry per manifest item',
         () async {
-      final EpubBookRef bookRef =
-          await const EpubReader().openBook(_buildBookWithEveryMediaType());
+      final EpubBookRef bookRef = await const EpubReader()
+          .openBook(_buildBookWithEveryMediaType(), maxEntryBytes: null);
 
       expect(
         bookRef.content.allFiles.keys.length,
@@ -355,9 +355,9 @@ void main() {
     // rather than holding a second copy, so either map reaches the same
     // file.
     test('TC-CNT-11 [Scenario]: allFiles shares the bucketed refs', () async {
-      final EpubContentRef content =
-          (await const EpubReader().openBook(_buildBookWithEveryMediaType()))
-              .content;
+      final EpubContentRef content = (await const EpubReader()
+              .openBook(_buildBookWithEveryMediaType(), maxEntryBytes: null))
+          .content;
 
       for (final MapEntry<String, EpubContentFileRef> entry
           in <MapEntry<String, EpubContentFileRef>>[
