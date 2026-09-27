@@ -67,8 +67,7 @@ class EpubReader {
   const EpubReader();
 
   /// What an entry is read and inflated in: a chunk of input, a chunk of
-  /// output. Also the most a read with no limit allocates before the
-  /// entry's bytes arrive, since the size an entry declares may be a lie.
+  /// output.
   static const int _chunkBytes = 64 * 1024;
 
   /// The most bytes DEFLATE can inflate one byte to: a 258-byte match

@@ -21,8 +21,9 @@ import 'package:test/test.dart';
 
 import 'support/epub_fixture.dart';
 
-/// An archive that counts how often its whole list of entries is asked for,
-/// which a lookup by name through `findFile` never does.
+/// An archive that counts how often its entries are gone through, as its
+/// list of entries or as the iterable it is, which a lookup by name through
+/// `findFile` never does.
 class _ScanCountingArchive extends Archive {
   int scans = 0;
 
@@ -30,6 +31,12 @@ class _ScanCountingArchive extends Archive {
   List<ArchiveFile> get files {
     scans++;
     return super.files;
+  }
+
+  @override
+  Iterator<ArchiveFile> get iterator {
+    scans++;
+    return super.iterator;
   }
 }
 
