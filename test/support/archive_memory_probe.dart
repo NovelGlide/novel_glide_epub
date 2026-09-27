@@ -200,6 +200,20 @@ Future<Future<Object?> Function()> _prepare(
               method: 8, uncompressedSize: 1024)));
       final EpubBookRef bookRef = await const EpubReader().openBookFile(path);
       return () => bookRef.content.allFiles['audio.mp3']!.readContentAsBytes();
+    // A 200 MiB stored audio file, read as bytes five times in a row from
+    // one opened book, each read's bytes dropped before the next.
+    case 'reread':
+      _writeZip(
+          path,
+          _bookWithAudio(
+              _ProbeEntry('OEBPS/audio.mp3', _randomMib(), repeat: 200)));
+      final EpubBookRef bookRef = await const EpubReader().openBookFile(path);
+      return () async {
+        for (int i = 0; i < 5; i++) {
+          await bookRef.content.allFiles['audio.mp3']!.readContentAsBytes();
+        }
+        return null;
+      };
     // A 200 MiB stored audio file, read as bytes from an opened book.
     default:
       _writeZip(

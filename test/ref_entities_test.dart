@@ -638,22 +638,33 @@ void main() {
       );
     });
 
-    // TC-REF-26 [Equivalence partitioning]: `openContentStream` returns the
-    // bytes an entry holds, not a copy: an entry this package decoded holds
-    // a `Uint8List`, returned as the same object every time and by
-    // `readContentAsBytes` too. An entry a caller built on a plain
-    // `List<int>` is copied into a `Uint8List`.
+    // TC-REF-26 [Equivalence partitioning]: `openContentStream` returns
+    // what `ArchiveFile.content` gives. An entry this package decoded is
+    // inflated again by each read, so every read, `readContentAsBytes`
+    // included, gets equal bytes of its own. An entry a caller built on a
+    // `Uint8List` returns that list; one built on a plain `List<int>` is
+    // copied into a `Uint8List`.
     test(
-        'TC-REF-26 [EP]: an entry\'s bytes are returned as they are, or '
-        'copied once when they are not a Uint8List', () async {
+        'TC-REF-26 [EP]: a decoded entry\'s bytes are the reader\'s own; a '
+        'built entry\'s are returned as they are, or copied when they are '
+        'not a Uint8List', () async {
       final EpubBookRef bookRef =
           await const EpubReader().openBook(seedArchive());
       final EpubTextContentFileRef chapter =
           bookRef.content.html['chapter1.xhtml']!;
       final ArchiveFile decoded = chapter.getContentFileEntry();
 
-      expect(chapter.openContentStream(decoded), same(decoded.content));
-      expect(await chapter.readContentAsBytes(), same(decoded.content));
+      final Uint8List first = chapter.openContentStream(decoded);
+      final Uint8List second = await chapter.readContentAsBytes();
+      expect(second, first);
+      expect(second, isNot(same(first)));
+      expect(decoded.content, isNot(same(second)));
+
+      final Uint8List held = Uint8List.fromList(<int>[0x4E, 0x47, 0x45]);
+      expect(
+          chapter.openContentStream(
+              ArchiveFile('OEBPS/chapter1.xhtml', held.length, held)),
+          same(held));
 
       final List<int> plain = <int>[0x4E, 0x47, 0x45];
       final Uint8List copied = chapter.openContentStream(

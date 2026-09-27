@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+**Behaviour change: an `EpubBookRef` keeps nothing it reads, and its reads
+share no total.** How long a ref is kept, and whether what it reads is
+cached, is the caller's decision.
+
+- Every read of an entry through a ref inflates it again and hands the bytes
+  to the caller: `readContentAsBytes`, `readContentAsText`,
+  `getContentStream`, `openContentStream`, `readCover`, `readCoverBytes`,
+  `EpubChapterRef.readHtmlContent`, and `ArchiveFile.content` and
+  `writeContent` on the archive `epubArchive()` returns. Nothing in the ref
+  or its archive keeps the bytes, so a ref kept for a long time does not
+  grow, and reading one entry twice inflates it twice, each read getting
+  bytes of its own. A caller that reads an entry repeatedly and wants it
+  inflated once keeps the bytes itself. An entry changed in the source after
+  a read is read as it is then by the next.
+- A read through a ref is held to the per-entry limit, 256 MiB, alone. The
+  512 MiB running total over a ref's reads is gone: a ref kept long enough
+  no longer refuses every further read.
+- `readBook` and `readBookFile` keep the 512 MiB total over what the one
+  call reads, since the `EpubBook` they return holds it all at once, and
+  still throw `EpubArchiveTooLargeException` past it. Within the call each
+  entry is inflated and counted once, the chapter text read for both the
+  content and the chapters included.
+
 **Archive size limits.** This package guards its own decompression: an
 entry is inflated only when it is read, by one inflater that holds every
 read to fixed limits. Opening a book inflates nothing but the documents it
@@ -12,7 +35,7 @@ parses; what a read costs in memory is the entry it reads.
 | Compressed input (the file, or the bytes passed in) | 512 MiB | when the book is opened, before any of it is read |
 | Entries in the archive | 4096 | when the book is opened |
 | Bytes one entry inflates to | 256 MiB | while it is read |
-| Bytes the entries read from one book inflate to between them | 512 MiB | while each is read |
+| Bytes the entries one `readBook` reads inflate to between them | 512 MiB | while each is read |
 
 The sizes the entries declare are not held against the limits: they are
 the archive's own claim, which a decompression bomb lies in. A book with an
@@ -86,7 +109,7 @@ read.
   keeping a copy of each one's extra field.
 - **An entry is inflated when it is read, once.** The inflater counts the
   bytes it really produces and abandons the entry as soon as they cross the
-  per-entry limit or what the book's whole-archive limit has left. A header
+  per-entry limit or, in `readBook`, what the whole-archive limit has left. A header
   that under-declares its size gets no further than the limit; within the
   limits an entry that inflates past its declared size is read, since
   writers misstate it in good faith (`package:archive`'s `ArchiveFile.string`
@@ -95,9 +118,7 @@ read.
   size: an honest entry is held
   once, and one that inflates past its declared size keeps its chunks and is
   joined once at the end. What a read costs is the entry, and one read
-  refused part-way the limit it crossed. `ArchiveFile` keeps an entry read
-  for as long as the `EpubBookRef` lives, as `package:archive` always did,
-  and it counts once towards the whole-archive limit.
+  refused part-way the limit it crossed.
 - **`readBook` and `readBookFile` read the book through the same reads.**
   Each entry the `EpubBook` holds is inflated once, by the same inflater
   under the same limits; what they cost is the `EpubBook` they return.
@@ -110,8 +131,7 @@ read.
     damaged data when it was read, and a decompression bomb was not refused
     at all.
   - `openBook` holds the bytes it was given, and reads each content file
-    from them when asked. A content file is inflated on first read and kept,
-    as before.
+    from them when asked, inflating a content file each time it is read.
   - **Reading a content file holds it once.**
     `EpubContentFileRef.openContentStream` and `getContentStream` return the
     bytes the archive entry holds, a `Uint8List` (they returned

@@ -27,10 +27,10 @@ final EpubBookRef refFromFile = await reader.openBookFile(path);
 ```
 
 What this package guards is its own decompression. An entry is inflated
-only when it is read, by one inflater that throws
-`EpubArchiveTooLargeException` as soon as the entry passes 256 MiB, or the
-entries read from one book pass 512 MiB between them, whatever size their
-headers declared. Opening a book refuses one over 512 MiB compressed or
+each time it is read, by one inflater that throws
+`EpubArchiveTooLargeException` as soon as the entry passes 256 MiB, or, in
+one `readBook`, the entries it reads pass 512 MiB between them, whatever size
+their headers declared. Opening a book refuses one over 512 MiB compressed or
 over 4096 entries; what sizes the entries declare is not held against it.
 The limits cannot be configured, and there is no separate check to call.
 An entry that
@@ -42,14 +42,19 @@ What that costs in memory:
 - **`openBook` / `openBookFile`** read the ZIP's end record and central
   directory, one pass over its records, and of the entries only the
   documents they parse to open the book: no other entry's local header or
-  data. An entry is read when it is asked for, local header and all,
-  inflated into memory, held once, and kept for as long as the
-  `EpubBookRef` lives; one never asked for is never read. `openBook` holds the
+  data. An entry is read each time it is asked for, local header and all,
+  inflated into memory, held once, and handed to the caller; one never asked
+  for is never read. The `EpubBookRef` keeps nothing it has read, so holding
+  it costs the same however long it is kept, and each read is held to the
+  256 MiB per-entry limit alone. A caller that wants an entry inflated once
+  however often it uses it keeps the bytes itself. `openBook` holds the
   bytes it was given; an `EpubBookRef` from `openBookFile` holds only the
   path, opening the file for each read and closing it after, so there is
   nothing to close.
 - **`readBook` / `readBookFile`** read every entry the `EpubBook` holds
-  through the same inflater, each once, into the `EpubBook` they return.
+  through the same inflater, each once, into the `EpubBook` they return,
+  which holds them all at once: what the call reads is held to 512 MiB
+  between them.
 
 ## Origin
 
