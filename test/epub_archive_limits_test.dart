@@ -34,10 +34,12 @@
 // the same process at once would make the count unreliable.
 //
 // Not equivalent, and pinned elsewhere: in `_InflatedBytes.add`,
-// `<= _buffer.length` as `<`. An honest entry's last chunk then overflows
-// its buffer and the entry is copied whole: the same bytes, held twice.
-// Only memory shows it, and `epub_archive_memory_test.dart`'s TC-MEM-3
-// does, in a process of its own.
+// `<= _buffer.length` as `<`; and in `_inflate`, `limit ?? _chunkBytes` as
+// `_chunkBytes`, a buffer of one chunk under a limit too. Either way an
+// honest entry overflows its buffer and is copied whole: the same bytes,
+// held twice. Only memory shows it, and `epub_archive_memory_test.dart`'s
+// TC-MEM-3 and TC-MEM-5 do, in a process of their own, which the mutation
+// run's per-test coverage cannot trace back to these lines.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -943,6 +945,30 @@ void main() {
               centralDirectoryOffset: directoryOffset,
             ),
             ...body,
+          ]),
+          bookEntries + 50);
+    });
+
+    // TC-LIM-66 [Boundary]: a central directory at the very first byte, the
+    // entries after it and the end record last. A structure starting where
+    // its file does is inside it, so the directory is read from offset 0.
+    test(
+        'TC-LIM-66 [Boundary]: a central directory at offset 0 has every '
+        'record read', () async {
+      final Uint8List zip = bookWith(50);
+      final int directoryLength = _bodyAt(zip, 0).directoryLength;
+      final _ZipBody moved = _bodyAt(zip, directoryLength);
+      final int localsLength = moved.directoryOffset - directoryLength;
+
+      expect(
+          await entriesOf(<int>[
+            ...moved.body.sublist(localsLength),
+            ...moved.body.sublist(0, localsLength),
+            ..._endOfCentralDirectory(
+              entryCount: moved.entryCount,
+              centralDirectoryLength: directoryLength,
+              centralDirectoryOffset: 0,
+            ),
           ]),
           bookEntries + 50);
     });

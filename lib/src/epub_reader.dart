@@ -171,11 +171,11 @@ class EpubReader {
   /// The returned [EpubBookRef] holds [path], not an open file: each content
   /// file is read by opening the file again, reading that entry, and closing
   /// it, so there is nothing to close afterwards. Each read is held to
-  /// [maxEntryBytes] whatever the file holds by then. A file that is gone fails
-  /// the read with `FileSystemException`; one cut short so that the entry is
-  /// no longer in it, or changed so that the entry no longer inflates, fails
-  /// it with [EpubCorruptArchiveException]; one changed so that the entry
-  /// inflates past [maxEntryBytes] fails it with
+  /// [maxEntryBytes] whatever the file holds by then. A file that is gone
+  /// fails the read with `FileSystemException`; one cut short so that the
+  /// entry is no longer in it, or changed so that the entry no longer
+  /// inflates, fails it with [EpubCorruptArchiveException]; one changed so
+  /// that the entry inflates past [maxEntryBytes] fails it with
   /// [EpubArchiveTooLargeException]. Bytes changed in place within the limit
   /// are read as they are then. `null` and a limit below zero are taken as
   /// [openBook] takes them.
@@ -296,8 +296,8 @@ class EpubReader {
   }
 
   /// The entries [headers] describe, each read from [source] when it is
-  /// asked for, through [reads], [headers] checked for
-  /// what no container of [fileLength] bytes holds as each is added.
+  /// asked for, through [reads], [headers] checked for what no container of
+  /// [fileLength] bytes holds as each is added.
   ///
   /// A zip64 size is read as a signed 64-bit value, so a record can declare
   /// a negative one, which only a damaged directory does.
@@ -715,7 +715,7 @@ final class _ArchiveEntry extends ArchiveFile {
 }
 
 /// The reads of an [EpubBookRef]'s entries: each entry inflated anew, held
-/// to [_maxEntryBytes], or to nothing when that is `null`.
+/// to [_maxEntryBytes], or to no limit when that is `null`.
 base class _EntryReads {
   _EntryReads(int? maxEntryBytes)
       : _maxEntryBytes = _checked(maxEntryBytes, 'maxEntryBytes');
