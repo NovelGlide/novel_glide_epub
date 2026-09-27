@@ -34,12 +34,13 @@
 // the same process at once would make the count unreliable.
 //
 // Not equivalent, and pinned elsewhere: in `_InflatedBytes.add`,
-// `<= _buffer.length` as `<`; and in `_inflate`, `limit ?? _chunkBytes` as
-// `_chunkBytes`, a buffer of one chunk under a limit too. Either way an
-// honest entry overflows its buffer and is copied whole: the same bytes,
-// held twice. Only memory shows it, and `epub_archive_memory_test.dart`'s
-// TC-MEM-3 and TC-MEM-5 do, in a process of their own, which the mutation
-// run's per-test coverage cannot trace back to these lines.
+// `<= _buffer.length` as `<`; and in `_inflate`, `inflater == null` as
+// `!=`, or its two branches swapped, which bounds a deflated entry's buffer
+// by its compressed length. Either way an honest entry overflows its buffer
+// and is copied whole: the same bytes, held twice. Only memory shows it, and
+// `epub_archive_memory_test.dart`'s TC-MEM-3, TC-MEM-5 and TC-MEM-10 do, in
+// a process of their own, which the mutation run's per-test coverage cannot
+// trace back to these lines.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -1234,6 +1235,34 @@ void main() {
         });
       }
     }
+
+    // TC-LIM-67 [Boundary]: the limit caps the buffer as well as the read.
+    // An entry declaring 1 TiB whose 64 MiB of deflated bytes could inflate
+    // to 66 GiB is read under a 256 MiB limit into a buffer of that limit,
+    // and refused when it passes it; a buffer of what the bytes could
+    // produce could not be allocated.
+    test(
+        'TC-LIM-67 [Boundary]: an entry declaring and able to produce far more '
+        'than the limit is refused at the limit', () async {
+      final EpubBookRef bookRef = await reader.openBook(
+          _craftBook(
+            chapter: _CraftedZipEntry.stored(
+                _chapterPath, utf8.encode(_chapterXhtml)),
+            extra: <_CraftedZipEntry>[
+              _CraftedZipEntry(
+                name: 'big.bin',
+                method: _deflateMethod,
+                declaredUncompressedSize: 0,
+                payload: _deflateOneOverEntryLimit,
+                zeroRunLength: 64 * _oneMib,
+                zip64UncompressedSize: 1 << 40,
+              ),
+            ],
+          ),
+          maxEntryBytes: _maxEntryBytes);
+
+      expect(() => read(bookRef, 'big.bin'), _throwsTooLarge);
+    });
 
     // TC-LIM-10 [Boundary]: entries each inside the per-entry limit whose
     // declared sizes add up to 600 MiB, past the whole-archive limit, and
