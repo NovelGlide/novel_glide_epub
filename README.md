@@ -14,47 +14,71 @@ and each has a variant that takes a file path.
 import 'package:novel_glide_epub/novel_glide_epub.dart';
 
 const EpubReader reader = EpubReader();
+const int mib = 1024 * 1024;
 
 // Whole book, content included.
-final EpubBook book = await reader.readBook(bytes);
+final EpubBook book = await reader.readBook(bytes,
+    maxEntryBytes: 256 * mib, maxTotalBytes: 512 * mib);
 
 // Just the structure; each content file is parsed when it is read.
-final EpubBookRef bookRef = await reader.openBook(bytes);
+final EpubBookRef bookRef =
+    await reader.openBook(bytes, maxEntryBytes: 256 * mib);
 
 // The same from a file on disk, read a chunk at a time, never whole.
-final EpubBook fromFile = await reader.readBookFile(path);
-final EpubBookRef refFromFile = await reader.openBookFile(path);
+final EpubBook fromFile = await reader.readBookFile(path,
+    maxEntryBytes: 256 * mib, maxTotalBytes: 512 * mib);
+final EpubBookRef refFromFile =
+    await reader.openBookFile(path, maxEntryBytes: 256 * mib);
 ```
 
-What this package guards is its own decompression. An entry is inflated
-each time it is read, by one inflater that throws
-`EpubArchiveTooLargeException` as soon as the entry passes 256 MiB, or, in
-one `readBook`, the entries it reads pass 512 MiB between them, whatever size
-their headers declared. Opening a book refuses one over 512 MiB compressed or
-over 4096 entries; what sizes the entries declare is not held against it.
-The limits cannot be configured, and there is no separate check to call.
-An entry that
-is damaged, too large, or compressed with a method other than store or
-deflate fails when it is read, not when the book is opened.
+**The package has no built-in limits.** How large a file may be, how many
+entries it may hold, and how much an entry may inflate to are the caller's
+to decide, so every entry point takes the inflation limits as required
+parameters, and each call states them:
+
+- `maxEntryBytes`: the most one entry may inflate to, on every read of it,
+  whether through `readBook`, an `EpubBookRef`'s reads, the cover reads, or
+  `ArchiveFile.content` on `epubArchive()`.
+- `maxTotalBytes` (`readBook` and `readBookFile` only): the most the entries
+  one call reads may inflate to between them.
+
+`null` sets no limit. **Without a limit, a crafted entry can inflate until
+memory runs out**, so a caller reading files it does not trust passes both.
+A limit below zero throws `ArgumentError`. The package does not check a
+file's size or its number of entries at all: a file of any size, with any
+number of entries, opens.
+
+A limit is held by the one inflater every read of an entry goes through,
+which throws `EpubArchiveTooLargeException` the moment the entry's output
+passes it, whatever size the entry's header declared: a decompression bomb
+is stopped part-way, holding no more than the limit. A caller cannot do that
+from outside, which is why the limits are passed in rather than checked
+after. An entry that is damaged, past a limit, or compressed with a method
+other than store or deflate fails when it is read, not when the book is
+opened.
 
 What that costs in memory:
 
 - **`openBook` / `openBookFile`** read the ZIP's end record and central
   directory, one pass over its records, and of the entries only the
   documents they parse to open the book: no other entry's local header or
-  data. An entry is read each time it is asked for, local header and all,
-  inflated into memory, held once, and handed to the caller; one never asked
-  for is never read. The `EpubBookRef` keeps nothing it has read, so holding
-  it costs the same however long it is kept, and each read is held to the
-  256 MiB per-entry limit alone. A caller that wants an entry inflated once
-  however often it uses it keeps the bytes itself. `openBook` holds the
-  bytes it was given; an `EpubBookRef` from `openBookFile` holds only the
-  path, opening the file for each read and closing it after, so there is
-  nothing to close.
+  data. What the opened book holds grows with its number of entries, about
+  half a KiB for each: 100,000 entries measured at about 50 MiB. A file's
+  size costs nothing by itself. An entry is read each time it is asked for,
+  local header and all, inflated into memory, and handed to the caller; one
+  never asked for is never read. Under a limit, an entry is held once; with
+  no limit, the size it declares is not taken on its word, so it is
+  collected a chunk at a time and joined at the end, held twice for that
+  moment. The `EpubBookRef` keeps nothing it has read, so holding it costs
+  the same however long it is kept, and each read is held to
+  `maxEntryBytes` alone. A caller that wants an entry inflated once however
+  often it uses it keeps the bytes itself. `openBook` holds the bytes it was
+  given; an `EpubBookRef` from `openBookFile` holds only the path, opening
+  the file for each read and closing it after, so there is nothing to close.
 - **`readBook` / `readBookFile`** read every entry the `EpubBook` holds
   through the same inflater, each once, into the `EpubBook` they return,
-  which holds them all at once: what the call reads is held to 512 MiB
-  between them.
+  which holds them all at once: what the call reads is held to
+  `maxTotalBytes` between them.
 
 ## Origin
 
@@ -80,7 +104,7 @@ Not published to pub.dev; consumed by git reference.
 
 ## Status
 
-**Coverage: 100%** (1551 / 1551 lines, 717 tests), up from 21% at extraction,
+**Coverage: 100%** (1556 / 1556 lines, 733 tests), up from 21% at extraction,
 when the suite was seven test cases written to pin two specific bugs and forty
 of the fifty-five files had never been executed at all.
 
