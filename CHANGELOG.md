@@ -107,7 +107,8 @@ read.
   opening costs one pass over the directory's records, whatever the entries
   hold. `ZipDirectory.read` parsed every entry's local header as well,
   keeping a copy of each one's extra field.
-- **An entry is inflated when it is read, once.** The inflater counts the
+- **An entry is inflated each time it is read**; within one `readBook`
+  call, each entry is inflated once. The inflater counts the
   bytes it really produces and abandons the entry as soon as they cross the
   per-entry limit or, in `readBook`, what the whole-archive limit has left. A header
   that under-declares its size gets no further than the limit; within the
@@ -133,16 +134,14 @@ read.
   - `openBook` holds the bytes it was given, and reads each content file
     from them when asked, inflating a content file each time it is read.
   - **Reading a content file holds it once.**
-    `EpubContentFileRef.openContentStream` and `getContentStream` return the
-    bytes the archive entry holds, a `Uint8List` (they returned
-    `List<int>`), without copying them; `readContentAsBytes` and
-    `readContentAsText` read through them, and `BookCoverReader` decodes
-    the cover from them. Before, every read copied the entry into a growable
-    `List<int>`, eight bytes to each byte of it, then copied that again: a
-    200 MiB audio file read as bytes cost over 2 GiB at its peak, and now
-    costs the file. The bytes returned are shared with every other read of
-    the same entry, so a caller that changes them copies them first. The
-    narrower return type is source-compatible for callers; a subclass that
+    `EpubContentFileRef.openContentStream` and `getContentStream` return
+    the bytes the read inflated, a `Uint8List` (they returned `List<int>`),
+    as they are; each read returns bytes of its own.
+    `readContentAsBytes` and `readContentAsText` read through them, and
+    `BookCoverReader` decodes the cover from them. Before, every read copied
+    the entry into a growable `List<int>`, eight bytes to each byte of it,
+    then copied that again: a 200 MiB audio file read as bytes cost over
+    2 GiB at its peak, and now costs the file. The narrower return type is source-compatible for callers; a subclass that
     overrides either method returning `List<int>` no longer compiles.
   - DEFLATE is still inflated by `dart:io`'s zlib, now through
     `RawZLibFilter`, fed a chunk at a time so the limits stop it part-way. An
@@ -151,7 +150,7 @@ read.
   - `EpubArchiveTooLargeException` messages give sizes and limits, never an
     entry's file name, which can carry the book's title.
   - The entries of `EpubBookRef.epubArchive()` carry their name, their
-    content, inflated when it is first asked for, and the `size` their header
+    content, inflated each time it is asked for, and the `size` their header
     declares, as before. They no longer carry the ZIP's CRC, file mode,
     modification time, or directory and symlink flags.
   - Only STORE and DEFLATE entries are read, the two methods the EPUB

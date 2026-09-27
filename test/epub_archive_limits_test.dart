@@ -1817,10 +1817,11 @@ void main() {
       expect(later(grown).content, utf8.encode('NGE-'));
     });
 
-    // TC-LIM-49 [Scenario]: nothing keeps an entry once it is read. Read
-    // twice, it is inflated twice: equal bytes, each read's own. Changed
-    // after a read, it reads as it is then, by `content` and by
-    // `writeContent` alike.
+    // TC-LIM-49 [Scenario]: each read of an entry inflates it from the
+    // source. Read twice, it is inflated twice: equal bytes, each read's own.
+    // Changed after a read, it reads as it is then, by `content` and by
+    // `writeContent` alike. That no read is kept afterwards is
+    // `epub_ref_retention_test.dart`'s to pin.
     test(
         'TC-LIM-49 [Scenario]: an entry read twice is inflated twice, from '
         'the source as it is then', () async {
@@ -1878,8 +1879,7 @@ void main() {
       });
 
       // TC-LIM-56 [Scenario]: an entry of a book file is read from the file
-      // each time, never kept: changed in place after a read, it reads as it
-      // is then.
+      // each time: changed in place after a read, it reads as it is then.
       test(
           'TC-LIM-56 [Scenario]: an entry of a file read twice is read from '
           'the file as it is then', () async {

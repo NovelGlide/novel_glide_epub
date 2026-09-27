@@ -38,3 +38,5 @@ dev_dependencies:
       ref: dart_mutants-v0.3.0
   lints: ^5.0.0
   test: ^1.25.0
+  # Forces a full collection, so a test can ask whether a read is still held.
+  vm_service: ^15.0.0

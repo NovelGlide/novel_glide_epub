@@ -479,8 +479,7 @@ class EpubReader {
   static void _checkInflatedSize(int size, int limit) {
     if (size > limit) {
       throw EpubArchiveTooLargeException('An entry inflates to at least '
-          '$size bytes; the per-entry and whole-archive limits leave it '
-          '$limit.');
+          '$size bytes; the read allows it at most $limit.');
     }
   }
 }
@@ -710,11 +709,13 @@ final class _ArchiveEntry extends ArchiveFile {
 /// to the whole-archive limit. A read refused adds nothing: what it inflated is
 /// dropped with it.
 final class _BookRead {
-  final Map<_ArchiveEntry, Uint8List> _read = <_ArchiveEntry, Uint8List>{};
+  final Map<_ArchiveEntry, Uint8List> _bytesByEntry =
+      <_ArchiveEntry, Uint8List>{};
   int _total = 0;
 
-  Uint8List read(_ArchiveEntry entry) => _read[entry] ??= _counted(entry._read(
-      min(EpubReader._maxEntryBytes, EpubReader._maxTotalBytes - _total)));
+  Uint8List read(_ArchiveEntry entry) =>
+      _bytesByEntry[entry] ??= _counted(entry._read(
+          min(EpubReader._maxEntryBytes, EpubReader._maxTotalBytes - _total)));
 
   Uint8List _counted(Uint8List bytes) {
     _total += bytes.length;

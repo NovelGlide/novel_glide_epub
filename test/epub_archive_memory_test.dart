@@ -88,17 +88,17 @@ void main() {
     expect(await peakGrowthMib('read'), lessThan(250));
   });
 
-  // TC-MEM-5 [Scenario]: an `EpubBookRef` keeps nothing it reads. A 200 MiB
-  // stored entry read as bytes five times in a row, each read's bytes
-  // dropped before the next, may grow the peak by 450 MiB: the read in hand,
-  // the one before it, which the collector has not reclaimed yet when the
-  // next is allocated, and slack. It is the same however many reads there
-  // are. Were each read kept, the five would take it past 1000. That no
-  // read at all is kept, which memory cannot tell from keeping one, is
-  // pinned by `epub_archive_limits_test.dart`'s TC-LIM-49 and TC-LIM-56.
+  // TC-MEM-5 [Scenario]: reads through one `EpubBookRef` do not add up. A
+  // 200 MiB stored entry read as bytes five times in a row, each read's
+  // bytes dropped before the next, may grow the peak by 450 MiB: about two
+  // entries and slack, however many reads there are. Why two and not one is
+  // inferred, not measured: the read before is likely not yet collected
+  // when the next allocates its buffer. Were every read kept, the five would
+  // take it past 1000. Memory cannot tell one read kept from none;
+  // `epub_ref_retention_test.dart` asks the collector that.
   test(
       'TC-MEM-5 [Scenario]: reading a 200 MiB content file five times from '
-      'one ref does not keep the reads', () async {
+      'one ref does not add the reads up', () async {
     expect(await peakGrowthMib('reread'), lessThan(450));
   });
 }
