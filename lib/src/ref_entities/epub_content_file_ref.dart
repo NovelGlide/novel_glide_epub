@@ -64,12 +64,12 @@ abstract class EpubContentFileRef {
     return openContentStream(getContentFileEntry());
   }
 
-  /// [contentFileEntry]'s bytes: the ones `ArchiveFile` holds for it, not a
-  /// copy. They are shared with every other read of the entry, so a caller
-  /// that changes them copies them first.
+  /// [contentFileEntry]'s bytes, as `ArchiveFile.content` gives them.
   ///
-  /// An entry this package decoded holds a `Uint8List`, returned as it is;
-  /// one a caller built on a plain `List<int>` is copied into one, once.
+  /// An entry of a book this package opened is inflated again by each read,
+  /// and its bytes are the caller's alone: nothing in the book keeps them. An
+  /// entry a caller built returns the bytes it holds, shared with every other
+  /// read of it; a plain `List<int>` is copied into a `Uint8List` each time.
   Uint8List openContentStream(ArchiveFile contentFileEntry) {
     final Object? content = contentFileEntry.content;
     return switch (content) {
