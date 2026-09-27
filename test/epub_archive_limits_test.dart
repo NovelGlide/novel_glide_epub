@@ -1193,33 +1193,46 @@ void main() {
     });
 
     // TC-LIM-9 [Boundary]: a declared size is only how large a buffer to
-    // inflate into: no larger than the limit, and with no limit, no larger
-    // than a chunk. An entry declaring 1 TiB through zip64 and holding one
-    // byte opens, and reads as that byte; a buffer of the size it declares
-    // could not be allocated.
-    for (final int? limit in <int?>[_maxEntryBytes, null]) {
-      test(
-          'TC-LIM-9 [Boundary]: an entry declaring 1 TiB that holds one byte '
-          'reads as that byte, the limit $limit', () async {
-        final EpubBookRef bookRef = await reader.openBook(
-            _craftBook(
-              chapter: _CraftedZipEntry.stored(
-                  _chapterPath, utf8.encode(_chapterXhtml)),
-              extra: const <_CraftedZipEntry>[
-                _CraftedZipEntry(
-                  name: 'big.bin',
-                  method: _storeMethod,
-                  declaredUncompressedSize: 0,
-                  payload: <int>[0x4E],
-                  zip64UncompressedSize: 1 << 40,
-                ),
-              ],
-            ),
-            maxEntryBytes: limit);
+    // inflate into: no larger than the limit, nor than the entry's own bytes
+    // can inflate to, stored or deflated. An entry declaring 1 TiB through
+    // zip64 and holding one byte opens, and reads as that byte, under a
+    // limit, a limit as large as the size it declares, or none; a buffer of
+    // the size it declares could not be allocated.
+    final Map<String, _CraftedZipEntry> oneByteEntries =
+        <String, _CraftedZipEntry>{
+      'stored': const _CraftedZipEntry(
+        name: 'big.bin',
+        method: _storeMethod,
+        declaredUncompressedSize: 0,
+        payload: <int>[0x4E],
+        zip64UncompressedSize: 1 << 40,
+      ),
+      'deflated': _CraftedZipEntry(
+        name: 'big.bin',
+        method: _deflateMethod,
+        declaredUncompressedSize: 0,
+        payload: _rawDeflateOf(1, block: Uint8List.fromList(<int>[0x4E])),
+        zip64UncompressedSize: 1 << 40,
+      ),
+    };
+    for (final MapEntry<String, _CraftedZipEntry> entry
+        in oneByteEntries.entries) {
+      for (final int? limit in <int?>[_maxEntryBytes, 1 << 40, null]) {
+        test(
+            'TC-LIM-9 [Boundary]: a ${entry.key} entry declaring 1 TiB that '
+            'holds one byte reads as that byte, the limit $limit', () async {
+          final EpubBookRef bookRef = await reader.openBook(
+              _craftBook(
+                chapter: _CraftedZipEntry.stored(
+                    _chapterPath, utf8.encode(_chapterXhtml)),
+                extra: <_CraftedZipEntry>[entry.value],
+              ),
+              maxEntryBytes: limit);
 
-        expect(bookRef.epubArchive().findFile('big.bin')!.size, 1 << 40);
-        expect(read(bookRef, 'big.bin'), <int>[0x4E]);
-      });
+          expect(bookRef.epubArchive().findFile('big.bin')!.size, 1 << 40);
+          expect(read(bookRef, 'big.bin'), <int>[0x4E]);
+        });
+      }
     }
 
     // TC-LIM-10 [Boundary]: entries each inside the per-entry limit whose

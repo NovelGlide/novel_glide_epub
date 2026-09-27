@@ -202,8 +202,7 @@ class PackageReader {
 
   Future<EpubPackage> readPackage(
       Archive epubArchive, String rootFilePath) async {
-    final ArchiveFile? rootFileEntry = epubArchive.files.firstWhereOrNull(
-        (ArchiveFile testFile) => testFile.name == rootFilePath);
+    final ArchiveFile? rootFileEntry = epubArchive.findFile(rootFilePath);
     if (rootFileEntry == null) {
       throw const EpubMissingArchiveEntryException(
           'EPUB parsing error: root file not found in archive.');

@@ -81,6 +81,17 @@ void main() {
     expect(await peakGrowthMib('entries:100000'), lessThan(100));
   });
 
+  // TC-MEM-9 [Scenario]: a file's size bounds what opening it holds. A
+  // directory record takes 46 bytes and a name, and records storing nothing
+  // pass the overlap check, so a file of nothing but records opens to an
+  // entry for about every 50 bytes. 100,000 of them, 4.9 MiB of file, may
+  // grow the peak by 50 MiB, ten times the file.
+  test(
+      'TC-MEM-9 [Scenario]: opening a file of nothing but 100,000 records '
+      'holds at most ten times its size', () async {
+    expect(await peakGrowthMib('records:100000'), lessThan(50));
+  });
+
   // TC-MEM-4 [Scenario]: opening reads no entry's local header. 4096
   // records sharing one whose name and extra field are 64 KiB each take a
   // third of a MiB of file, and may grow the peak by 32 MiB. Parsed for
@@ -116,15 +127,26 @@ void main() {
     expect(await peakGrowthMib('read'), lessThan(250));
   });
 
-  // TC-MEM-8 [Scenario]: read with no limit, an entry's declared size is not
-  // allocated on its word, so the entry is collected a chunk at a time and
-  // joined once at the end: the same 200 MiB entry is held twice for that
-  // moment, and may grow the peak by 450 MiB, as TC-MEM-5's two entries
-  // may. A third copy would take it past 600.
+  // TC-MEM-8 [Scenario]: read with no limit, an honest entry is still held
+  // once. Its buffer is made for the size it declares, as far as its stored
+  // bytes can fill it: a 200 MiB stored entry may grow the peak by 250 MiB,
+  // as TC-MEM-3's does under a limit. Collected a chunk at a time and joined
+  // at the end, it would be held twice, past 400.
   test(
       'TC-MEM-8 [Scenario]: reading a 200 MiB content file with no limit '
-      'holds it at most twice', () async {
-    expect(await peakGrowthMib('read-unlimited'), lessThan(450));
+      'holds it once', () async {
+    expect(await peakGrowthMib('read-unlimited'), lessThan(250));
+  });
+
+  // TC-MEM-10 [Scenario]: the same for a deflated entry, whose buffer is
+  // bounded by the most its compressed bytes can inflate to. 200 MiB of
+  // deflated zeros, declaring their size, read with no limit, may grow the
+  // peak by 250 MiB; a buffer bounded by less than they inflate to would be
+  // outgrown and joined, past 400.
+  test(
+      'TC-MEM-10 [Scenario]: reading a 200 MiB deflated content file with no '
+      'limit holds it once', () async {
+    expect(await peakGrowthMib('read-deflated-unlimited'), lessThan(250));
   });
 
   // TC-MEM-5 [Scenario]: reads through one `EpubBookRef` do not add up. A

@@ -63,13 +63,17 @@ What that costs in memory:
   directory, one pass over its records, and of the entries only the
   documents they parse to open the book: no other entry's local header or
   data. What the opened book holds grows with its number of entries, about
-  half a KiB for each: 100,000 entries measured at about 50 MiB. A file's
-  size costs nothing by itself. An entry is read each time it is asked for,
-  local header and all, inflated into memory, and handed to the caller; one
-  never asked for is never read. Under a limit, an entry is held once; with
-  no limit, the size it declares is not taken on its word, so it is
-  collected a chunk at a time and joined at the end, held twice for that
-  moment. The `EpubBookRef` keeps nothing it has read, so holding it costs
+  half a KiB for each: 100,000 entries measured at about 50 MiB. The file's
+  size bounds how many entries there can be: a directory record takes 46
+  bytes and a name, and records storing nothing pass the overlap check, so
+  opening holds up to about ten times the file's size (a file of nothing but
+  100,000 such records, 4.9 MiB, measured at 38 MiB). A caller can bound
+  what opening costs by the size of the files it accepts. An entry is read
+  each time it is asked for, local header and all, inflated into memory, and
+  handed to the caller; one never asked for is never read. The size an entry
+  declares is never allocated on its word: the buffer is capped at the limit
+  and at what the entry's compressed bytes can inflate to, so an honest
+  entry is held once, limit or none. The `EpubBookRef` keeps nothing it has read, so holding it costs
   the same however long it is kept, and each read is held to
   `maxEntryBytes` alone. A caller that wants an entry inflated once however
   often it uses it keeps the bytes itself. `openBook` holds the bytes it was
@@ -104,7 +108,7 @@ Not published to pub.dev; consumed by git reference.
 
 ## Status
 
-**Coverage: 100%** (1556 / 1556 lines, 734 tests), up from 21% at extraction,
+**Coverage: 100%** (1554 / 1554 lines, 742 tests), up from 21% at extraction,
 when the suite was seven test cases written to pin two specific bugs and forty
 of the fifty-five files had never been executed at all.
 

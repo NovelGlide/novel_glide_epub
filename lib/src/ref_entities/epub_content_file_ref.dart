@@ -3,7 +3,6 @@ import 'dart:convert' as convert;
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
-import 'package:collection/collection.dart' show IterableExtension;
 import 'package:quiver/core.dart';
 
 import '../entities/epub_content_type.dart';
@@ -50,8 +49,8 @@ abstract class EpubContentFileRef {
   ArchiveFile getContentFileEntry() {
     final String contentFilePath =
         const ZipPathResolver().combine(_contentDirectoryPath, fileName);
-    final ArchiveFile? contentFileEntry = _epubArchive.files
-        .firstWhereOrNull((ArchiveFile x) => x.name == contentFilePath);
+    final ArchiveFile? contentFileEntry =
+        _epubArchive.findFile(contentFilePath);
     if (contentFileEntry == null) {
       throw EpubMissingArchiveEntryException(
           'EPUB parsing error: file $contentFilePath not found in archive.');

@@ -11,6 +11,8 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:novel_glide_epub/novel_glide_epub.dart';
 import 'package:novel_glide_epub/src/readers/content_reader.dart';
+import 'package:novel_glide_epub/src/readers/package_reader.dart';
+import 'package:novel_glide_epub/src/readers/root_file_path_reader.dart';
 import 'package:novel_glide_epub/src/ref_entities/epub_byte_content_file_ref.dart';
 import 'package:novel_glide_epub/src/ref_entities/epub_content_file_ref.dart';
 import 'package:novel_glide_epub/src/ref_entities/epub_content_ref.dart';
@@ -18,6 +20,18 @@ import 'package:novel_glide_epub/src/ref_entities/epub_text_content_file_ref.dar
 import 'package:test/test.dart';
 
 import 'support/epub_fixture.dart';
+
+/// An archive that counts how often its whole list of entries is asked for,
+/// which a lookup by name through `findFile` never does.
+class _ScanCountingArchive extends Archive {
+  int scans = 0;
+
+  @override
+  List<ArchiveFile> get files {
+    scans++;
+    return super.files;
+  }
+}
 
 /// manifest entries covering every branch of the content-type switch, plus
 /// the NCX the EPUB2 navigation reader needs.
@@ -369,6 +383,59 @@ void main() {
         expect(identical(content.allFiles[entry.key], entry.value), isTrue,
             reason: entry.key);
       }
+    });
+  });
+  group('entries found by name', () {
+    // TC-CNT-13 [Scenario]: a content file is found by its name, not by a
+    // pass over the archive's entries. Reading 20,000 manifest items out of
+    // an archive of 20,000 entries asks for the list of entries not once:
+    // one pass for each item would be 400 million name comparisons.
+    test(
+        'TC-CNT-13 [Scenario]: reading 20,000 content files passes over the '
+        'entries never', () async {
+      const int count = 20000;
+      final _ScanCountingArchive archive = _ScanCountingArchive();
+      for (int i = 0; i < count; i++) {
+        archive.addFile(ArchiveFile('OEBPS/$i.bin', 1, <int>[i % 256]));
+      }
+      final EpubContentRef contentRef = const ContentReader().parseContentMap(
+          archive,
+          'OEBPS',
+          EpubManifest(items: <EpubManifestItem>[
+            for (int i = 0; i < count; i++)
+              EpubManifestItem(
+                  id: 'i$i',
+                  href: '$i.bin',
+                  mediaType: 'application/octet-stream'),
+          ]));
+
+      final EpubContent content =
+          await const EpubReader().readContent(contentRef);
+
+      expect(content.allFiles, hasLength(count));
+      expect(
+          (content.allFiles['${count - 1}.bin']! as EpubByteContentFile)
+              .content,
+          <int>[(count - 1) % 256]);
+      expect(archive.scans, 0);
+    });
+
+    // TC-CNT-14 [Scenario]: the container and package documents are found
+    // by name as well.
+    test(
+        'TC-CNT-14 [Scenario]: the container and package documents are '
+        'found without a pass over the entries', () async {
+      final _ScanCountingArchive archive = _ScanCountingArchive();
+      ZipDecoder()
+          .decodeBytes(_buildBookWithEveryMediaType())
+          .files
+          .forEach(archive.addFile);
+
+      final String rootFilePath =
+          (await const RootFilePathReader().getRootFilePath(archive))!;
+      await const PackageReader().readPackage(archive, rootFilePath);
+
+      expect(archive.scans, 0);
     });
   });
 }

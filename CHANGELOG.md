@@ -42,11 +42,16 @@ final EpubBook book = await reader.readBookFile(path,
 - Opening a book checks neither the file's size nor its number of entries:
   a file of any size, with any number of entries, opens. What opening holds
   grows with the entries, about half a KiB for each (100,000 entries
-  measured at about 50 MiB); a file's size costs nothing by itself.
-- With no limit, the size an entry declares is not allocated on its word:
-  the entry is collected a 64 KiB chunk at a time and joined at the end,
-  held twice for that moment, where under a limit an honest entry is held
-  once.
+  measured at about 50 MiB), and the file's size bounds how many there can
+  be: a directory record takes 46 bytes and a name, and records storing
+  nothing pass the overlap check, so opening holds up to about ten times the
+  file's size (a file of nothing but 100,000 such records, 4.9 MiB, measured
+  at 38 MiB). A caller can bound what opening costs by the size of the files
+  it accepts.
+- The size an entry declares is never allocated on its word: an entry is
+  inflated into a buffer of the size it declares, capped at its limit and at
+  what its compressed bytes can inflate to (their own length stored, 1032
+  times it deflated), so an honest entry is held once, limit or none.
 
 **Behaviour change: an `EpubBookRef` keeps nothing it reads, and its reads
 share no total.** How long a ref is kept, and whether what it reads is
@@ -87,8 +92,8 @@ entry is refused if it is read.
 - There is no separate check to call: every read of an entry, by any entry
   point, goes through the same inflater, held to the limits its book was
   opened or read with. The package has no validation or import API; what a
-  caller does with the bytes it reads, a WebView's own ZIP reader say, is
-  the caller's to guard.
+  caller does with the bytes it reads, such as handing them to another
+  decoder, is the caller's to guard.
 - **A damaged ZIP container now throws the new
   `EpubCorruptArchiveException`**, a member of the same family:
   - bytes that are not a ZIP at all, or whose end-of-central-directory
@@ -152,12 +157,11 @@ entry is refused if it is read.
   that under-declares its size gets no further than the limit; within the
   limits an entry that inflates past its declared size is read, since
   writers misstate it in good faith (`package:archive`'s `ArchiveFile.string`
-  declares a text's UTF-16 length). Under a limit, an entry is inflated into
-  a buffer of the size it declares, capped at what the limits leave, the one
-  use made of that size: an honest entry is held once, and one that inflates
-  past its declared size keeps its chunks and is joined once at the end.
-  With no limit, the buffer is one 64 KiB chunk and the rest is joined at
-  the end. What a read costs is the entry, and one read refused part-way the
+  declares a text's UTF-16 length). An entry is inflated into a buffer of
+  the size it declares, capped at what the limits leave and at what its
+  compressed bytes can inflate to, the one use made of that size: an honest
+  entry is held once, and one that inflates past its declared size keeps its
+  chunks and is joined once at the end. What a read costs is the entry, and one read refused part-way the
   limit it crossed.
 - **`readBook` and `readBookFile` read the book through the same reads.**
   Each entry the `EpubBook` holds is inflated once, by the same inflater

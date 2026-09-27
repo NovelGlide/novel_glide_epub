@@ -71,6 +71,10 @@ class EpubReader {
   /// entry's bytes arrive, since the size an entry declares may be a lie.
   static const int _chunkBytes = 64 * 1024;
 
+  /// The most bytes DEFLATE can inflate one byte to: a 258-byte match
+  /// coded in about two bits.
+  static const int _maxDeflateRatio = 1032;
+
   /// What a file is read in when `package:archive` reads a header from it a
   /// few bytes at a time: a page, so an entry's local header, read with the
   /// entry wherever it is in the file, costs one small read.
@@ -149,7 +153,7 @@ class EpubReader {
   /// throws [ArgumentError].
   Future<EpubBook> readBook(FutureOr<List<int>> bytes,
       {required int? maxEntryBytes, required int? maxTotalBytes}) async {
-    final _BookRead reads = _BookRead(maxEntryBytes, maxTotalBytes);
+    final _BookEntryReads reads = _BookEntryReads(maxEntryBytes, maxTotalBytes);
     return _readBook(await _openBook(_ArchiveBytesSource(await bytes), reads));
   }
 
@@ -188,8 +192,8 @@ class EpubReader {
   /// with [maxEntryBytes] and [maxTotalBytes] taken as [readBook] takes them.
   Future<EpubBook> readBookFile(String path,
       {required int? maxEntryBytes, required int? maxTotalBytes}) async {
-    return _readBook(await _openBook(
-        _ArchiveFileSource(path), _BookRead(maxEntryBytes, maxTotalBytes)));
+    return _readBook(await _openBook(_ArchiveFileSource(path),
+        _BookEntryReads(maxEntryBytes, maxTotalBytes)));
   }
 
   Future<EpubContent> readContent(EpubContentRef contentRef) async {
@@ -449,6 +453,11 @@ class EpubReader {
   /// [limit] allows, and refused as soon as the output passes [limit]; with
   /// no [limit], inflated to the end, however far that is.
   ///
+  /// The buffer is made for the declared size, but no larger than [limit]
+  /// or than [raw] can inflate to: its own length stored, [_maxDeflateRatio]
+  /// times it deflated. So a declared size is never allocated on its word
+  /// alone, and an honest entry is inflated into one buffer, limit or none.
+  ///
   /// The one inflater: every read of an entry goes through it. zlib inflates
   /// only as far as each `processed` call asks, 64 KiB at a time, and each
   /// call returns all the output the input so far allows, so no
@@ -470,8 +479,10 @@ class EpubReader {
       _ => throw EpubUnsupportedCompressionException('An entry uses ZIP '
           'compression method $method; an EPUB may only store or deflate.'),
     };
+    final int producible =
+        inflater == null ? raw.length : raw.length * _maxDeflateRatio;
     final _InflatedBytes inflated =
-        _InflatedBytes(min(declaredSize, limit ?? _chunkBytes));
+        _InflatedBytes(min(min(declaredSize, producible), limit ?? producible));
     void take(List<int> chunk) {
       _checkInflatedSize(inflated.length + chunk.length, limit);
       inflated.add(chunk);
@@ -735,8 +746,8 @@ base class _EntryReads {
 /// inflated and counted once, and what they inflate to between them is held
 /// to [_maxTotalBytes], when there is one, as well as each to its own
 /// limit. A read refused adds nothing: what it inflated is dropped with it.
-final class _BookRead extends _EntryReads {
-  _BookRead(super.maxEntryBytes, int? maxTotalBytes)
+final class _BookEntryReads extends _EntryReads {
+  _BookEntryReads(super.maxEntryBytes, int? maxTotalBytes)
       : _maxTotalBytes = _EntryReads._checked(maxTotalBytes, 'maxTotalBytes');
 
   final int? _maxTotalBytes;
@@ -771,14 +782,13 @@ final class _BookRead extends _EntryReads {
 /// An entry's inflated bytes, collected into a buffer of the [capacity]
 /// the entry is expected to fill and, past that, as the inflater's chunks.
 ///
-/// An honest entry read under a limit is held once: inflated into its
-/// buffer, returned as it is. The capacity is the entry's declared size,
-/// capped at its limit, or with no limit at one chunk, and the declared size
-/// may be wrong in either direction, in good faith (`package:archive`'s
+/// An honest entry is held once: inflated into its buffer, returned as it
+/// is. The capacity is the entry's declared size, capped at its limit and at
+/// what its compressed bytes can inflate to, and the declared size may be
+/// wrong in either direction, in good faith (`package:archive`'s
 /// `ArchiveFile.string` declares a text's UTF-16 length) or not; the
-/// inflater's limit is what bounds the entry, so the buffer is only a first
-/// guess, and without a limit nothing bounds it, so the declared size is not
-/// allocated on its word. An entry inflating past the buffer keeps its
+/// inflater's limit, when there is one, is what bounds the entry, so the
+/// buffer is only a first guess. An entry inflating past the buffer keeps its
 /// chunks and is joined once at the end, holding it twice for that moment
 /// at most; one inflating to less is copied out of it, so a buffer larger
 /// than the entry is not kept. Nothing grows by reallocating.

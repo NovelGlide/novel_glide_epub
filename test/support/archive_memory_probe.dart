@@ -243,6 +243,47 @@ void _writeSharedLocalHeaderZip(String path) {
   File(path).writeAsBytesSync(bytes);
 }
 
+/// [records] central-directory records written to [path], and nothing else
+/// but the one empty local header they all point at: the smallest file that
+/// opens to that many entries. Each record is 46 bytes and a distinct name
+/// of at most five digits, and stores nothing.
+void _writeRecordsOnlyZip(String path, int records) {
+  final RandomAccessFile file = File(path).openSync(mode: FileMode.write);
+  file.writeFromSync((ByteData(30)
+        ..setUint32(0, 0x04034b50, Endian.little)
+        ..setUint16(4, 20, Endian.little))
+      .buffer
+      .asUint8List());
+  final BytesBuilder block = BytesBuilder(copy: false);
+  for (int i = 0; i < records; i++) {
+    final List<int> name = utf8.encode('$i');
+    block
+      ..add((ByteData(46)
+            ..setUint32(0, 0x02014b50, Endian.little)
+            ..setUint16(4, 20, Endian.little)
+            ..setUint16(6, 20, Endian.little)
+            ..setUint16(28, name.length, Endian.little))
+          .buffer
+          .asUint8List())
+      ..add(name);
+    if (block.length >= _oneMib) {
+      file.writeFromSync(block.takeBytes());
+    }
+  }
+  file.writeFromSync(block.takeBytes());
+  final int directoryLength = file.positionSync() - 30;
+  file
+    ..writeFromSync((ByteData(22)
+          ..setUint32(0, 0x06054b50, Endian.little)
+          ..setUint16(8, records & 0xFFFF, Endian.little)
+          ..setUint16(10, records & 0xFFFF, Endian.little)
+          ..setUint32(12, directoryLength, Endian.little)
+          ..setUint32(16, 30, Endian.little))
+        .buffer
+        .asUint8List())
+    ..closeSync();
+}
+
 /// The call [probeCase] measures, its fixture built at [path] first unless
 /// it is already there.
 Future<Future<Object?> Function()> _prepare(
@@ -278,6 +319,10 @@ Future<Future<Object?> Function()> _prepare(
                       _ProbeEntry('OEBPS/extra/$i.txt', const <int>[0x4E]),
                   ])));
       return () => const EpubReader().openBookFile(path, maxEntryBytes: null);
+    // n records and nothing else, opened from its file.
+    case <String>['records', final String count]:
+      _build(path, () => _writeRecordsOnlyZip(path, int.parse(count)));
+      return () => const EpubReader().openBookFile(path, maxEntryBytes: null);
     // 4096 records sharing one 128 KiB local header, opened from its file.
     case <String>['shared']:
       _build(path, () => _writeSharedLocalHeaderZip(path));
@@ -306,6 +351,19 @@ Future<Future<Object?> Function()> _prepare(
     // limit.
     case <String>['read-unlimited']:
       final EpubBookRef bookRef = await _openBigAudio(path, null);
+      return () => _readAudio(bookRef);
+    // A 200 MiB audio file of deflated zeros, declaring its size, read as
+    // bytes from a book opened with no limit.
+    case <String>['read-deflated-unlimited']:
+      _build(
+          path,
+          () => _writeZip(
+              path,
+              _bookWithAudio(_ProbeEntry(
+                  'OEBPS/audio.mp3', _deflatedZeros(200 * _oneMib),
+                  method: 8, uncompressedSize: 200 * _oneMib))));
+      final EpubBookRef bookRef =
+          await const EpubReader().openBookFile(path, maxEntryBytes: null);
       return () => _readAudio(bookRef);
     // A 200 MiB stored audio file, read as bytes from a book opened with a
     // 256 MiB limit.
