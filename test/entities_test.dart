@@ -802,10 +802,14 @@ void main() {
     // bytes.
     test('TC-ENT-33 [Scenario]: two reads of one archive produce equal books',
         () async {
-      final EpubBook first =
-          await const EpubReader().readBook(build('NGE-SEED-A'));
-      final EpubBook second =
-          await const EpubReader().readBook(build('NGE-SEED-A'));
+      final EpubBook first = await const EpubReader().readBook(
+          build('NGE-SEED-A'),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
+      final EpubBook second = await const EpubReader().readBook(
+          build('NGE-SEED-A'),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
 
       expect(first.schema, equals(second.schema));
       expect(first.content, equals(second.content));
@@ -841,10 +845,14 @@ void main() {
     test(
         'TC-ENT-34 [Equivalence partitioning]: a differing chapter body makes '
         'the content unequal', () async {
-      final EpubBook first =
-          await const EpubReader().readBook(build('NGE-SEED-A'));
-      final EpubBook second =
-          await const EpubReader().readBook(build('NGE-SEED-B'));
+      final EpubBook first = await const EpubReader().readBook(
+          build('NGE-SEED-A'),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
+      final EpubBook second = await const EpubReader().readBook(
+          build('NGE-SEED-B'),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
 
       expect(first.content, isNot(equals(second.content)));
       expect(first.schema, equals(second.schema));
@@ -859,8 +867,10 @@ void main() {
     // read path actually takes.
     test('TC-ENT-35 [Boundary]: a coverless archive yields a null coverImage',
         () async {
-      final EpubBook book =
-          await const EpubReader().readBook(build('NGE-SEED-A'));
+      final EpubBook book = await const EpubReader().readBook(
+          build('NGE-SEED-A'),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
 
       expect(book.coverImage, isNull);
       expect(book.title, 'NGE-SEED Entities Book');

@@ -108,8 +108,8 @@ void main() {
       'TC-NCX-1 [Scenario]: complete NCX populates head, docTitle, docAuthors '
       'and navMap',
       () async {
-        final EpubBookRef bookRef =
-            await const EpubReader().openBook(_buildEpub2Book());
+        final EpubBookRef bookRef = await const EpubReader()
+            .openBook(_buildEpub2Book(), maxEntryBytes: null);
         final EpubNavigation navigation = bookRef.schema.navigation;
 
         final List<EpubNavigationHeadMeta> meta = navigation.head.metadata;
@@ -140,8 +140,8 @@ void main() {
       'TC-NCX-2 [Scenario]: nested navPoints keep id/class/playOrder and '
       'resolve to chapters with anchors split off',
       () async {
-        final EpubBookRef bookRef =
-            await const EpubReader().openBook(_buildEpub2Book());
+        final EpubBookRef bookRef = await const EpubReader()
+            .openBook(_buildEpub2Book(), maxEntryBytes: null);
         final List<EpubNavigationPoint> points =
             bookRef.schema.navigation.navMap.points;
         final EpubNavigationPoint first = points.first;
@@ -185,8 +185,8 @@ void main() {
       'TC-NCX-3 [Scenario]: pageList reads pageTargets with typed values and '
       'skips foreign children',
       () async {
-        final EpubBookRef bookRef =
-            await const EpubReader().openBook(_buildEpub2Book());
+        final EpubBookRef bookRef = await const EpubReader()
+            .openBook(_buildEpub2Book(), maxEntryBytes: null);
         final List<EpubNavigationPageTarget> targets =
             bookRef.schema.navigation.pageList!.targets;
 
@@ -225,6 +225,7 @@ void main() {
               '',
             ),
           ),
+          maxEntryBytes: null,
         );
 
         expect(bookRef.schema.navigation.pageList, isNull);
@@ -242,6 +243,7 @@ void main() {
           _buildEpub2Book(
             ncx: _ncxWithNavLists('<navList id="nl-1" class="illustrations"/>'),
           ),
+          maxEntryBytes: null,
         );
 
         final List<EpubNavigationList> navLists =
@@ -281,6 +283,7 @@ void main() {
               '</navList>',
             ),
           ),
+          maxEntryBytes: null,
         );
 
         final List<EpubNavigationList> navLists =
@@ -336,6 +339,7 @@ void main() {
                 'href="toc.ncx"', 'href="NGE-SEED%20t%C3%B6c.ncx"'),
             ncxPath: 'OEBPS/NGE-SEED töc.ncx',
           ),
+          maxEntryBytes: null,
         );
 
         expect(bookRef.schema.navigation.docTitle.titles,
@@ -356,6 +360,7 @@ void main() {
                 '<spine toc="ncx">', '<spine toc="NCX">'),
             ncxPath: 'OEBPS/TOC.NCX',
           ),
+          maxEntryBytes: null,
         );
 
         expect(bookRef.schema.navigation.docTitle.titles,

@@ -208,8 +208,11 @@ void main() {
         _point('np-1', '1', 'NGE-SEED Chapter One', 'chapter1.xhtml'),
       ]);
 
-      final EpubBook book = await const EpubReader().readBook(_archiveAround(
-          const EpubNavigationWriter().writeNavigation(original)));
+      final EpubBook book = await const EpubReader().readBook(
+          _archiveAround(
+              const EpubNavigationWriter().writeNavigation(original)),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
 
       expect(book.schema.navigation.head.metadata, original.head.metadata);
       expect(book.schema.navigation.navMap.points, original.navMap.points);
@@ -231,8 +234,10 @@ void main() {
       final String ncx = const EpubNavigationWriter().writeNavigation(original);
 
       expect(ncx, contains('<docTitle>NGE-SEED OneNGE-SEED Two</docTitle>'));
-      final EpubBook book =
-          await const EpubReader().readBook(_archiveAround(ncx));
+      final EpubBook book = await const EpubReader().readBook(
+          _archiveAround(ncx),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
       expect(book.schema.navigation.docTitle.titles, isEmpty);
     });
 
@@ -250,8 +255,10 @@ void main() {
       final String ncx = const EpubNavigationWriter().writeNavigation(original);
 
       expect(ncx, isNot(contains('np-1-1')));
-      final EpubBook book =
-          await const EpubReader().readBook(_archiveAround(ncx));
+      final EpubBook book = await const EpubReader().readBook(
+          _archiveAround(ncx),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
       expect(book.chapters.single.subChapters, isEmpty);
     });
   });

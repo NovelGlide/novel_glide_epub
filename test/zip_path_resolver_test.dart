@@ -213,8 +213,10 @@ void main() {
     // reads the chapter's text — the content-file path through `combine`.
     test('TC-ZPR-6 [Scenario]: an EPUB2 book named in CJK reads its chapter',
         () async {
-      final EpubBook book =
-          await const EpubReader().readBook(_buildEpub2CjkBook());
+      final EpubBook book = await const EpubReader().readBook(
+          _buildEpub2CjkBook(),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
 
       expect(book.chapters.single.title, 'NGE-SEED 第一章');
       expect(book.chapters.single.htmlContent, contains('NGE-SEED-CJK-CH1'));
@@ -224,8 +226,8 @@ void main() {
     // file through its ref, the path NovelGlide's reader takes.
     test('TC-ZPR-7 [Scenario]: a content ref with a CJK name reads its entry',
         () async {
-      final EpubBookRef bookRef =
-          await const EpubReader().openBook(_buildEpub2CjkBook());
+      final EpubBookRef bookRef = await const EpubReader()
+          .openBook(_buildEpub2CjkBook(), maxEntryBytes: null);
 
       final String html =
           await bookRef.content.html['文字/第一章.xhtml']!.readContentAsText();
@@ -238,8 +240,8 @@ void main() {
     test(
         'TC-ZPR-8 [Regression]: a percent-encoded EPUB3 nav href resolves to '
         'its CJK entry', () async {
-      final EpubBookRef bookRef =
-          await const EpubReader().openBook(_buildEpub3EncodedNavBook());
+      final EpubBookRef bookRef = await const EpubReader()
+          .openBook(_buildEpub3EncodedNavBook(), maxEntryBytes: null);
 
       final List<EpubChapterRef> chapters = await bookRef.getChapters();
 
@@ -253,8 +255,10 @@ void main() {
     test(
         'TC-ZPR-16 [Regression]: a percent-encoded NCX href resolves to its '
         'CJK entry', () async {
-      final EpubBook book = await const EpubReader()
-          .readBook(_buildEpub2CjkBook(ncxHref: '%E7%9B%AE%E9%8C%84.ncx'));
+      final EpubBook book = await const EpubReader().readBook(
+          _buildEpub2CjkBook(ncxHref: '%E7%9B%AE%E9%8C%84.ncx'),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
 
       expect(book.chapters.single.title, 'NGE-SEED 第一章');
     });
@@ -269,7 +273,9 @@ void main() {
       final EpubBook book = await const EpubReader().readBook(
           _buildEpub2CjkBook(
               chapterHref:
-                  '%E6%96%87%E5%AD%97/%E7%AC%AC%E4%B8%80%E7%AB%A0.xhtml'));
+                  '%E6%96%87%E5%AD%97/%E7%AC%AC%E4%B8%80%E7%AB%A0.xhtml'),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
 
       expect(book.chapters.single.htmlContent, contains('NGE-SEED-CJK-CH1'));
     });
@@ -283,7 +289,9 @@ void main() {
       final EpubBook book = await const EpubReader().readBook(
           _buildEpub2CjkBook(
               chapterHref:
-                  '%E6%96%87%E5%AD%97/%E7%AC%AC%E4%B8%80%E7%AB%A0.xhtml'));
+                  '%E6%96%87%E5%AD%97/%E7%AC%AC%E4%B8%80%E7%AB%A0.xhtml'),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
 
       final List<int> written = const EpubWriter().writeBook(book)!;
       final List<String> entries = ZipDecoder()
@@ -297,7 +305,8 @@ void main() {
           entries,
           isNot(contains(
               'OEBPS/%E6%96%87%E5%AD%97/%E7%AC%AC%E4%B8%80%E7%AB%A0.xhtml')));
-      final EpubBook readBack = await const EpubReader().readBook(written);
+      final EpubBook readBack = await const EpubReader()
+          .readBook(written, maxEntryBytes: null, maxTotalBytes: null);
       expect(
           readBack.chapters.single.htmlContent, contains('NGE-SEED-CJK-CH1'));
     });

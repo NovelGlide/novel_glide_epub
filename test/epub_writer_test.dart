@@ -154,7 +154,8 @@ class _UnknownContentFile extends EpubContentFile {
 }
 
 Future<EpubBook> _roundTrip(EpubBook book) async =>
-    const EpubReader().readBook(const EpubWriter().writeBook(book)!);
+    const EpubReader().readBook(const EpubWriter().writeBook(book)!,
+        maxEntryBytes: null, maxTotalBytes: null);
 
 Archive _writtenArchive(EpubBook book) =>
     ZipDecoder().decodeBytes(const EpubWriter().writeBook(book)!);
@@ -220,8 +221,8 @@ void main() {
     // field-by-field subset: anything ELSE the writer drops fails here.
     test('TC-WRT-1 [Scenario]: a written book reads back equal to the original',
         () async {
-      final EpubBook original =
-          await const EpubReader().readBook(_seedArchive());
+      final EpubBook original = await const EpubReader()
+          .readBook(_seedArchive(), maxEntryBytes: null, maxTotalBytes: null);
 
       final EpubBook reread = await _roundTrip(original);
 
@@ -232,8 +233,8 @@ void main() {
     // regression names the part it broke instead of only saying "not equal".
     test('TC-WRT-2 [Scenario]: each part of the book survives independently',
         () async {
-      final EpubBook original =
-          await const EpubReader().readBook(_seedArchive());
+      final EpubBook original = await const EpubReader()
+          .readBook(_seedArchive(), maxEntryBytes: null, maxTotalBytes: null);
 
       final EpubBook reread = await _roundTrip(original);
 
@@ -255,8 +256,11 @@ void main() {
     // from the linearity flag that does not.
     test('TC-WRT-9 [Scenario]: the spine keeps its toc, direction and order',
         () async {
-      final EpubBook original = await const EpubReader().readBook(_seedArchive(
-          spineItemRef: '<itemref idref="ch1"/><itemref idref="css"/>'));
+      final EpubBook original = await const EpubReader().readBook(
+          _seedArchive(
+              spineItemRef: '<itemref idref="ch1"/><itemref idref="css"/>'),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
 
       final EpubSpine spine = (await _roundTrip(original)).schema.package.spine;
 
@@ -272,8 +276,10 @@ void main() {
     // back the same null guide and, flip undone, the same book.
     test('TC-WRT-7 [Equivalence]: a book with no guide round-trips without one',
         () async {
-      final EpubBook original =
-          await const EpubReader().readBook(_seedArchive(guide: ''));
+      final EpubBook original = await const EpubReader().readBook(
+          _seedArchive(guide: ''),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
       expect(original.schema.package.guide, isNull);
 
       final Archive archive = _writtenArchive(original);
@@ -298,13 +304,16 @@ void main() {
     test(
         'TC-WRT-12 [Error guessing]: a file name holding a literal %25 is '
         'written under that exact name', () async {
-      final EpubBook original = await const EpubReader().readBook(_seedArchive(
-        extraManifestItems: '<item id="pct" href="100%2525.xhtml" '
-            'media-type="application/xhtml+xml"/>',
-        extraTextEntries: <String, String>{
-          '$_contentDir/100%25.xhtml': seedXhtml('NGE-SEED Percent'),
-        },
-      ));
+      final EpubBook original = await const EpubReader().readBook(
+          _seedArchive(
+            extraManifestItems: '<item id="pct" href="100%2525.xhtml" '
+                'media-type="application/xhtml+xml"/>',
+            extraTextEntries: <String, String>{
+              '$_contentDir/100%25.xhtml': seedXhtml('NGE-SEED Percent'),
+            },
+          ),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
       expect(original.content.allFiles.keys, contains('100%25.xhtml'));
 
       final Archive archive = _writtenArchive(original);
@@ -322,7 +331,8 @@ void main() {
     // TC-WRT-3 [Scenario/use-case]: the four kinds of entry the writer emits.
     test('TC-WRT-3 [Scenario]: emits mimetype, container, content and the OPF',
         () async {
-      final EpubBook book = await const EpubReader().readBook(_seedArchive());
+      final EpubBook book = await const EpubReader()
+          .readBook(_seedArchive(), maxEntryBytes: null, maxTotalBytes: null);
 
       final Archive archive = _writtenArchive(book);
 
@@ -343,7 +353,8 @@ void main() {
     // TC-WRT-4 [Boundary value]: `mimetype` must be stored uncompressed for the
     // archive to be a valid EPUB container.
     test('TC-WRT-4 [Boundary]: mimetype is stored uncompressed', () async {
-      final EpubBook book = await const EpubReader().readBook(_seedArchive());
+      final EpubBook book = await const EpubReader()
+          .readBook(_seedArchive(), maxEntryBytes: null, maxTotalBytes: null);
 
       final Archive archive = _writtenArchive(book);
 
@@ -353,7 +364,8 @@ void main() {
     // TC-WRT-5 [Scenario/use-case]: binary content goes through untouched
     // rather than being utf8-encoded like the text branch.
     test('TC-WRT-5 [Scenario]: image bytes are copied verbatim', () async {
-      final EpubBook book = await const EpubReader().readBook(_seedArchive());
+      final EpubBook book = await const EpubReader()
+          .readBook(_seedArchive(), maxEntryBytes: null, maxTotalBytes: null);
 
       final Archive archive = _writtenArchive(book);
 
@@ -375,8 +387,10 @@ void main() {
     test(
         'TC-WRT-10 [Equivalence]: a spine with no toc is written without the '
         'attribute', () async {
-      final EpubBook original =
-          await const EpubReader().readBook(_epub3ArchiveWithoutTocOrGuide());
+      final EpubBook original = await const EpubReader().readBook(
+          _epub3ArchiveWithoutTocOrGuide(),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
       final EpubPackage package = original.schema.package;
       expect(package.spine.tableOfContents, isNull);
       expect(package.guide, isNull);
@@ -402,7 +416,8 @@ void main() {
         'TC-WRT-11 [Error guessing]: a content file that is neither text nor '
         'bytes is refused', () async {
       final EpubBook book = _withAllFiles(
-        await const EpubReader().readBook(_seedArchive()),
+        await const EpubReader()
+            .readBook(_seedArchive(), maxEntryBytes: null, maxTotalBytes: null),
         <String, EpubContentFile>{
           'NGE-SEED-unknown.bin': const _UnknownContentFile(),
         },
@@ -425,16 +440,19 @@ void main() {
     test(
         'TC-WRT-6 [Error guessing]: a non-OEBPS content directory writes a '
         'container that points at nothing', () async {
-      final EpubBook book = await const EpubReader().readBook(buildEpubArchive(
-        opfPath: 'content.opf',
-        textEntries: <String, String>{
-          'content.opf': _opf(),
-          'toc.ncx': _ncx,
-          'chapter1.xhtml': seedXhtml('NGE-SEED Chapter One'),
-          'style.css': 'p { color: #123456; } /* NGE-SEED */',
-        },
-        binaryEntries: <String, List<int>>{'cover.png': seedPngBytes()},
-      ));
+      final EpubBook book = await const EpubReader().readBook(
+          buildEpubArchive(
+            opfPath: 'content.opf',
+            textEntries: <String, String>{
+              'content.opf': _opf(),
+              'toc.ncx': _ncx,
+              'chapter1.xhtml': seedXhtml('NGE-SEED Chapter One'),
+              'style.css': 'p { color: #123456; } /* NGE-SEED */',
+            },
+            binaryEntries: <String, List<int>>{'cover.png': seedPngBytes()},
+          ),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
 
       final Archive archive = _writtenArchive(book);
 
@@ -452,8 +470,10 @@ void main() {
     // point, so a book cannot be written and read without the flag flipping.
     void linearityInverts(String itemRef, String spelling, bool isLinear) {
       test('TC-WRT-8 [Equivalence]: spine linear=$spelling inverts', () async {
-        final EpubBook original = await const EpubReader()
-            .readBook(_seedArchive(spineItemRef: itemRef));
+        final EpubBook original = await const EpubReader().readBook(
+            _seedArchive(spineItemRef: itemRef),
+            maxEntryBytes: null,
+            maxTotalBytes: null);
         expect(original.schema.package.spine.items.single.isLinear, isLinear);
 
         final EpubBook reread = await _roundTrip(original);

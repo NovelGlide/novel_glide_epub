@@ -293,6 +293,7 @@ void main() {
       () async {
         final EpubBookRef bookRef = await const EpubReader().openBook(
           _buildRootOpfSubfolderContentEpub(),
+          maxEntryBytes: null,
         );
 
         expect(_navSources(bookRef), <String>[
@@ -327,6 +328,7 @@ void main() {
       () async {
         final EpubBookRef bookRef = await const EpubReader().openBook(
           _buildClassicOebpsEpub(),
+          maxEntryBytes: null,
         );
 
         expect(
@@ -357,6 +359,7 @@ void main() {
       () async {
         final EpubBookRef bookRef = await const EpubReader().openBook(
           _buildNestedOpfDeeperNavEpub(),
+          maxEntryBytes: null,
         );
 
         expect(_navSources(bookRef), <String>[
@@ -415,6 +418,7 @@ void main() {
               'OEBPS/chapter1.xhtml': seedXhtml('NGE-SEED-CH1'),
             },
           ),
+          maxEntryBytes: null,
         );
 
         expect(_navSources(bookRef), <String>['chapter1.xhtml']);

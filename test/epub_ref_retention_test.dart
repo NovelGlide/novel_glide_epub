@@ -76,7 +76,8 @@ void main() {
         .singleWhere(
             (IsolateRef isolate) => isolate.name == Isolate.current.debugName)
         .id!;
-    bookRef = await const EpubReader().openBook(_bookWithCover());
+    bookRef = await const EpubReader()
+        .openBook(_bookWithCover(), maxEntryBytes: null);
   });
 
   tearDownAll(() async {

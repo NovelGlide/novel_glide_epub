@@ -126,8 +126,8 @@ void main() {
     test(
         'TC-RDR-1 [Scenario]: opening a book lifts title and authors from '
         'metadata', () async {
-      final EpubBookRef bookRef =
-          await const EpubReader().openBook(_buildFullBook());
+      final EpubBookRef bookRef = await const EpubReader()
+          .openBook(_buildFullBook(), maxEntryBytes: null);
 
       expect(bookRef.title, 'NGE-SEED Read Book');
       expect(bookRef.authorList,
@@ -154,8 +154,9 @@ void main() {
     test(
         'TC-RDR-2 [Equivalence partitioning]: openBook accepts a Future of '
         'bytes as well as a list', () async {
-      final EpubBookRef fromFuture = await const EpubReader()
-          .openBook(Future<List<int>>.value(_buildFullBook()));
+      final EpubBookRef fromFuture = await const EpubReader().openBook(
+          Future<List<int>>.value(_buildFullBook()),
+          maxEntryBytes: null);
 
       expect(fromFuture.title, 'NGE-SEED Read Book');
     });
@@ -167,6 +168,7 @@ void main() {
         'list', () async {
       final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildBareBook(metadata: '<dc:title>NGE-SEED No Author</dc:title>'),
+        maxEntryBytes: null,
       );
 
       expect(bookRef.title, 'NGE-SEED No Author');
@@ -179,6 +181,7 @@ void main() {
         () async {
       final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildBareBook(metadata: '<dc:creator>NGE-SEED Author</dc:creator>'),
+        maxEntryBytes: null,
       );
 
       expect(bookRef.title, '');
@@ -197,6 +200,7 @@ void main() {
               '<dc:title>NGE-SEED Subtitle</dc:title>'
               '<dc:creator>NGE-SEED Abe</dc:creator>',
         ),
+        maxEntryBytes: null,
       );
 
       expect(bookRef.title, 'NGE-SEED Main');
@@ -213,6 +217,7 @@ void main() {
           metadata: '<dc:title>NGE-SEED Root</dc:title>',
           directory: '',
         ),
+        maxEntryBytes: null,
       );
 
       expect(bookRef.schema.contentDirectoryPath, '');
@@ -227,7 +232,8 @@ void main() {
     test(
         'TC-RDR-4 [Scenario]: reading a book carries metadata and decodes '
         'the cover', () async {
-      final EpubBook book = await const EpubReader().readBook(_buildFullBook());
+      final EpubBook book = await const EpubReader()
+          .readBook(_buildFullBook(), maxEntryBytes: null, maxTotalBytes: null);
 
       expect(book.title, 'NGE-SEED Read Book');
       expect(book.authorList,
@@ -241,7 +247,8 @@ void main() {
     // decoded strings in their own buckets.
     test('TC-RDR-5 [Scenario]: html and css are materialised as decoded text',
         () async {
-      final EpubBook book = await const EpubReader().readBook(_buildFullBook());
+      final EpubBook book = await const EpubReader()
+          .readBook(_buildFullBook(), maxEntryBytes: null, maxTotalBytes: null);
 
       final EpubTextContentFile chapter = book.content.html['chapter1.xhtml']!;
       expect(chapter.content, contains('NGE-SEED-CH1'));
@@ -256,7 +263,8 @@ void main() {
     // raw bytes, images and fonts alike.
     test('TC-RDR-6 [Scenario]: images and fonts are materialised as bytes',
         () async {
-      final EpubBook book = await const EpubReader().readBook(_buildFullBook());
+      final EpubBook book = await const EpubReader()
+          .readBook(_buildFullBook(), maxEntryBytes: null, maxTotalBytes: null);
 
       expect(book.content.images['cover.png']!.content, seedPngBytes());
       expect(book.content.fonts['seed.ttf']!.content, _seedFontBytes);
@@ -279,7 +287,8 @@ void main() {
     test(
         'TC-RDR-7 [Equivalence partitioning]: allFiles unions bucketed and '
         'unbucketed files', () async {
-      final EpubBook book = await const EpubReader().readBook(_buildFullBook());
+      final EpubBook book = await const EpubReader()
+          .readBook(_buildFullBook(), maxEntryBytes: null, maxTotalBytes: null);
 
       expect(
         book.content.allFiles.keys,
@@ -320,7 +329,8 @@ void main() {
     test(
         'TC-RDR-8 [Scenario]: chapters are materialised recursively with '
         'their html', () async {
-      final EpubBook book = await const EpubReader().readBook(_buildFullBook());
+      final EpubBook book = await const EpubReader()
+          .readBook(_buildFullBook(), maxEntryBytes: null, maxTotalBytes: null);
 
       expect(book.chapters, hasLength(1));
       final EpubChapter chapter = book.chapters.single;
@@ -341,8 +351,10 @@ void main() {
     test(
         'TC-RDR-9 [Equivalence partitioning]: readBook accepts a Future of '
         'bytes', () async {
-      final EpubBook book = await const EpubReader()
-          .readBook(Future<List<int>>.value(_buildFullBook()));
+      final EpubBook book = await const EpubReader().readBook(
+          Future<List<int>>.value(_buildFullBook()),
+          maxEntryBytes: null,
+          maxTotalBytes: null);
 
       expect(book.title, 'NGE-SEED Read Book');
     });
@@ -356,7 +368,8 @@ void main() {
     test(
         'TC-RDR-10 [Scenario]: allFiles shares the bucketed instance for '
         'html, css, images and fonts', () async {
-      final EpubBook book = await const EpubReader().readBook(_buildFullBook());
+      final EpubBook book = await const EpubReader()
+          .readBook(_buildFullBook(), maxEntryBytes: null, maxTotalBytes: null);
 
       expect(
         identical(
@@ -394,9 +407,10 @@ void main() {
     test(
         'TC-RDR-14 [Scenario]: readBook carries what openBook reads, key for '
         'key', () async {
-      final EpubBookRef bookRef =
-          await const EpubReader().openBook(_buildFullBook());
-      final EpubBook book = await const EpubReader().readBook(_buildFullBook());
+      final EpubBookRef bookRef = await const EpubReader()
+          .openBook(_buildFullBook(), maxEntryBytes: null);
+      final EpubBook book = await const EpubReader()
+          .readBook(_buildFullBook(), maxEntryBytes: null, maxTotalBytes: null);
 
       expect(book.title, bookRef.title);
       expect(book.authorList, bookRef.authorList);
@@ -418,6 +432,8 @@ void main() {
         'and no cover', () async {
       final EpubBook book = await const EpubReader().readBook(
         _buildBareBook(metadata: '<dc:language>en</dc:language>'),
+        maxEntryBytes: null,
+        maxTotalBytes: null,
       );
 
       expect(book.title, '');
@@ -437,6 +453,8 @@ void main() {
           metadata: '<dc:title>NGE-SEED Escaped</dc:title>',
           chapterHref: 'chapter%20one.xhtml',
         ),
+        maxEntryBytes: null,
+        maxTotalBytes: null,
       );
 
       expect(book.content.html.keys, <String>['chapter one.xhtml']);
@@ -455,8 +473,8 @@ void main() {
     test(
         'TC-RDR-17 [Scenario]: a split chapter keeps the names of its other '
         'parts', () async {
-      final EpubBook book =
-          await const EpubReader().readBook(_buildSplitBook());
+      final EpubBook book = await const EpubReader().readBook(_buildSplitBook(),
+          maxEntryBytes: null, maxTotalBytes: null);
 
       final EpubChapter chapter = book.chapters.single;
       expect(chapter.contentFileName, 'part_split_000.xhtml');
@@ -471,9 +489,10 @@ void main() {
     test(
         'TC-RDR-18 [Error guessing]: the collections a read book holds '
         'cannot be changed', () async {
-      final EpubBook book = await const EpubReader().readBook(_buildFullBook());
-      final EpubBookRef bookRef =
-          await const EpubReader().openBook(_buildFullBook());
+      final EpubBook book = await const EpubReader()
+          .readBook(_buildFullBook(), maxEntryBytes: null, maxTotalBytes: null);
+      final EpubBookRef bookRef = await const EpubReader()
+          .openBook(_buildFullBook(), maxEntryBytes: null);
 
       expect(() => book.authorList.add('NGE-SEED'), throwsUnsupportedError);
       expect(() => book.chapters.clear(), throwsUnsupportedError);

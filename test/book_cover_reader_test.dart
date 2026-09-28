@@ -100,6 +100,7 @@ void main() {
     test('TC-COV-1 [Scenario]: a declared cover decodes to an image', () async {
       final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildCoverBook(metaItems: _coverMeta, coverItems: _coverImageItem),
+        maxEntryBytes: null,
       );
 
       final Image? cover = await bookRef.readCover();
@@ -114,8 +115,8 @@ void main() {
     test(
         'TC-COV-2 [Equivalence partitioning]: a book with no meta items has '
         'no cover', () async {
-      final EpubBookRef bookRef =
-          await const EpubReader().openBook(_buildCoverBook());
+      final EpubBookRef bookRef = await const EpubReader()
+          .openBook(_buildCoverBook(), maxEntryBytes: null);
 
       expect(await bookRef.readCover(), isNull);
     });
@@ -127,6 +128,7 @@ void main() {
         _buildCoverBook(
           metaItems: '<meta name="calibre:series" content="NGE-SEED"/>',
         ),
+        maxEntryBytes: null,
       );
 
       expect(await bookRef.readCover(), isNull);
@@ -138,6 +140,7 @@ void main() {
         () async {
       final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildCoverBook(metaItems: '<meta name="cover" content=""/>'),
+        maxEntryBytes: null,
       );
 
       expect(
@@ -155,6 +158,7 @@ void main() {
         _buildCoverBook(
           metaItems: '<meta name="cover" content="nge-seed-absent"/>',
         ),
+        maxEntryBytes: null,
       );
 
       expect(
@@ -174,6 +178,7 @@ void main() {
           coverItems: '<item id="cover-page" href="cover.xhtml" '
               'media-type="application/xhtml+xml"/>',
         ),
+        maxEntryBytes: null,
       );
 
       expect(
@@ -194,6 +199,7 @@ void main() {
           coverItems: _escapedCoverImageItem,
           imageEntryName: '封面.png',
         ),
+        maxEntryBytes: null,
       );
 
       final Image? cover = await bookRef.readCover();
@@ -213,6 +219,7 @@ void main() {
           metaItems: '<meta name="COVER" content="Cover-IMG"/>',
           coverItems: _coverImageItem,
         ),
+        maxEntryBytes: null,
       );
 
       expect(await bookRef.readCover(), isNotNull);
@@ -231,6 +238,7 @@ void main() {
           coverItems: _coverImageItem,
           includeImageEntry: false,
         ),
+        maxEntryBytes: null,
       );
 
       expect(
@@ -253,6 +261,7 @@ void main() {
             'junk.png': _notAnImage,
           },
         ),
+        maxEntryBytes: null,
       );
 
       expect(await bookRef.readCover(), isNull);
@@ -267,6 +276,7 @@ void main() {
         () async {
       final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildCoverBook(metaItems: _coverMeta, coverItems: _coverImageItem),
+        maxEntryBytes: null,
       );
 
       expect(await bookRef.readCoverBytes(), seedPngBytes());
@@ -297,8 +307,9 @@ void main() {
         'TC-COV-8 [Equivalence partitioning]: the manifest convention '
         '${row[0]} resolves the cover without a cover meta',
         () async {
-          final EpubBookRef bookRef = await const EpubReader()
-              .openBook(_buildCoverBook(coverItems: row[1]));
+          final EpubBookRef bookRef = await const EpubReader().openBook(
+              _buildCoverBook(coverItems: row[1]),
+              maxEntryBytes: null);
 
           expect(await bookRef.readCoverBytes(), seedPngBytes());
         },
@@ -310,8 +321,8 @@ void main() {
     test(
         'TC-COV-9 [Equivalence partitioning]: a book with no cover at all '
         'yields null bytes', () async {
-      final EpubBookRef bookRef =
-          await const EpubReader().openBook(_buildCoverBook());
+      final EpubBookRef bookRef = await const EpubReader()
+          .openBook(_buildCoverBook(), maxEntryBytes: null);
 
       expect(await bookRef.readCoverBytes(), isNull);
     });
@@ -323,6 +334,7 @@ void main() {
         'of throwing', () async {
       final EpubBookRef bookRef = await const EpubReader().openBook(
         _buildCoverBook(metaItems: '<meta name="cover" content=""/>'),
+        maxEntryBytes: null,
       );
 
       expect(await bookRef.readCoverBytes(), isNull);
@@ -337,6 +349,7 @@ void main() {
         _buildCoverBook(
           metaItems: '<meta name="cover" content="nge-seed-absent"/>',
         ),
+        maxEntryBytes: null,
       );
 
       expect(await bookRef.readCoverBytes(), isNull);
@@ -353,6 +366,7 @@ void main() {
           coverItems: '<item id="cover-page" href="cover.xhtml" '
               'media-type="application/xhtml+xml"/>',
         ),
+        maxEntryBytes: null,
       );
 
       expect(await bookRef.readCoverBytes(), isNull);
@@ -371,6 +385,7 @@ void main() {
           coverItems: _coverImageItem,
           includeImageEntry: false,
         ),
+        maxEntryBytes: null,
       );
 
       expect(await bookRef.readCoverBytes(), isNull);
@@ -390,6 +405,7 @@ void main() {
           coverItems: '<item id="illustration" href="cover.png" '
               'media-type="image/png"/>',
         ),
+        maxEntryBytes: null,
       );
 
       expect(await bookRef.readCoverBytes(), isNull);
@@ -415,6 +431,7 @@ void main() {
             coverItems: row[2],
             imageEntryName: '封面.png',
           ),
+          maxEntryBytes: null,
         );
 
         expect(await bookRef.readCoverBytes(), seedPngBytes());
@@ -436,6 +453,7 @@ void main() {
           coverItems: '$manifestCover$_coverImageItem',
           extraImages: <String, List<int>>{'other.png': otherBytes},
         ),
+        maxEntryBytes: null,
       );
       final EpubBookRef dangling = await const EpubReader().openBook(
         _buildCoverBook(
@@ -443,6 +461,7 @@ void main() {
           coverItems: manifestCover,
           extraImages: <String, List<int>>{'other.png': otherBytes},
         ),
+        maxEntryBytes: null,
       );
 
       expect(await both.readCoverBytes(), seedPngBytes());
@@ -462,6 +481,7 @@ void main() {
               '<item id="img-1" href="cover.png" media-type="IMAGE/PNG" '
               'properties="COVER-IMAGE"/>',
         ),
+        maxEntryBytes: null,
       );
 
       expect(await bookRef.readCoverBytes(), seedPngBytes());

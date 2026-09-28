@@ -96,17 +96,18 @@ final class EpubUnsupportedCompressionException extends EpubException {
   const EpubUnsupportedCompressionException(super.message);
 }
 
-/// The ZIP container is past one of the parser's fixed limits: the file's
-/// compressed size, or the number of entries, checked when the book is
-/// opened; or the bytes one entry, or all the entries read from one book,
-/// inflate to, counted when an entry is read. The sizes entries declare are
-/// not held against the limits, so an entry declaring more than they allow
-/// is refused only if it is read.
+/// An entry of the ZIP container inflated past a limit the caller passed:
+/// `maxEntryBytes`, the most one entry may inflate to, or, in one
+/// `readBook`, `maxTotalBytes`, the most its entries may inflate to between
+/// them. Counted as the entry is read; the sizes entries declare are not
+/// held against the limits, so an entry declaring more than they allow is
+/// refused only if it is read. The package sets no limit of its own, so a
+/// caller that passes none never sees this.
 ///
 /// A read is stopped part-way through inflating the entry that crosses the
 /// limit, so a decompression bomb is refused before more than the limit is
-/// held. The file may be a well-formed EPUB that the parser declines to
-/// read.
+/// held. The file may be a well-formed EPUB that the caller's limits
+/// decline.
 final class EpubArchiveTooLargeException extends EpubException {
   const EpubArchiveTooLargeException(super.message);
 }

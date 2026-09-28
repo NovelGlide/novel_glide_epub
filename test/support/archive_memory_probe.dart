@@ -3,8 +3,10 @@
 // before it in the same process could already have raised it.
 //
 // Usage: archive_memory_probe.dart <case> <scratch directory>
-// Builds its fixture first, then prints how many MiB the process's peak
-// memory grew by across the one call the case is about.
+// Builds its fixture first, unless the scratch directory already holds it
+// from an earlier run, then prints how many MiB the process's peak
+// memory grew by across the one call the case is about. `entries:<n>` opens
+// a book of n more entries than its own.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -37,9 +39,13 @@ class _ProbeEntry {
 }
 
 /// [entries] in a ZIP written to [path], a payload at a time, so nothing
-/// close to the data's size is ever held in memory.
-void _writeZip(String path, List<_ProbeEntry> entries) {
-  final RandomAccessFile file = File(path).openSync(mode: FileMode.write);
+/// close to the data's size is ever held in memory, after [gap] bytes that
+/// no entry holds and nothing writes: a hole the file system keeps sparse.
+/// Past 65,535 entries, the count is in a zip64 end record, as a writer
+/// puts it.
+void _writeZip(String path, List<_ProbeEntry> entries, {int gap = 0}) {
+  final RandomAccessFile file = File(path).openSync(mode: FileMode.write)
+    ..setPositionSync(gap);
   final BytesBuilder directory = BytesBuilder(copy: false);
   for (final _ProbeEntry entry in entries) {
     final List<int> name = utf8.encode(entry.name);
@@ -72,14 +78,32 @@ void _writeZip(String path, List<_ProbeEntry> entries) {
   }
   final int directoryOffset = file.positionSync();
   final Uint8List records = directory.takeBytes();
+  file.writeFromSync(records);
+  final bool zip64 = entries.length > 0xFFFF;
+  if (zip64) {
+    final int record = file.positionSync();
+    final ByteData tail = ByteData(56 + 20)
+      ..setUint32(0, 0x06064b50, Endian.little)
+      ..setUint64(4, 44, Endian.little)
+      ..setUint16(12, 45, Endian.little)
+      ..setUint16(14, 45, Endian.little)
+      ..setUint64(24, entries.length, Endian.little)
+      ..setUint64(32, entries.length, Endian.little)
+      ..setUint64(40, records.length, Endian.little)
+      ..setUint64(48, directoryOffset, Endian.little)
+      ..setUint32(56, 0x07064b50, Endian.little)
+      ..setUint64(56 + 8, record, Endian.little)
+      ..setUint32(56 + 16, 1, Endian.little);
+    file.writeFromSync(tail.buffer.asUint8List());
+  }
+  final int count = zip64 ? 0xFFFF : entries.length;
   final ByteData end = ByteData(22)
     ..setUint32(0, 0x06054b50, Endian.little)
-    ..setUint16(8, entries.length, Endian.little)
-    ..setUint16(10, entries.length, Endian.little)
+    ..setUint16(8, count, Endian.little)
+    ..setUint16(10, count, Endian.little)
     ..setUint32(12, records.length, Endian.little)
     ..setUint32(16, directoryOffset, Endian.little);
   file
-    ..writeFromSync(records)
     ..writeFromSync(end.buffer.asUint8List())
     ..closeSync();
 }
@@ -113,8 +137,9 @@ Uint8List _deflatedZeros(int length) {
 }
 
 /// A readable one-chapter book with [audio] as `OEBPS/audio.mp3` in its
-/// manifest.
-List<_ProbeEntry> _bookWithAudio(_ProbeEntry audio) {
+/// manifest, and [extra] entries nothing in it points at.
+List<_ProbeEntry> _bookWithAudio(_ProbeEntry audio,
+    [List<_ProbeEntry> extra = const <_ProbeEntry>[]]) {
   _ProbeEntry text(String name, String content) =>
       _ProbeEntry(name, utf8.encode(content));
   return <_ProbeEntry>[
@@ -149,7 +174,48 @@ List<_ProbeEntry> _bookWithAudio(_ProbeEntry audio) {
             '</ncx>'),
     text('OEBPS/chapter1.xhtml', '<html><body><p>NGE-SEED</p></body></html>'),
     audio,
+    ...extra,
   ];
+}
+
+/// Runs [write] unless [path] already holds the fixture it writes: a run
+/// whose scratch directory holds one from an earlier run builds nothing, so
+/// the peak it reports is the call's alone.
+void _build(String path, void Function() write) {
+  if (!File(path).existsSync()) {
+    write();
+  }
+}
+
+/// The limit on one entry a caller reading untrusted files might pass.
+const int _maxEntryBytes = 256 * _oneMib;
+
+/// An opened book's `audio.mp3`, read as bytes.
+Future<Object?> _readAudio(EpubBookRef bookRef) =>
+    bookRef.content.allFiles['audio.mp3']!.readContentAsBytes();
+
+/// A book whose audio entry declares 1 KiB and inflates to [length] zeros,
+/// opened from [path] with each entry held to [_maxEntryBytes].
+Future<EpubBookRef> _openBomb(String path, int length) async {
+  _build(
+      path,
+      () => _writeZip(
+          path,
+          _bookWithAudio(_ProbeEntry('OEBPS/audio.mp3', _deflatedZeros(length),
+              method: 8, uncompressedSize: 1024))));
+  return const EpubReader().openBookFile(path, maxEntryBytes: _maxEntryBytes);
+}
+
+/// A book whose 200 MiB stored audio entry holds random bytes, opened from
+/// [path] with each entry held to [maxEntryBytes].
+Future<EpubBookRef> _openBigAudio(String path, int? maxEntryBytes) {
+  _build(
+      path,
+      () => _writeZip(
+          path,
+          _bookWithAudio(
+              _ProbeEntry('OEBPS/audio.mp3', _randomMib(), repeat: 200))));
+  return const EpubReader().openBookFile(path, maxEntryBytes: maxEntryBytes);
 }
 
 /// 4096 central-directory records written to [path], every one of an empty
@@ -177,51 +243,133 @@ void _writeSharedLocalHeaderZip(String path) {
   File(path).writeAsBytesSync(bytes);
 }
 
-/// The call [probeCase] measures, its fixture already built at [path].
+/// [records] central-directory records written to [path], and nothing else
+/// but the one empty local header they all point at: the smallest file that
+/// opens to that many entries. Each record is 46 bytes and a distinct name
+/// of at most five digits, and stores nothing.
+void _writeRecordsOnlyZip(String path, int records) {
+  final RandomAccessFile file = File(path).openSync(mode: FileMode.write);
+  file.writeFromSync((ByteData(30)
+        ..setUint32(0, 0x04034b50, Endian.little)
+        ..setUint16(4, 20, Endian.little))
+      .buffer
+      .asUint8List());
+  final BytesBuilder block = BytesBuilder(copy: false);
+  for (int i = 0; i < records; i++) {
+    final List<int> name = utf8.encode('$i');
+    block
+      ..add((ByteData(46)
+            ..setUint32(0, 0x02014b50, Endian.little)
+            ..setUint16(4, 20, Endian.little)
+            ..setUint16(6, 20, Endian.little)
+            ..setUint16(28, name.length, Endian.little))
+          .buffer
+          .asUint8List())
+      ..add(name);
+    if (block.length >= _oneMib) {
+      file.writeFromSync(block.takeBytes());
+    }
+  }
+  file.writeFromSync(block.takeBytes());
+  final int directoryLength = file.positionSync() - 30;
+  file
+    ..writeFromSync((ByteData(22)
+          ..setUint32(0, 0x06054b50, Endian.little)
+          ..setUint16(8, records & 0xFFFF, Endian.little)
+          ..setUint16(10, records & 0xFFFF, Endian.little)
+          ..setUint32(12, directoryLength, Endian.little)
+          ..setUint32(16, 30, Endian.little))
+        .buffer
+        .asUint8List())
+    ..closeSync();
+}
+
+/// The call [probeCase] measures, its fixture built at [path] first unless
+/// it is already there.
 Future<Future<Object?> Function()> _prepare(
     String probeCase, String path) async {
-  switch (probeCase) {
+  switch (probeCase.split(':')) {
     // A 128 MiB stored entry, opened from its file.
-    case 'file':
-      _writeZip(
-          path, <_ProbeEntry>[_ProbeEntry('x', _randomMib(), repeat: 128)]);
-      return () => const EpubReader().openBookFile(path);
+    case <String>['file']:
+      _build(
+          path,
+          () => _writeZip(path,
+              <_ProbeEntry>[_ProbeEntry('x', _randomMib(), repeat: 128)]));
+      return () => const EpubReader().openBookFile(path, maxEntryBytes: null);
+    // A readable book after a 1.5 GiB hole, opened from its file.
+    case <String>['large']:
+      _build(
+          path,
+          () => _writeZip(
+              path,
+              _bookWithAudio(
+                  _ProbeEntry('OEBPS/audio.mp3', utf8.encode('NGE-SEED'))),
+              gap: 1536 * _oneMib));
+      return () => const EpubReader().openBookFile(path, maxEntryBytes: null);
+    // A readable book with n more one-byte entries, opened from its file.
+    case <String>['entries', final String count]:
+      _build(
+          path,
+          () => _writeZip(
+              path,
+              _bookWithAudio(
+                  _ProbeEntry('OEBPS/audio.mp3', utf8.encode('NGE-SEED')),
+                  <_ProbeEntry>[
+                    for (int i = 0; i < int.parse(count); i++)
+                      _ProbeEntry('OEBPS/extra/$i.txt', const <int>[0x4E]),
+                  ])));
+      return () => const EpubReader().openBookFile(path, maxEntryBytes: null);
+    // n records and nothing else, opened from its file.
+    case <String>['records', final String count]:
+      _build(path, () => _writeRecordsOnlyZip(path, int.parse(count)));
+      return () => const EpubReader().openBookFile(path, maxEntryBytes: null);
     // 4096 records sharing one 128 KiB local header, opened from its file.
-    case 'shared':
-      _writeSharedLocalHeaderZip(path);
-      return () => const EpubReader().openBookFile(path);
+    case <String>['shared']:
+      _build(path, () => _writeSharedLocalHeaderZip(path));
+      return () => const EpubReader().openBookFile(path, maxEntryBytes: null);
     // An audio file declaring 1 KiB and inflating to 1 GiB of zeros, read as
-    // bytes from an opened book.
-    case 'bomb':
-      _writeZip(
-          path,
-          _bookWithAudio(_ProbeEntry(
-              'OEBPS/audio.mp3', _deflatedZeros(1024 * _oneMib),
-              method: 8, uncompressedSize: 1024)));
-      final EpubBookRef bookRef = await const EpubReader().openBookFile(path);
-      return () => bookRef.content.allFiles['audio.mp3']!.readContentAsBytes();
+    // bytes from a book opened with a 256 MiB limit.
+    case <String>['bomb']:
+      final EpubBookRef bookRef = await _openBomb(path, 1024 * _oneMib);
+      return () => _readAudio(bookRef);
+    // The same, inflating to 4 GiB.
+    case <String>['bomb4g']:
+      final EpubBookRef bookRef = await _openBomb(path, 4096 * _oneMib);
+      return () => _readAudio(bookRef);
     // A 200 MiB stored audio file, read as bytes five times in a row from
-    // one opened book, each read's bytes dropped before the next.
-    case 'reread':
-      _writeZip(
-          path,
-          _bookWithAudio(
-              _ProbeEntry('OEBPS/audio.mp3', _randomMib(), repeat: 200)));
-      final EpubBookRef bookRef = await const EpubReader().openBookFile(path);
+    // one book opened with a 256 MiB limit, each read's bytes dropped before
+    // the next.
+    case <String>['reread']:
+      final EpubBookRef bookRef = await _openBigAudio(path, _maxEntryBytes);
       return () async {
         for (int i = 0; i < 5; i++) {
-          await bookRef.content.allFiles['audio.mp3']!.readContentAsBytes();
+          await _readAudio(bookRef);
         }
         return null;
       };
-    // A 200 MiB stored audio file, read as bytes from an opened book.
-    default:
-      _writeZip(
+    // A 200 MiB stored audio file, read as bytes from a book opened with no
+    // limit.
+    case <String>['read-unlimited']:
+      final EpubBookRef bookRef = await _openBigAudio(path, null);
+      return () => _readAudio(bookRef);
+    // A 200 MiB audio file of deflated zeros, declaring its size, read as
+    // bytes from a book opened with no limit.
+    case <String>['read-deflated-unlimited']:
+      _build(
           path,
-          _bookWithAudio(
-              _ProbeEntry('OEBPS/audio.mp3', _randomMib(), repeat: 200)));
-      final EpubBookRef bookRef = await const EpubReader().openBookFile(path);
-      return () => bookRef.content.allFiles['audio.mp3']!.readContentAsBytes();
+          () => _writeZip(
+              path,
+              _bookWithAudio(_ProbeEntry(
+                  'OEBPS/audio.mp3', _deflatedZeros(200 * _oneMib),
+                  method: 8, uncompressedSize: 200 * _oneMib))));
+      final EpubBookRef bookRef =
+          await const EpubReader().openBookFile(path, maxEntryBytes: null);
+      return () => _readAudio(bookRef);
+    // A 200 MiB stored audio file, read as bytes from a book opened with a
+    // 256 MiB limit.
+    default:
+      final EpubBookRef bookRef = await _openBigAudio(path, _maxEntryBytes);
+      return () => _readAudio(bookRef);
   }
 }
 

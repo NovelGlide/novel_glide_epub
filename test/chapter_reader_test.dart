@@ -128,6 +128,7 @@ void main() {
           navItems: '<li><span>NGE-SEED Heading</span></li>'
               '<li><a href="$_rawChapter">NGE-SEED 第一章</a></li>',
         ),
+        maxEntryBytes: null,
       );
 
       final List<EpubChapterRef> chapters = await bookRef.getChapters();
@@ -164,7 +165,8 @@ void main() {
           'OEBPS/chapter1.xhtml': seedXhtml('NGE-SEED-CH1'),
         },
       );
-      final EpubBookRef bookRef = await const EpubReader().openBook(bytes);
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(bytes, maxEntryBytes: null);
 
       expect(
         bookRef.getChapters,
@@ -202,7 +204,8 @@ void main() {
           'OEBPS/archived_chapter1.xhtml': seedXhtml('NGE-SEED-ARCHIVED'),
         },
       );
-      final EpubBookRef bookRef = await const EpubReader().openBook(bytes);
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(bytes, maxEntryBytes: null);
       final EpubChapterRef chapter = (await bookRef.getChapters()).single;
 
       expect(chapter.otherContentFileNames, isEmpty);
@@ -226,6 +229,7 @@ void main() {
           'find the chapter', () async {
         final EpubBookRef bookRef = await const EpubReader().openBook(
           _buildEpub2Book(manifestHref: row[0], ncxSrc: row[1]),
+          maxEntryBytes: null,
         );
 
         final EpubChapterRef chapter = (await bookRef.getChapters()).single;
@@ -253,6 +257,7 @@ void main() {
             manifestHref: row[0],
             navItems: '<li><a href="${row[1]}">NGE-SEED 第一章</a></li>',
           ),
+          maxEntryBytes: null,
         );
 
         final EpubChapterRef chapter = (await bookRef.getChapters()).single;
@@ -297,7 +302,8 @@ void main() {
           'OEBPS/chapter2.xhtml': seedXhtml('NGE-SEED-CH2'),
         },
       );
-      final EpubBookRef bookRef = await const EpubReader().openBook(bytes);
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(bytes, maxEntryBytes: null);
 
       final EpubChapterRef chapter = (await bookRef.getChapters()).single;
 
@@ -351,7 +357,8 @@ void main() {
           'OEBPS/part_split_001.xhtml': seedXhtml('NGE-SEED-SPLIT-001'),
         },
       );
-      final EpubBookRef bookRef = await const EpubReader().openBook(bytes);
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(bytes, maxEntryBytes: null);
 
       final EpubChapterRef chapter = (await bookRef.getChapters()).single;
 
@@ -390,6 +397,7 @@ void main() {
           manifestHref: _rawChapter,
           ncxSrc: 'ghost%20page.xhtml#frag',
         ),
+        maxEntryBytes: null,
       );
 
       expect(

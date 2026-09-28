@@ -13,8 +13,8 @@ class RootFilePathReader {
   Future<String?> getRootFilePath(Archive epubArchive) async {
     const String epubContainerFilePath = 'META-INF/container.xml';
 
-    final ArchiveFile? containerFileEntry = epubArchive.files.firstWhereOrNull(
-        (ArchiveFile file) => file.name == epubContainerFilePath);
+    final ArchiveFile? containerFileEntry =
+        epubArchive.findFile(epubContainerFilePath);
     if (containerFileEntry == null) {
       throw const EpubMissingArchiveEntryException(
           'EPUB parsing error: $epubContainerFilePath file not found in archive.');
