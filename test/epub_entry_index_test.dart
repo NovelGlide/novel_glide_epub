@@ -421,12 +421,18 @@ void main() {
       final EpubBookRef bookRef =
           await _reader.openBook(zip, maxEntryBytes: null);
 
+      // Stopped by the inflater: what it had inflated by then, far short of
+      // the 8 MiB a read checked only at its end would have reached.
       await expectLater(
           bookRef.readEntry('extras/bomb.bin', maxBytes: 1024),
           throwsA(isA<EpubArchiveTooLargeException>().having(
-              (EpubArchiveTooLargeException e) => e.message,
-              'message',
-              contains('allows it at most 1024'))));
+              (EpubArchiveTooLargeException e) => int.parse(
+                  RegExp(r'^An entry inflates to at least (\d+) bytes; the '
+                          r'read allows it at most 1024\.$')
+                      .firstMatch(e.message)!
+                      .group(1)!),
+              'bytes inflated when stopped',
+              inInclusiveRange(1025, 1024 + 64 * 1024))));
       expect(await bookRef.readEntry('extras/bomb.bin'), hasLength(8 << 20));
     });
 
