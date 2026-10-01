@@ -71,26 +71,40 @@ void main() {
   });
 
   // TC-MEM-7 [Scenario]: what opening holds for the central directory grows
-  // with its records, and only with them: about half a KiB for each, the
-  // record parsed, its entry, and its name. 100,000 one-byte entries, 11 MiB
-  // of file, measured at 52 MiB, may grow the peak by 100 MiB. Parsing each
-  // record's local header, or holding each record twice, would take it past.
+  // with the book's `META-INF/` entries and its manifest, not with the
+  // records the directory has. A book with 100,000 one-byte entries its
+  // manifest does not list, 11 MiB of file, may grow the peak by 16 MiB,
+  // measured at 3; holding a record for each, about half a KiB apiece, took
+  // it to 52.
   test(
-      'TC-MEM-7 [Scenario]: opening 100,000 entries holds about half a KiB '
-      'for each', () async {
-    expect(await peakGrowthMib('entries:100000'), lessThan(100));
+      'TC-MEM-7 [Scenario]: opening a book with 100,000 entries it does not '
+      'list holds none of them', () async {
+    expect(await peakGrowthMib('entries:100000'), lessThan(16));
   });
 
-  // TC-MEM-9 [Scenario]: a file's size bounds what opening it holds. A
-  // directory record takes 46 bytes and a name, and records storing nothing
-  // pass the overlap check, so a file of nothing but records opens to an
-  // entry for about every 50 bytes. 100,000 of them, 4.9 MiB of file, may
-  // grow the peak by 50 MiB, ten times the file.
+  // TC-MEM-9 [Scenario]: a file of nothing but records holds nothing for
+  // them. A directory record takes 46 bytes and a name, and records storing
+  // nothing pass the overlap check, so 100,000 of them take 4.9 MiB of file.
+  // Opening it reads every record, keeps none, and fails on the container
+  // it does not have; the peak may grow by 16 MiB, measured at 3.
   test(
       'TC-MEM-9 [Scenario]: opening a file of nothing but 100,000 records '
-      'holds at most ten times its size', () async {
-    expect(await peakGrowthMib('records:100000'), lessThan(50));
+      'holds none of them', () async {
+    expect(await peakGrowthMib('records:100000'), lessThan(16));
   });
+
+  // TC-MEM-11 [Scenario]: what opening a readable book holds stays flat
+  // however many records its directory has besides its own. 4,096, 100,000
+  // and 1,000,000 zero-length records the manifest does not list, up to
+  // 50 MiB of directory, may each grow the peak by 16 MiB, all measured at
+  // 2 to 3; holding a record for each took the last two to 53 and 281.
+  for (final int records in <int>[4096, 100000, 1000000]) {
+    test(
+        'TC-MEM-11 [Scenario]: opening a book with $records more records '
+        'holds none of them', () async {
+      expect(await peakGrowthMib('book-records:$records'), lessThan(16));
+    }, timeout: const Timeout(Duration(minutes: 2)));
+  }
 
   // TC-MEM-4 [Scenario]: opening reads no entry's local header. 4096
   // records sharing one whose name and extra field are 64 KiB each take a

@@ -5,8 +5,10 @@
 // Usage: archive_memory_probe.dart <case> <scratch directory>
 // Builds its fixture first, unless the scratch directory already holds it
 // from an earlier run, then prints how many MiB the process's peak
-// memory grew by across the one call the case is about. `entries:<n>` opens
-// a book of n more entries than its own.
+// memory grew by across the one call the case is about, and on stderr how
+// many milliseconds the call took. `entries:<n>` opens a book of n more
+// entries than its own; `book-records:<n>`, a book of n more zero-length
+// records its manifest does not list.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -284,6 +286,50 @@ void _writeRecordsOnlyZip(String path, int records) {
     ..closeSync();
 }
 
+/// The readable book of [_bookWithAudio] written to [path], its directory
+/// followed by [records] more records the manifest does not list: each 46
+/// bytes and a distinct name of at most twelve, `x/` and up to seven digits,
+/// storing nothing, and pointing at the book's first local header, which no
+/// read of them reaches. The records are written a MiB at a time, so a
+/// million cost about 50 MiB of file and nothing close to it in memory.
+void _writeBookWithRecords(String path, int records) {
+  _writeZip(path,
+      _bookWithAudio(_ProbeEntry('OEBPS/audio.mp3', utf8.encode('NGE-SEED'))));
+  final Uint8List book = File(path).readAsBytesSync();
+  final ByteData end = ByteData.sublistView(book, book.length - 22);
+  final int directoryOffset = end.getUint32(16, Endian.little);
+  final RandomAccessFile file = File(path).openSync(mode: FileMode.write)
+    ..writeFromSync(book, 0, book.length - 22);
+  final BytesBuilder block = BytesBuilder(copy: false);
+  for (int i = 0; i < records; i++) {
+    final List<int> name = utf8.encode('x/$i');
+    block
+      ..add((ByteData(46)
+            ..setUint32(0, 0x02014b50, Endian.little)
+            ..setUint16(4, 20, Endian.little)
+            ..setUint16(6, 20, Endian.little)
+            ..setUint16(28, name.length, Endian.little))
+          .buffer
+          .asUint8List())
+      ..add(name);
+    if (block.length >= _oneMib) {
+      file.writeFromSync(block.takeBytes());
+    }
+  }
+  file.writeFromSync(block.takeBytes());
+  final int directoryLength = file.positionSync() - directoryOffset;
+  file
+    ..writeFromSync((ByteData(22)
+          ..setUint32(0, 0x06054b50, Endian.little)
+          ..setUint16(8, (6 + records) & 0xFFFF, Endian.little)
+          ..setUint16(10, (6 + records) & 0xFFFF, Endian.little)
+          ..setUint32(12, directoryLength, Endian.little)
+          ..setUint32(16, directoryOffset, Endian.little))
+        .buffer
+        .asUint8List())
+    ..closeSync();
+}
+
 /// The call [probeCase] measures, its fixture built at [path] first unless
 /// it is already there.
 Future<Future<Object?> Function()> _prepare(
@@ -318,6 +364,11 @@ Future<Future<Object?> Function()> _prepare(
                     for (int i = 0; i < int.parse(count); i++)
                       _ProbeEntry('OEBPS/extra/$i.txt', const <int>[0x4E]),
                   ])));
+      return () => const EpubReader().openBookFile(path, maxEntryBytes: null);
+    // A readable book with n more zero-length records its manifest does not
+    // list, opened from its file.
+    case <String>['book-records', final String count]:
+      _build(path, () => _writeBookWithRecords(path, int.parse(count)));
       return () => const EpubReader().openBookFile(path, maxEntryBytes: null);
     // n records and nothing else, opened from its file.
     case <String>['records', final String count]:
@@ -377,6 +428,7 @@ Future<void> main(List<String> args) async {
   final Future<Object?> Function() measured =
       await _prepare(args[0], '${args[1]}/probe.zip');
   final int before = ProcessInfo.maxRss;
+  final Stopwatch elapsed = Stopwatch()..start();
   try {
     await measured();
   } on EpubMissingArchiveEntryException catch (expected) {
@@ -386,5 +438,6 @@ Future<void> main(List<String> args) async {
     // The bomb, refused part-way.
     stderr.writeln(expected);
   }
+  stderr.writeln('elapsed-ms ${elapsed.elapsedMilliseconds}');
   stdout.writeln((ProcessInfo.maxRss - before) ~/ _oneMib);
 }

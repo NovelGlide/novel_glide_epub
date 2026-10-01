@@ -822,9 +822,6 @@ void main() {
   });
 
   group('the central directory, however many entries', () {
-    /// The entries `_craftBook` writes for a book of its own.
-    const int bookEntries = 5;
-
     /// A readable book with [count] more entries, each `NGE-SEED-<i>.txt`
     /// holding `NGE-SEED-<i>`.
     Uint8List bookWith(int count) => _craftBook(
@@ -837,26 +834,37 @@ void main() {
           ],
         );
 
-    /// How many entries [zip] opens with.
-    Future<int> entriesOf(List<int> zip) async =>
-        (await reader.openBook(zip, maxEntryBytes: _maxEntryBytes))
-            .epubArchive()
-            .length;
+    /// The entries the book `_craftBook` writes keeps when it is opened.
+    const Set<String> ownEntries = <String>{
+      'mimetype',
+      'META-INF/container.xml',
+      'OEBPS/content.opf',
+      'OEBPS/toc.ncx',
+      _chapterPath,
+    };
 
-    List<int> read(EpubBookRef bookRef, String name) =>
-        bookRef.epubArchive().findFile(name)!.content as List<int>;
+    /// The last of the 50 entries `bookWith(50)` adds, read from [zip] once
+    /// it is open: found only by a pass over the directory that reads every
+    /// record before it.
+    Future<List<int>?> lastOf(List<int> zip) async =>
+        (await reader.openBook(zip, maxEntryBytes: _maxEntryBytes))
+            .readEntry('NGE-SEED-49.txt');
+
+    Future<List<int>?> read(EpubBookRef bookRef, String name) =>
+        bookRef.readEntry(name);
 
     // TC-LIM-59 [Scenario]: the package sets no limit on the number of
-    // entries. A book of 10,000 more than its own opens with every one, and
-    // an entry deep in the directory reads.
+    // entries. A book of 10,000 more than its own opens keeping only its
+    // own, and an entry deep in the directory reads.
     test(
         'TC-LIM-59 [Scenario]: a book of 10,000 entries opens, and an entry '
         'of them reads', () async {
       final EpubBookRef bookRef = await reader.openBook(bookWith(_manyEntries),
           maxEntryBytes: _maxEntryBytes);
 
-      expect(bookRef.epubArchive().length, bookEntries + _manyEntries);
-      expect(read(bookRef, 'NGE-SEED-7777.txt'), utf8.encode('NGE-SEED-7777'));
+      expect(bookRef.knownEntrySizes.keys, unorderedEquals(ownEntries));
+      expect(await read(bookRef, 'NGE-SEED-7777.txt'),
+          utf8.encode('NGE-SEED-7777'));
     });
 
     // TC-LIM-25 [Error guessing]: the entries are taken from the central
@@ -871,7 +879,7 @@ void main() {
         ..setUint16(
             zip.length - _endOfCentralDirectoryLength + 10, 1, Endian.little);
 
-      expect(await entriesOf(zip), bookEntries + 50);
+      expect(await lastOf(zip), utf8.encode('NGE-SEED-49'));
     });
 
     // TC-LIM-26 [Equivalence partitioning]: a zip64 end record moves the
@@ -879,8 +887,8 @@ void main() {
     // follows it there.
     test('TC-LIM-26 [EP]: behind a zip64 end record, every record is read',
         () async {
-      expect(
-          await entriesOf(_withZip64EndRecord(bookWith(50))), bookEntries + 50);
+      expect(await lastOf(_withZip64EndRecord(bookWith(50))),
+          utf8.encode('NGE-SEED-49'));
     });
 
     // TC-LIM-27 [Error guessing]: an end record marked zip64 with no zip64
@@ -893,7 +901,7 @@ void main() {
       ByteData.sublistView(zip).setUint16(
           zip.length - _endOfCentralDirectoryLength + 8, 0xFFFF, Endian.little);
 
-      expect(await entriesOf(zip), bookEntries + 50);
+      expect(await lastOf(zip), utf8.encode('NGE-SEED-49'));
     });
 
     // TC-LIM-28 [Error guessing]: bytes with no end record have no directory
@@ -921,8 +929,9 @@ void main() {
           _withRecordTrailers(bookWith(50), extraLength: 4, commentLength: 3),
           maxEntryBytes: _maxEntryBytes);
 
-      expect(bookRef.epubArchive().length, bookEntries + 50);
-      expect(read(bookRef, 'NGE-SEED-49.txt'), utf8.encode('NGE-SEED-49'));
+      expect(bookRef.knownEntrySizes.keys, unorderedEquals(ownEntries));
+      expect(
+          await read(bookRef, 'NGE-SEED-49.txt'), utf8.encode('NGE-SEED-49'));
     });
 
     // TC-LIM-30 [Error guessing]: an end record at the very first byte, with
@@ -939,7 +948,7 @@ void main() {
       ) = _bodyAt(bookWith(50), _endOfCentralDirectoryLength);
 
       expect(
-          await entriesOf(<int>[
+          await lastOf(<int>[
             ..._endOfCentralDirectory(
               entryCount: entryCount,
               centralDirectoryLength: directoryLength,
@@ -947,7 +956,7 @@ void main() {
             ),
             ...body,
           ]),
-          bookEntries + 50);
+          utf8.encode('NGE-SEED-49'));
     });
 
     // TC-LIM-66 [Boundary]: a central directory at the very first byte, the
@@ -962,7 +971,7 @@ void main() {
       final int localsLength = moved.directoryOffset - directoryLength;
 
       expect(
-          await entriesOf(<int>[
+          await lastOf(<int>[
             ...moved.body.sublist(localsLength),
             ...moved.body.sublist(0, localsLength),
             ..._endOfCentralDirectory(
@@ -971,7 +980,7 @@ void main() {
               centralDirectoryOffset: 0,
             ),
           ]),
-          bookEntries + 50);
+          utf8.encode('NGE-SEED-49'));
     });
 
     // TC-LIM-31 [Error guessing]: a zip64 locator at the very first byte,
@@ -1005,8 +1014,8 @@ void main() {
         ..setUint64(zip64Record + 40, directoryLength, Endian.little)
         ..setUint64(zip64Record + 48, directoryOffset, Endian.little);
 
-      expect(await entriesOf(<int>[...head.buffer.asUint8List(), ...body]),
-          bookEntries + 50);
+      expect(await lastOf(<int>[...head.buffer.asUint8List(), ...body]),
+          utf8.encode('NGE-SEED-49'));
     });
 
     // TC-LIM-41 [Boundary]: a zip64 record at the very first byte, then the
@@ -1041,12 +1050,12 @@ void main() {
         ..setUint32(20 + 16, 0xFFFFFFFF, Endian.little);
 
       expect(
-          await entriesOf(<int>[
+          await lastOf(<int>[
             ...zip64Record.buffer.asUint8List(),
             ...body,
             ...tail.buffer.asUint8List(),
           ]),
-          bookEntries + 50);
+          utf8.encode('NGE-SEED-49'));
     });
 
     // TC-LIM-32 [Equivalence partitioning]: any one of the end record's four
@@ -1069,7 +1078,8 @@ void main() {
       test(
           'TC-LIM-32 [EP]: an end record whose ${marker.key} alone marks '
           'zip64 has the zip64 record read', () async {
-        expect(await entriesOf(marker.value(bookWith(50))), bookEntries + 50);
+        expect(await lastOf(marker.value(bookWith(50))),
+            utf8.encode('NGE-SEED-49'));
       });
     }
   });
@@ -1085,8 +1095,8 @@ void main() {
             ),
             maxEntryBytes: _maxEntryBytes);
 
-    List<int> read(EpubBookRef bookRef, String name) =>
-        bookRef.epubArchive().findFile(name)!.content as List<int>;
+    Future<List<int>?> read(EpubBookRef bookRef, String name) =>
+        bookRef.readEntry(name);
 
     /// A readable book whose manifest also lists [listed], which reading it
     /// whole reads with the rest.
@@ -1111,12 +1121,16 @@ void main() {
               _CraftedZipEntry.stored('OEBPS/$name.bin', const <int>[]),
           ]),
           maxEntryBytes: _maxEntryBytes);
-      final int readWhole = <String>[
+      final List<String> names = <String>[
         'META-INF/container.xml',
         'OEBPS/content.opf',
         'OEBPS/toc.ncx',
         _chapterPath,
-      ].fold(0, (int sum, String name) => sum + read(opened, name).length);
+      ];
+      int readWhole = 0;
+      for (final String name in names) {
+        readWhole += (await read(opened, name))!.length;
+      }
       restLength = _maxTotalBytes - _maxEntryBytes - readWhole;
       restDeflated = _rawDeflateOf(restLength);
     });
@@ -1160,7 +1174,7 @@ void main() {
               .single
               .htmlContent,
           _chapterXhtml);
-      expect(() => read(bookRef, 'OEBPS/film.bin'), _throwsTooLarge);
+      await expectLater(read(bookRef, 'OEBPS/film.bin'), _throwsTooLarge);
     });
 
     // TC-LIM-60 [Scenario]: with no limit passed, nothing stops an entry. The
@@ -1179,7 +1193,7 @@ void main() {
             ],
           ),
           maxEntryBytes: null);
-      expect(read(bookRef, 'OEBPS/film.bin'), hasLength(300 * _oneMib));
+      expect(await read(bookRef, 'OEBPS/film.bin'), hasLength(300 * _oneMib));
 
       final EpubBook book = await reader.readBook(
           bookListing(<_CraftedZipEntry>[
@@ -1202,14 +1216,14 @@ void main() {
     final Map<String, _CraftedZipEntry> oneByteEntries =
         <String, _CraftedZipEntry>{
       'stored': const _CraftedZipEntry(
-        name: 'big.bin',
+        name: 'OEBPS/big.bin',
         method: _storeMethod,
         declaredUncompressedSize: 0,
         payload: <int>[0x4E],
         zip64UncompressedSize: 1 << 40,
       ),
       'deflated': _CraftedZipEntry(
-        name: 'big.bin',
+        name: 'OEBPS/big.bin',
         method: _deflateMethod,
         declaredUncompressedSize: 0,
         payload: _rawDeflateOf(1, block: Uint8List.fromList(<int>[0x4E])),
@@ -1226,12 +1240,12 @@ void main() {
               _craftBook(
                 chapter: _CraftedZipEntry.stored(
                     _chapterPath, utf8.encode(_chapterXhtml)),
-                extra: <_CraftedZipEntry>[entry.value],
+                listed: <_CraftedZipEntry>[entry.value],
               ),
               maxEntryBytes: limit);
 
-          expect(bookRef.epubArchive().findFile('big.bin')!.size, 1 << 40);
-          expect(read(bookRef, 'big.bin'), <int>[0x4E]);
+          expect(bookRef.knownEntrySizes['OEBPS/big.bin'], 1 << 40);
+          expect(await read(bookRef, 'OEBPS/big.bin'), <int>[0x4E]);
         });
       }
     }
@@ -1261,7 +1275,7 @@ void main() {
           ),
           maxEntryBytes: _maxEntryBytes);
 
-      expect(() => read(bookRef, 'big.bin'), _throwsTooLarge);
+      await expectLater(read(bookRef, 'big.bin'), _throwsTooLarge);
     });
 
     // TC-LIM-10 [Boundary]: entries each inside the per-entry limit whose
@@ -1277,7 +1291,7 @@ void main() {
       ]);
 
       for (int i = 0; i < 3; i++) {
-        expect(read(bookRef, 'part$i.bin'), isEmpty);
+        expect(await read(bookRef, 'part$i.bin'), isEmpty);
       }
     });
 
@@ -1294,7 +1308,7 @@ void main() {
             declaredUncompressedSize: 1024),
       ]);
 
-      expect(() => read(bookRef, 'liar.bin'), _throwsTooLarge);
+      await expectLater(read(bookRef, 'liar.bin'), _throwsTooLarge);
     });
 
     // TC-LIM-13 [Boundary]: inflating to exactly the per-entry limit is
@@ -1307,7 +1321,7 @@ void main() {
             declaredUncompressedSize: _maxEntryBytes),
       ]);
 
-      expect(read(bookRef, 'atlimit.bin'), hasLength(_maxEntryBytes));
+      expect(await read(bookRef, 'atlimit.bin'), hasLength(_maxEntryBytes));
     });
 
     // TC-LIM-14 [Error guessing]: the canonical bomb, zeros declaring 1 KiB
@@ -1326,7 +1340,7 @@ void main() {
 
       final EpubBookRef bookRef =
           await reader.openBook(book, maxEntryBytes: _maxEntryBytes);
-      expect(() => read(bookRef, _chapterPath), _throwsTooLarge);
+      await expectLater(read(bookRef, _chapterPath), _throwsTooLarge);
       expect(
           reader.readBook(book,
               maxEntryBytes: _maxEntryBytes, maxTotalBytes: _maxTotalBytes),
@@ -1349,10 +1363,10 @@ void main() {
             declaredUncompressedSize: 1024),
       ]);
 
-      expect(read(bookRef, 'a.bin'), hasLength(_maxEntryBytes));
-      expect(read(bookRef, 'b.bin'), hasLength(200 * _oneMib));
-      expect(read(bookRef, 'c.bin'), hasLength(200 * _oneMib));
-      expect(read(bookRef, 'a.bin'), hasLength(_maxEntryBytes));
+      expect(await read(bookRef, 'a.bin'), hasLength(_maxEntryBytes));
+      expect(await read(bookRef, 'b.bin'), hasLength(200 * _oneMib));
+      expect(await read(bookRef, 'c.bin'), hasLength(200 * _oneMib));
+      expect(await read(bookRef, 'a.bin'), hasLength(_maxEntryBytes));
     });
 
     // TC-LIM-16 [Boundary]: reading a book whole, whose entries inflate to
@@ -1390,7 +1404,7 @@ void main() {
         ),
       ]);
 
-      expect(() => read(bookRef, 'liar.bin'), _throwsTooLarge);
+      await expectLater(read(bookRef, 'liar.bin'), _throwsTooLarge);
     });
 
     // TC-LIM-18 [Boundary]: reading a book whole one byte past the
@@ -1418,9 +1432,9 @@ void main() {
 
       final EpubBookRef bookRef =
           await reader.openBook(book, maxEntryBytes: _maxEntryBytes);
-      expect(read(bookRef, 'OEBPS/half.bin'), hasLength(_maxEntryBytes));
-      expect(read(bookRef, 'OEBPS/rest.bin'), hasLength(restLength));
-      expect(read(bookRef, 'OEBPS/one.bin'), <int>[0x4E]);
+      expect(await read(bookRef, 'OEBPS/half.bin'), hasLength(_maxEntryBytes));
+      expect(await read(bookRef, 'OEBPS/rest.bin'), hasLength(restLength));
+      expect(await read(bookRef, 'OEBPS/one.bin'), <int>[0x4E]);
     });
 
     // TC-LIM-65 [Scenario]: with no limits passed, a book read whole is not
@@ -1465,8 +1479,9 @@ void main() {
 
     /// A readable book whose chapter and cover each hold [length] bytes or
     /// more: the chapter padded with text, the cover with bytes after the
-    /// image's end, which decoders ignore. Its own documents stay under
-    /// [limit].
+    /// image's end, which decoders ignore. `OEBPS/unlisted.bin`, which its
+    /// manifest leaves out, holds one byte more. Its own documents stay
+    /// under [limit].
     Uint8List bookOf(int length) => buildEpubArchive(
           opfPath: 'OEBPS/content.opf',
           textEntries: <String, String>{
@@ -1501,10 +1516,12 @@ void main() {
           },
           binaryEntries: <String, List<int>>{
             'OEBPS/cover.png': <int>[...seedPngBytes(), ...Uint8List(length)],
+            'OEBPS/unlisted.bin': Uint8List(length + 1),
           },
         );
 
-    /// Every read an [EpubBookRef] makes of its chapter and its cover.
+    /// Every read an [EpubBookRef] makes of its chapter and its cover, and
+    /// of an entry its manifest leaves out.
     Map<String, Future<Object?> Function(EpubBookRef)> readsOf() =>
         <String, Future<Object?> Function(EpubBookRef)>{
           'readContentAsText': (EpubBookRef bookRef) =>
@@ -1522,13 +1539,20 @@ void main() {
               (await bookRef.getChapters()).single.readHtmlContent(),
           'readCover': (EpubBookRef bookRef) => bookRef.readCover(),
           'readCoverBytes': (EpubBookRef bookRef) => bookRef.readCoverBytes(),
-          'ArchiveFile.content': (EpubBookRef bookRef) async =>
-              bookRef.epubArchive().findFile(_chapterPath)!.content,
+          'ArchiveFile.content': (EpubBookRef bookRef) async => bookRef
+              .content.html['chapter1.xhtml']!
+              .getContentFileEntry()
+              .content,
           'ArchiveFile.writeContent': (EpubBookRef bookRef) async {
             final OutputStream output = OutputStream();
-            bookRef.epubArchive().findFile(_chapterPath)!.writeContent(output);
+            bookRef.content.html['chapter1.xhtml']!
+                .getContentFileEntry()
+                .writeContent(output);
             return output.getBytes();
           },
+          'readEntry': (EpubBookRef bookRef) => bookRef.readEntry(_chapterPath),
+          'readEntry of an entry the manifest leaves out':
+              (EpubBookRef bookRef) => bookRef.readEntry('OEBPS/unlisted.bin'),
         };
 
     late Directory tempDir;
@@ -1844,11 +1868,13 @@ void main() {
           extra: <_CraftedZipEntry>[extra],
         );
 
-    /// The entry [name] of [book], opened and not yet read.
-    Future<ArchiveFile> opened(Uint8List book, String name) async =>
-        (await reader.openBook(book, maxEntryBytes: _maxEntryBytes))
-            .epubArchive()
-            .findFile(name)!;
+    /// A read of the entry [name] of [book], opened and not yet read.
+    Future<Future<Uint8List?> Function()> opened(
+        Uint8List book, String name) async {
+      final EpubBookRef bookRef =
+          await reader.openBook(book, maxEntryBytes: _maxEntryBytes);
+      return () => bookRef.readEntry(name);
+    }
 
     // TC-LIM-53 [Error guessing]: opening a book reads no entry's local
     // header, so a broken one in an entry the book never uses, a stray
@@ -1863,7 +1889,7 @@ void main() {
       ByteData.sublistView(book).setUint32(
           _localHeaderOf(book, _recordOf(book, strayPath)), 0, Endian.little);
 
-      final ArchiveFile stray = await opened(book, strayPath);
+      final Future<Uint8List?> Function() stray = await opened(book, strayPath);
       expect(
           (await reader.readBook(book,
                   maxEntryBytes: _maxEntryBytes, maxTotalBytes: _maxTotalBytes))
@@ -1871,7 +1897,7 @@ void main() {
               .single
               .htmlContent,
           _chapterXhtml);
-      expect(() => stray.content, _throwsCorrupt);
+      await expectLater(stray(), _throwsCorrupt);
     });
 
     // TC-LIM-43 [Boundary]: the local header a record points at has to fit
@@ -1881,7 +1907,7 @@ void main() {
     test(
         'TC-LIM-43 [Boundary]: a local header placed where it does not fit '
         'fails its entry when it is read', () async {
-      final ArchiveFile negative = await opened(
+      final Future<Uint8List?> Function() negative = await opened(
           bookWith(const _CraftedZipEntry(
             name: extraPath,
             method: _storeMethod,
@@ -1889,7 +1915,7 @@ void main() {
             zip64LocalHeaderOffset: -1,
           )),
           extraPath);
-      expect(() => negative.content, _throwsCorrupt);
+      await expectLater(negative(), _throwsCorrupt);
 
       Uint8List localHeaderAtEnd(int missing) {
         // The end record given a comment that is an empty local header, less
@@ -1914,9 +1940,10 @@ void main() {
         return file;
       }
 
-      expect((await opened(localHeaderAtEnd(0), extraPath)).content, isEmpty);
-      final ArchiveFile cut = await opened(localHeaderAtEnd(1), extraPath);
-      expect(() => cut.content, _throwsCorrupt);
+      expect(await (await opened(localHeaderAtEnd(0), extraPath))(), isEmpty);
+      final Future<Uint8List?> Function() cut =
+          await opened(localHeaderAtEnd(1), extraPath);
+      await expectLater(cut(), _throwsCorrupt);
     });
 
     // TC-LIM-44 [Error guessing]: a streaming writer sets bit 3 of an entry's
@@ -1946,8 +1973,9 @@ void main() {
           ..setUint32(
               record + 20, book.length - data + overrun.value, Endian.little);
 
-        final ArchiveFile extra = await opened(book, extraPath);
-        expect(() => extra.content, _throwsCorrupt);
+        final Future<Uint8List?> Function() extra =
+            await opened(book, extraPath);
+        await expectLater(extra(), _throwsCorrupt);
       });
     }
 
@@ -2076,6 +2104,98 @@ void main() {
     }
   });
 
+  group('records the book does not keep', () {
+    const String strayPath = 'NGE-SEED/stray.bin';
+
+    /// A readable book with one entry more, at [strayPath], which nothing
+    /// in it points at and opening does not keep.
+    Uint8List bookWith(_CraftedZipEntry stray) => _craftBook(
+          chapter:
+              _CraftedZipEntry.stored(_chapterPath, utf8.encode(_chapterXhtml)),
+          extra: <_CraftedZipEntry>[stray],
+        );
+
+    /// The compressed sizes [zip]'s records declare, added up.
+    int compressedTotal(Uint8List zip) {
+      final ByteData data = ByteData.sublistView(zip);
+      int total = 0;
+      for (int record = data.getUint32(
+              zip.length - _endOfCentralDirectoryLength + 16, Endian.little);
+          data.getUint32(record, Endian.little) == _centralFileHeaderSignature;
+          record += _centralFileHeaderLength +
+              data.getUint16(record + 28, Endian.little) +
+              data.getUint16(record + 30, Endian.little) +
+              data.getUint16(record + 32, Endian.little)) {
+        total += data.getUint32(record + 20, Endian.little);
+      }
+      return total;
+    }
+
+    // TC-LIM-68 [Error guessing]: every record is checked as opening reads
+    // it, kept or not. One the book does not keep, declaring -1 through
+    // zip64, uncompressed or compressed, fails the book as a damaged
+    // directory; declaring 0 the same way, it opens.
+    final Map<String, void Function(Uint8List zip, int record)> sizeByField =
+        <String, void Function(Uint8List zip, int record)>{
+      'uncompressed': (Uint8List zip, int record) {},
+      // The zip64 field holds whichever size is marked 0xFFFFFFFF: the
+      // compressed one, once the uncompressed one is not.
+      'compressed': (Uint8List zip, int record) => ByteData.sublistView(zip)
+        ..setUint32(record + 20, 0xFFFFFFFF, Endian.little)
+        ..setUint32(record + 24, 0, Endian.little),
+    };
+    for (final MapEntry<String, void Function(Uint8List, int)> field
+        in sizeByField.entries) {
+      test(
+          'TC-LIM-68 [Error guessing]: a record the book does not keep '
+          'declaring a ${field.key} size of -1 fails opening', () async {
+        Uint8List zip(int size) {
+          final Uint8List book = bookWith(_CraftedZipEntry(
+            name: strayPath,
+            method: _storeMethod,
+            declaredUncompressedSize: 0,
+            zip64UncompressedSize: size,
+          ));
+          field.value(book, _recordOf(book, strayPath));
+          return book;
+        }
+
+        expect(
+            (await reader.openBook(zip(0), maxEntryBytes: _maxEntryBytes))
+                .knownEntrySizes,
+            isNot(contains(strayPath)));
+        await expectLater(
+            reader.openBook(zip(-1), maxEntryBytes: _maxEntryBytes),
+            _throwsCorrupt);
+      });
+    }
+
+    // TC-LIM-69 [Boundary]: a record the book does not keep counts towards
+    // the compressed total all the same. Claiming every byte the others
+    // leave of the file, it opens; one byte more, the entries overlap and
+    // the book fails as a damaged directory.
+    test(
+        'TC-LIM-69 [Boundary]: a record the book does not keep overlapping '
+        'the others fails opening', () async {
+      Uint8List zip(int over) {
+        final Uint8List book =
+            bookWith(_CraftedZipEntry.stored(strayPath, const <int>[0x4E]));
+        final int record = _recordOf(book, strayPath);
+        final ByteData data = ByteData.sublistView(book);
+        final int others =
+            compressedTotal(book) - data.getUint32(record + 20, Endian.little);
+        data.setUint32(record + 20, book.length - others + over, Endian.little);
+        return book;
+      }
+
+      expect(
+          (await reader.openBook(zip(0), maxEntryBytes: _maxEntryBytes)).title,
+          'NGE-SEED Limits Book');
+      await expectLater(reader.openBook(zip(1), maxEntryBytes: _maxEntryBytes),
+          _throwsCorrupt);
+    });
+  });
+
   group('the one decode', () {
     // TC-LIM-19 [Equivalence partitioning]: each compression method an EPUB
     // may use produces the chapter it holds.
@@ -2125,7 +2245,7 @@ void main() {
             ),
             maxEntryBytes: _maxEntryBytes);
 
-        expect(() => bookRef.epubArchive().findFile('OEBPS/extra.bin')!.content,
+        await expectLater(bookRef.readEntry('OEBPS/extra.bin'),
             throwsA(isA<EpubUnsupportedCompressionException>()));
       });
     }
@@ -2154,8 +2274,7 @@ void main() {
               .single
               .htmlContent,
           _chapterXhtml);
-      expect(() => bookRef.epubArchive().findFile('OEBPS/unused.bin')!.content,
-          _throwsCorrupt);
+      await expectLater(bookRef.readEntry('OEBPS/unused.bin'), _throwsCorrupt);
     });
 
     // TC-LIM-24 [Error guessing]: a DEFLATE stream cut short is accepted as
@@ -2176,8 +2295,7 @@ void main() {
                 declaredUncompressedSize: whole.length),
           ),
           maxEntryBytes: _maxEntryBytes);
-      final List<int> content =
-          bookRef.epubArchive().findFile(_chapterPath)!.content as List<int>;
+      final List<int> content = (await bookRef.readEntry(_chapterPath))!;
 
       expect(content.length, inInclusiveRange(1, whole.length - 1));
       expect(content, whole.sublist(0, content.length));
@@ -2205,7 +2323,7 @@ void main() {
             ),
             maxEntryBytes: _maxEntryBytes);
         final ArchiveFile chapter =
-            bookRef.epubArchive().findFile(_chapterPath)!;
+            bookRef.content.html['chapter1.xhtml']!.getContentFileEntry();
 
         expect(chapter.size, declared.value);
         expect(chapter.isCompressed, isFalse);
@@ -2269,8 +2387,8 @@ void main() {
       bytes.setAll(at, to);
     }
 
-    ArchiveFile later(EpubBookRef bookRef) =>
-        bookRef.epubArchive().findFile(laterPath)!;
+    Future<Uint8List?> later(EpubBookRef bookRef) =>
+        bookRef.readEntry(laterPath);
 
     // TC-LIM-46 [Scenario]: `openBook` reads no entry it does not parse; an
     // entry is read from the bytes when it is asked for. Changed after
@@ -2285,7 +2403,7 @@ void main() {
       replace(bytes, utf8.encode('NGE-SEED-READ-LATER'),
           utf8.encode('NGE-SEED-READ-AGAIN'));
 
-      expect(later(bookRef).content, utf8.encode('NGE-SEED-READ-AGAIN'));
+      expect(await later(bookRef), utf8.encode('NGE-SEED-READ-AGAIN'));
     });
 
     // TC-LIM-47 [Error guessing]: an entry is inflated only when it is read.
@@ -2301,8 +2419,8 @@ void main() {
 
       expect(await (await bookRef.getChapters()).single.readHtmlContent(),
           _chapterXhtml);
-      expect(() => later(bookRef).content,
-          throwsA(isA<EpubCorruptArchiveException>()));
+      await expectLater(
+          later(bookRef), throwsA(isA<EpubCorruptArchiveException>()));
     });
 
     // TC-LIM-48 [Scenario]: nothing about an entry's content is recorded
@@ -2322,32 +2440,40 @@ void main() {
           await reader.openBook(growing, maxEntryBytes: _maxEntryBytes);
       replace(growing, storedBlock(2), storedBlock(4));
 
-      expect(later(shrunk).content, utf8.encode('NG'));
-      expect(later(grown).content, utf8.encode('NGE-'));
+      expect(await later(shrunk), utf8.encode('NG'));
+      expect(await later(grown), utf8.encode('NGE-'));
     });
 
     // TC-LIM-49 [Scenario]: each read of an entry inflates it from the
     // source. Read twice, it is inflated twice: equal bytes, each read's own.
-    // Changed after a read, it reads as it is then, by `content` and by
-    // `writeContent` alike. That no read is kept afterwards is
+    // Changed after a read, it reads as it is then, by `readEntry`, and, for
+    // an entry the manifest lists, by its `content` and `writeContent`
+    // alike. That no read is kept afterwards is
     // `epub_ref_retention_test.dart`'s to pin.
     test(
         'TC-LIM-49 [Scenario]: an entry read twice is inflated twice, from '
         'the source as it is then', () async {
-      final Uint8List bytes = bookWith(deflatedLater(storedBlock(4)));
+      final Uint8List bytes = _craftBook(
+        chapter:
+            _CraftedZipEntry.stored(_chapterPath, utf8.encode(_chapterXhtml)),
+        listed: <_CraftedZipEntry>[deflatedLater(storedBlock(4))],
+      );
       final EpubBookRef bookRef =
           await reader.openBook(bytes, maxEntryBytes: _maxEntryBytes);
-      final List<int> first = later(bookRef).content as List<int>;
-      final List<int> second = later(bookRef).content as List<int>;
+      final List<int> first = (await later(bookRef))!;
+      final List<int> second = (await later(bookRef))!;
       expect(first, utf8.encode('NGE-'));
       expect(second, first);
       expect(second, isNot(same(first)));
 
       replace(bytes, storedBlock(4), storedBlock(2));
+      final ArchiveFile entry =
+          bookRef.content.allFiles['later.bin']!.getContentFileEntry();
       final OutputStream written = OutputStream();
-      later(bookRef).writeContent(written);
+      entry.writeContent(written);
 
-      expect(later(bookRef).content, utf8.encode('NG'));
+      expect(await later(bookRef), utf8.encode('NG'));
+      expect(entry.content, utf8.encode('NG'));
       expect(written.getBytes(), utf8.encode('NG'));
     });
 
@@ -2379,15 +2505,14 @@ void main() {
           ..truncateSync(book.length ~/ 2)
           ..closeSync();
 
-        expect(() => later(cut).content,
-            throwsA(isA<EpubCorruptArchiveException>()));
+        await expectLater(
+            later(cut), throwsA(isA<EpubCorruptArchiveException>()));
 
         File(path).writeAsBytesSync(book);
         final EpubBookRef removed =
             await reader.openBookFile(path, maxEntryBytes: _maxEntryBytes);
         File(path).deleteSync();
-        expect(
-            () => later(removed).content, throwsA(isA<FileSystemException>()));
+        await expectLater(later(removed), throwsA(isA<FileSystemException>()));
       });
 
       // TC-LIM-56 [Scenario]: an entry of a book file is read from the file
@@ -2399,12 +2524,12 @@ void main() {
         File(path).writeAsBytesSync(book);
         final EpubBookRef bookRef =
             await reader.openBookFile(path, maxEntryBytes: _maxEntryBytes);
-        expect(later(bookRef).content, utf8.encode('NGE-'));
+        expect(await later(bookRef), utf8.encode('NGE-'));
 
         replace(book, storedBlock(4), storedBlock(2));
         File(path).writeAsBytesSync(book);
 
-        expect(later(bookRef).content, utf8.encode('NG'));
+        expect(await later(bookRef), utf8.encode('NG'));
       });
 
       // TC-LIM-51 [Scenario]: a file is read a window at a time, so headers
@@ -2429,7 +2554,7 @@ void main() {
             await reader.openBookFile(path, maxEntryBytes: _maxEntryBytes);
         expect(fromFile,
             await reader.openBook(bytes, maxEntryBytes: _maxEntryBytes));
-        expect(later(fromFile).content, big);
+        expect(await later(fromFile), big);
         expect(
             await reader.readBookFile(path,
                 maxEntryBytes: _maxEntryBytes, maxTotalBytes: _maxTotalBytes),
@@ -2454,11 +2579,10 @@ void main() {
           ],
         ));
 
-        final Archive archive =
-            (await reader.openBookFile(path, maxEntryBytes: _maxEntryBytes))
-                .epubArchive();
-        expect(archive.length, 5 + _manyEntries);
-        expect(archive.findFile('NGE-SEED-9999.txt')!.content,
+        final EpubBookRef bookRef =
+            await reader.openBookFile(path, maxEntryBytes: _maxEntryBytes);
+        expect(bookRef.knownEntrySizes, hasLength(5));
+        expect(await bookRef.readEntry('NGE-SEED-9999.txt'),
             utf8.encode('NGE-SEED-9999'));
       });
     });

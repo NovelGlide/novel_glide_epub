@@ -7,7 +7,6 @@
 // what each stage is responsible for.
 import 'dart:typed_data';
 
-import 'package:archive/archive.dart';
 import 'package:novel_glide_epub/novel_glide_epub.dart';
 import 'package:test/test.dart';
 
@@ -141,9 +140,9 @@ void main() {
             .text,
         'NGE-SEED Chapter One',
       );
-      // The handle the lazy refs read through is the book's own archive.
+      // The entries the lazy refs read are among those the book keeps.
       expect(
-        bookRef.epubArchive().files.map((ArchiveFile file) => file.name),
+        bookRef.knownEntrySizes.keys,
         containsAll(<String>['OEBPS/content.opf', 'OEBPS/chapter1.xhtml']),
       );
     });

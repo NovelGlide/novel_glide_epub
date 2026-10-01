@@ -7,7 +7,9 @@
 // produces. Where a test needs a ref the reader cannot produce from a real
 // file — one that differs from its twin in a single field, or points at an
 // entry the archive lacks — it rebuilds a reader-produced ref through the
-// public constructor, over the same archive, changing only that field.
+// public constructor, changing only that field, over an archive of the test's
+// own, which equality ignores.
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -100,7 +102,8 @@ Future<EpubChapterRef> openSingleChapter(Uint8List bytes) async =>
             .getChapters())
         .single;
 
-/// [ref] rebuilt over the same archive, with any field given here replaced.
+/// [ref] rebuilt over an empty archive, which equality ignores, with any
+/// field given here replaced.
 EpubBookRef copyBookRef(
   EpubBookRef ref, {
   String? title,
@@ -109,7 +112,7 @@ EpubBookRef copyBookRef(
   EpubContentRef? content,
 }) =>
     EpubBookRef(
-      epubArchive: ref.epubArchive(),
+      epubArchive: Archive(),
       title: title ?? ref.title,
       authorList: authorList ?? ref.authorList,
       schema: schema ?? ref.schema,
@@ -165,11 +168,9 @@ void main() {
       expect(bookRef.authorList,
           <String>['NGE-SEED Author One', 'NGE-SEED Author Two']);
       expect(bookRef.schema.contentDirectoryPath, 'OEBPS');
-      expect(bookRef.epubArchive(), isA<Archive>());
-      expect(
-        bookRef.epubArchive().files.map((ArchiveFile f) => f.name),
-        contains('OEBPS/chapter1.xhtml'),
-      );
+      expect(bookRef.knownEntrySizes, contains('OEBPS/chapter1.xhtml'));
+      expect(await bookRef.readEntry('OEBPS/chapter1.xhtml'),
+          utf8.encode(seedXhtml('NGE-SEED-CH1')));
     });
 
     // TC-REF-2 [Scenario/use-case]: two opens of one archive produce refs that
@@ -447,20 +448,26 @@ void main() {
 
     // TC-REF-12 [Error guessing]: a manifest href with no matching archive
     // entry is rejected as a typed `EpubMissingArchiveEntryException`, with
-    // the archive path in the message. A manifest the reader accepted is by
-    // construction resolvable, so the ref is rebuilt over the opened archive
-    // with a missing name — the state a hand-edited EPUB reaches.
+    // the archive path in the message. The book opens with a manifest item
+    // naming a file the archive lacks, the state a hand-edited EPUB reaches;
+    // looking for it reads the whole directory and finds nothing.
     test('TC-REF-12 [Error guessing]: an unresolvable file name throws',
         () async {
-      final EpubBookRef bookRef =
-          await const EpubReader().openBook(seedArchive(), maxEntryBytes: null);
-      final EpubTextContentFileRef chapter = EpubTextContentFileRef(
-        epubArchive: bookRef.epubArchive(),
-        contentDirectoryPath: bookRef.schema.contentDirectoryPath,
-        fileName: 'NGE-SEED-missing.xhtml',
-        contentType: EpubContentType.xhtml11,
-        contentMimeType: 'application/xhtml+xml',
-      );
+      final EpubBookRef bookRef = await const EpubReader().openBook(
+          buildEpubArchive(
+            opfPath: 'OEBPS/content.opf',
+            textEntries: <String, String>{
+              'OEBPS/content.opf': _opf(
+                  manifestItems: '$_manifestItems<item id="gone" '
+                      'href="NGE-SEED-missing.xhtml" '
+                      'media-type="application/xhtml+xml"/>'),
+              'OEBPS/toc.ncx': _ncx(),
+              'OEBPS/chapter1.xhtml': seedXhtml('NGE-SEED-CH1'),
+            },
+          ),
+          maxEntryBytes: null);
+      final EpubTextContentFileRef chapter =
+          bookRef.content.html['NGE-SEED-missing.xhtml']!;
 
       expect(
         chapter.getContentFileEntry,
@@ -496,7 +503,7 @@ void main() {
       final EpubTextContentFileRef second =
           secondBook.content.html['chapter1.xhtml']!;
 
-      expect(firstBook.epubArchive(), isNot(same(secondBook.epubArchive())));
+      expect(firstBook, isNot(same(secondBook)));
       expect(first, equals(second));
       expect(first.hashCode, equals(second.hashCode));
     });
@@ -517,7 +524,7 @@ void main() {
         final EpubTextContentFileRef first =
             bookRef.content.html['chapter1.xhtml']!;
         final EpubTextContentFileRef second = EpubTextContentFileRef(
-          epubArchive: bookRef.epubArchive(),
+          epubArchive: Archive(),
           contentDirectoryPath: bookRef.schema.contentDirectoryPath,
           fileName:
               field == 'fileName' ? 'NGE-SEED-other.xhtml' : first.fileName,
@@ -549,7 +556,7 @@ void main() {
       expect(text, isNot(equals(image)));
 
       final EpubByteContentFileRef bytes = EpubByteContentFileRef(
-        epubArchive: bookRef.epubArchive(),
+        epubArchive: Archive(),
         contentDirectoryPath: bookRef.schema.contentDirectoryPath,
         fileName: text.fileName,
         contentMimeType: text.contentMimeType,
