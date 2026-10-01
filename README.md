@@ -38,7 +38,8 @@ parameters, and each call states them:
 
 - `maxEntryBytes`: the most one entry may inflate to, on every read of it,
   whether through `readBook`, an `EpubBookRef`'s reads, the cover reads, or
-  `ArchiveFile.content` on `epubArchive()`.
+  `EpubBookRef.readEntry`, which a read can hold to a tighter `maxBytes` of
+  its own.
 - `maxTotalBytes` (`readBook` and `readBookFile` only): the most the entries
   one call reads may inflate to between them.
 
@@ -60,22 +61,31 @@ opened.
 What that costs in memory:
 
 - **`openBook` / `openBookFile`** read the ZIP's end record and central
-  directory, one pass over its records, and of the entries only the
-  documents they parse to open the book: no other entry's local header or
-  data. What the opened book holds grows with its number of entries, about
-  half a KiB for each: 100,000 entries measured at about 50 MiB. The file's
-  size bounds how many entries there can be: a directory record takes 46
-  bytes and a name, and records storing nothing pass the overlap check, so
-  opening holds up to about ten times the file's size (a file of nothing but
-  100,000 such records, 4.9 MiB, measured at 38 MiB). A caller can bound
-  what opening costs by the size of the files it accepts. An entry is read
+  directory, and of the entries only the documents they parse to open the
+  book: no other entry's local header or data. Of the directory, the opened
+  book keeps where to find `mimetype`, each `META-INF/` entry, the package
+  document and each file its manifest lists, and nothing of any other
+  record, so what it holds grows with its `META-INF/` entries and its
+  manifest, not with the number of records in the ZIP. A book with 4,096,
+  100,000 or 1,000,000 more records its manifest does not list measured
+  about 3 MiB each to open from a file. Opening still reads every record,
+  in three passes at most (checking each record and keeping `META-INF/`,
+  finding the package document, keeping the manifest's files), so how long
+  it takes grows with the directory: the same three books took about
+  0.03 s, 0.8 s and 7.7 s. `knownEntrySizes` lists the entries the book
+  keeps, with the sizes they declare. An entry the manifest does not list,
+  an image only a stylesheet points at say, is read with
+  `readEntry(name)`: the first read of it reads the directory once more to
+  find it, and later reads go to it directly; a name the archive does not
+  hold reads as `null`, and is looked for again each time. An entry is read
   each time it is asked for, local header and all, inflated into memory, and
   handed to the caller; one never asked for is never read. The size an entry
   declares is never allocated on its word: the buffer is capped at the limit
   and at what the entry's compressed bytes can inflate to, so an honest
   entry is held once, limit or none. The `EpubBookRef` keeps nothing it has read, so holding it costs
   the same however long it is kept, and each read is held to
-  `maxEntryBytes` alone. A caller that wants an entry inflated once however
+  `maxEntryBytes`, or to a tighter `maxBytes` a `readEntry` call passes, with
+  no total across reads. A caller that wants an entry inflated once however
   often it uses it keeps the bytes itself. `openBook` holds the bytes it was
   given; an `EpubBookRef` from `openBookFile` holds only the path, opening
   the file for each read and closing it after, so there is nothing to close.

@@ -142,6 +142,18 @@ Uint8List _withRecords(Uint8List zip, int count) {
 
 final Matcher _throwsTooLarge = throwsA(isA<EpubArchiveTooLargeException>());
 
+/// The `maxEntryBytes` a book is opened with, and the `maxBytes` one read of
+/// it passes.
+class _Limits {
+  const _Limits(this.entry, this.read);
+
+  final int? entry;
+  final int? read;
+
+  @override
+  String toString() => 'maxEntryBytes $entry, maxBytes $read';
+}
+
 void main() {
   group('what opening keeps', () {
     // TC-IDX-1 [Scenario]: opening keeps `mimetype`, every `META-INF/`
@@ -368,30 +380,30 @@ void main() {
         Future<EpubBookRef> opened(int? limit) =>
             _reader.openBook(zip, maxEntryBytes: limit);
 
-        for (final (int? limit, int? maxBytes) reads in <(int?, int?)>[
-          (null, null),
-          (null, size),
-          (size, null),
-          (size, size + 1),
-          (size + 1, size),
-          (size, 1 << 40),
+        for (final _Limits reads in const <_Limits>[
+          _Limits(null, null),
+          _Limits(null, size),
+          _Limits(size, null),
+          _Limits(size, size + 1),
+          _Limits(size + 1, size),
+          _Limits(size, 1 << 40),
         ]) {
           expect(
-              await (await opened(reads.$1))
-                  .readEntry(entry.value, maxBytes: reads.$2),
+              await (await opened(reads.entry))
+                  .readEntry(entry.value, maxBytes: reads.read),
               hasLength(size),
               reason: '$reads');
         }
-        for (final (int? limit, int? maxBytes) reads in <(int?, int?)>[
-          (null, size - 1),
-          (size - 1, null),
-          (size - 1, size + 1),
-          (size + 1, size - 1),
-          (null, 0),
+        for (final _Limits reads in const <_Limits>[
+          _Limits(null, size - 1),
+          _Limits(size - 1, null),
+          _Limits(size - 1, size + 1),
+          _Limits(size + 1, size - 1),
+          _Limits(null, 0),
         ]) {
           await expectLater(
-              (await opened(reads.$1))
-                  .readEntry(entry.value, maxBytes: reads.$2),
+              (await opened(reads.entry))
+                  .readEntry(entry.value, maxBytes: reads.read),
               _throwsTooLarge,
               reason: '$reads');
         }

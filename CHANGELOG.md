@@ -2,6 +2,66 @@
 
 ## Unreleased
 
+**Breaking: `EpubBookRef.epubArchive()` is removed. Read an entry by its
+archive name with `readEntry`, and look up the sizes of the entries the book
+keeps in `knownEntrySizes`.** An opened book no longer holds a record for
+every entry its ZIP directory lists, so it has no archive of every entry to
+hand out.
+
+```dart
+// Before
+final ArchiveFile? image = ref.epubArchive().findFile('OEBPS/images/bg.png');
+final List<int>? bytes = image?.content as List<int>?;
+final int? size = ref.epubArchive().findFile('OEBPS/content.opf')?.size;
+
+// After
+final Uint8List? bytes = await ref.readEntry('OEBPS/images/bg.png');
+final int? size = ref.knownEntrySizes['OEBPS/content.opf'];
+```
+
+- `readEntry(String name, {int? maxBytes})` returns the bytes of any entry
+  by its full name in the archive, whether the manifest lists it or not,
+  and `null` when the archive has no such entry. Each read inflates the
+  entry anew, held to the `maxEntryBytes` the book was opened with and,
+  when `maxBytes` is given, to the tighter of the two; the inflater stops
+  part-way with `EpubArchiveTooLargeException` as soon as the entry passes
+  it. A damaged entry throws `EpubCorruptArchiveException`, and one
+  compressed with a method an EPUB may not use
+  `EpubUnsupportedCompressionException`. A `maxBytes` below zero throws
+  `ArgumentError`.
+- `knownEntrySizes` maps each entry the book keeps to the uncompressed size
+  its header declares: `mimetype`, every `META-INF/` entry, the package
+  document, and every file the manifest lists that the archive holds. An
+  entry `readEntry` finds outside them is not added.
+- **Opening holds what grows with `META-INF/` and the manifest, not with the
+  ZIP's records.** Opening reads the central directory through the same
+  4 KiB window as before and keeps the location of the entries above only;
+  every other record is read and dropped. Measured opening a book from a
+  file, with more zero-length records its manifest does not list:
+
+  | Extra records | Peak memory growth, before | After | Open time, before | After |
+  | ---: | ---: | ---: | ---: | ---: |
+  | 4,096 | 3 MiB | 2 MiB | 0.02 s | 0.03 s |
+  | 100,000 | 53 MiB | 3 MiB | 0.3 s | 0.8 s |
+  | 1,000,000 | 281 MiB | 3 MiB | 3.8 s | 7.7 s |
+
+- Opening still reads every record, in three passes at most: one checking
+  each record and keeping the `META-INF/` entries, one finding the package
+  document the container names (skipped when it is one of those), and one
+  keeping the manifest's files. So opening takes time in proportion to the
+  directory, about twice what it did. The checks on every record are
+  unchanged: a negative size, or compressed sizes adding up to more than
+  the file, fail the book with `EpubCorruptArchiveException` whichever
+  record declares them.
+- An entry the manifest does not list, such as an image only a stylesheet
+  points at, costs one more pass over the directory the first time it is
+  read, through `readEntry` or an `EpubContentFileRef`; after that it is
+  kept and read directly. A name the archive does not hold is looked for
+  again each time it is asked for.
+- The table of contents is still looked up regardless of case. Of the
+  entries whose names match a manifest file's but for case, the first in the
+  directory is kept as well, one for each file at most.
+
 **Breaking: the package has no built-in limits; each call passes its own.**
 How large a file may be, how many entries it may hold, and how much an entry
 may inflate to are the caller's decision. The entry points take the
@@ -25,8 +85,7 @@ final EpubBook book = await reader.readBookFile(path,
   entry through the returned `EpubBookRef` (`readContentAsBytes`,
   `readContentAsText`, `getContentStream`, `openContentStream`,
   `EpubChapterRef.readHtmlContent`, `readCover`, `readCoverBytes`, and
-  `ArchiveFile.content` and `writeContent` on `epubArchive()`) inflates it to
-  at most `maxEntryBytes`.
+  `readEntry`) inflates it to at most `maxEntryBytes`.
 - `readBook(bytes, {required int? maxEntryBytes, required int?
   maxTotalBytes})` and `readBookFile(path, {...})`: each entry held to
   `maxEntryBytes`, and what the entries the one call reads inflate to
@@ -41,13 +100,8 @@ final EpubBook book = await reader.readBookFile(path,
   than the limit, whatever size the entry declares.
 - Opening a book checks neither the file's size nor its number of entries:
   a file of any size, with any number of entries, opens. What opening holds
-  grows with the entries, about half a KiB for each (100,000 entries
-  measured at about 50 MiB), and the file's size bounds how many there can
-  be: a directory record takes 46 bytes and a name, and records storing
-  nothing pass the overlap check, so opening holds up to about ten times the
-  file's size (a file of nothing but 100,000 such records, 4.9 MiB, measured
-  at 38 MiB). A caller can bound what opening costs by the size of the files
-  it accepts.
+  grows with the book's `META-INF/` entries and its manifest, not with the
+  number of entries the ZIP has (see above).
 - The size an entry declares is never allocated on its word: an entry is
   inflated into a buffer of the size it declares, capped at its limit and at
   what its compressed bytes can inflate to (their own length stored, 1032
@@ -60,9 +114,10 @@ cached, is the caller's decision.
 - Every read of an entry through a ref inflates it again and hands the bytes
   to the caller: `readContentAsBytes`, `readContentAsText`,
   `getContentStream`, `openContentStream`, `readCover`, `readCoverBytes`,
-  `EpubChapterRef.readHtmlContent`, and `ArchiveFile.content` and
-  `writeContent` on the archive `epubArchive()` returns. Nothing in the ref
-  or its archive keeps the bytes, so a ref kept for a long time does not
+  `EpubChapterRef.readHtmlContent`, `readEntry`, and `ArchiveFile.content`
+  and `writeContent` on the entry `EpubContentFileRef.getContentFileEntry`
+  returns. Nothing in the ref keeps the bytes, so a ref kept for a long time
+  does not
   grow, and reading one entry twice inflates it twice, each read getting
   bytes of its own. A caller that reads an entry repeatedly and wants it
   inflated once keeps the bytes itself. An entry changed in the source after
@@ -146,9 +201,9 @@ entry is refused if it is read.
   directory's bytes run out, whatever count the end record claims. Their
   declared sizes are checked
   against the file, as above, and of the entries only the container,
-  package and navigation documents are read. No other entry is touched, neither its local header nor its data:
-  opening costs one pass over the directory's records, whatever the entries
-  hold. `ZipDirectory.read` parsed every entry's local header as well,
+  package and navigation documents are read. No other entry is touched,
+  neither its local header nor its data: opening costs at most three passes
+  over the directory's records (see above), whatever the entries hold. `ZipDirectory.read` parsed every entry's local header as well,
   keeping a copy of each one's extra field.
 - **An entry is inflated each time it is read**; within one `readBook`
   call, each entry is inflated once. The inflater counts the
@@ -193,10 +248,10 @@ entry is refused if it is read.
     still yields what it holds, without an error, as before.
   - `EpubArchiveTooLargeException` messages give sizes and limits, never an
     entry's file name, which can carry the book's title.
-  - The entries of `EpubBookRef.epubArchive()` carry their name, their
-    content, inflated each time it is asked for, and the `size` their header
-    declares, as before. They no longer carry the ZIP's CRC, file mode,
-    modification time, or directory and symlink flags.
+  - The entries `EpubContentFileRef.getContentFileEntry` returns carry their
+    name, their content, inflated each time it is asked for, and the `size`
+    their header declares, as before. They no longer carry the ZIP's CRC,
+    file mode, modification time, or directory and symlink flags.
   - Only STORE and DEFLATE entries are read, the two methods the EPUB
     container format allows. Reading an entry in any other method, BZIP2
     included, throws the new **`EpubUnsupportedCompressionException`**;
@@ -277,7 +332,7 @@ entry is refused if it is read.
 - Signatures that changed with the above:
   - `EpubContentFileRef` and its two subclasses take the `Archive` and the
     content directory path instead of the `EpubBookRef`; the `epubBookRef`
-    field is gone. `EpubBookRef.epubArchive()` returns a non-null `Archive`.
+    field is gone.
   - `ContentReader.parseContentMap(Archive, String contentDirectoryPath,
     EpubManifest)` replaces `parseContentMap(EpubBookRef)`.
   - `PackageReader.readMetadata` takes a non-null `EpubVersion`.
