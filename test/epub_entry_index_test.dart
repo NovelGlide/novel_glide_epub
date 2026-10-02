@@ -347,6 +347,51 @@ void main() {
       });
     }
 
+    // TC-IDX-21 [Error guessing]: a package document inside `META-INF/`,
+    // which the first pass keeps, written twice at two local headers, and
+    // listed by its own manifest. The later record is the document; reached
+    // by the first pass and again by the manifest it is still one entry, so
+    // a book read whole counts it once.
+    test(
+        'TC-IDX-21 [Error guessing]: a package document in META-INF written '
+        'twice and listed by its manifest is counted once by readBook',
+        () async {
+      const String opfPath = 'META-INF/book/content.opf';
+      const String manifestExtra = '<item id="opf" href="content.opf" '
+          'media-type="application/oebps-package+xml"/>';
+      final List<int> opf = ZipDecoder()
+          .decodeBytes(_book(opfPath: opfPath, manifestExtra: manifestExtra))
+          .findFile(opfPath)!
+          .content as List<int>;
+      final Uint8List zip = _book(
+          opfPath: opfPath,
+          manifestExtra: manifestExtra,
+          extra: <String, List<int>>{'META-INF/book/content.opx': opf});
+      _rename(zip, 'META-INF/book/content.opx', opfPath);
+      final Archive whole = ZipDecoder().decodeBytes(zip);
+      final int readOnce = <String>[
+        'META-INF/container.xml',
+        opfPath,
+        'META-INF/book/toc.ncx',
+        'META-INF/book/chapter1.xhtml',
+        'META-INF/book/Text/chapter 2.xhtml',
+        'META-INF/book/style.css',
+      ].fold(0, (int sum, String name) {
+        return sum + (whole.findFile(name)!.content as List<int>).length;
+      });
+
+      expect(
+          (await _reader.readBook(zip,
+                  maxEntryBytes: null, maxTotalBytes: readOnce))
+              .content
+              .allFiles,
+          contains('content.opf'));
+      await expectLater(
+          _reader.readBook(zip,
+              maxEntryBytes: null, maxTotalBytes: readOnce - 1),
+          _throwsTooLarge);
+    });
+
     // TC-IDX-15 [Error guessing]: several records of one name, or of one
     // spelling of it, and a name spelled two ways. The table of contents is
     // read from the spelling that matches the manifest's name but for case
@@ -684,10 +729,10 @@ void main() {
               'An entry holds 3 bytes; the read allows it at most 2.')));
     });
 
-    // TC-IDX-18 [Boundary]: over an archive of the caller's, `maxBytes` is
-    // checked against the count of bytes a file holds before any is read, so
-    // a stream file holding more is refused with nothing read from its
-    // stream; one within it is read once.
+    // TC-IDX-18 [Boundary]: over an archive of the caller's, a file made
+    // with `ArchiveFile.stream` has its byte count checked against `maxBytes`
+    // before its stream is read, so one holding more is refused with nothing
+    // read from its stream; one within it is read once.
     test(
         'TC-IDX-18 [Boundary]: a stream file over maxBytes is refused '
         'unread', () async {
@@ -728,6 +773,33 @@ void main() {
               'An entry holds ${8 << 20} bytes; the read allows it at most '
                   '1024.')));
       expect(record.compressionMethod, ZipFile.zipCompressionStore);
+    });
+
+    // TC-IDX-22 [Error guessing]: what `ArchiveFile.content` throws comes
+    // out of `readEntry` as it is. An entry of a decoded archive whose
+    // deflated data is damaged fails with `package:archive`'s own
+    // `FormatException`, not one of this package's exceptions.
+    test(
+        'TC-IDX-22 [Error guessing]: a damaged entry of a decoded archive '
+        'fails with the error ArchiveFile.content throws', () async {
+      final Uint8List zip = _book(extra: <String, List<int>>{
+        'extras/bad.bin': List<int>.generate(4096, (int i) => i % 7),
+      });
+      final ByteData data = ByteData.sublistView(zip);
+      final int record = _recordNameOf(zip, 'extras/bad.bin') - 46;
+      final int local = data.getUint32(record + 42, Endian.little);
+      // The first byte of the deflated data: a final block of the reserved
+      // type, which no inflater reads.
+      zip[local +
+          30 +
+          data.getUint16(local + 26, Endian.little) +
+          data.getUint16(local + 28, Endian.little)] = 0xFF;
+      final EpubBookRef bookRef = await built(ZipDecoder().decodeBytes(zip));
+
+      await expectLater(
+          bookRef.readEntry('extras/bad.bin'),
+          throwsA(allOf(isA<FormatException>(),
+              isNot(isA<EpubCorruptArchiveException>()))));
     });
 
     // TC-IDX-16 [Error guessing]: a file the caller made with

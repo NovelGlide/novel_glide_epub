@@ -735,37 +735,47 @@ final class _ZipContainerIndex extends ContainerIndex {
     final Map<String, String?> spellingByFolded = <String, String?>{
       for (final String name in names) name.toLowerCase(): null,
     };
+    // The entries held before this pass, kept or found by name: each record
+    // the pass keeps that one of them was made from keeps that entry. Taken
+    // before the pass, so an entry the pass itself adds, and may replace
+    // with a later record of its name, is not mistaken for one.
+    final Map<String, List<_ArchiveEntry>> heldByName =
+        <String, List<_ArchiveEntry>>{};
+    for (final _ArchiveEntry held in <_ArchiveEntry>[
+      ...files.whereType<_ArchiveEntry>(),
+      ..._foundByName.values,
+    ]) {
+      (heldByName[held.name] ??= <_ArchiveEntry>[]).add(held);
+    }
     _eachRecord((ZipFileHeader record, int fileLength) {
       final String name = _nameOf(record);
       final String folded = name.toLowerCase();
       if (names.contains(name) ||
           (spellingByFolded.containsKey(folded) &&
               (spellingByFolded[folded] ??= name) == name)) {
-        addFile(_heldOr(_entryOf(record)));
+        final _ArchiveEntry entry = _entryOf(record);
+        addFile(
+            _heldOr(entry, heldByName[entry.name] ?? const <_ArchiveEntry>[]));
       }
     });
   }
 
-  /// The entry already held for the record [entry] was made from, the one
-  /// at the same local header, kept or found by name before; [entry] itself
-  /// when there is none.
+  /// The entry of [held] made from the same record as [entry], at the same
+  /// local header and declaring the same sizes; [entry] itself when there is
+  /// none.
   ///
   /// So a record has one entry however many ways it was reached: a package
   /// document opening found, or kept as a `META-INF/` entry, that its own
   /// manifest also lists is one entry, inflated once and counted once by a
-  /// book read whole.
-  _ArchiveEntry _heldOr(_ArchiveEntry entry) {
-    for (final ArchiveFile? held in <ArchiveFile?>[
-      super.findFile(entry.name),
-      _foundByName[entry.name],
-    ]) {
-      if (held is _ArchiveEntry &&
-          held._localHeaderOffset == entry._localHeaderOffset) {
-        return held;
-      }
-    }
-    return entry;
-  }
+  /// book read whole. Another record at the same local header declaring
+  /// other sizes is another record, and gets an entry of its own, so the
+  /// last record of a name is the one kept, as it always is.
+  static _ArchiveEntry _heldOr(_ArchiveEntry entry, List<_ArchiveEntry> held) =>
+      held.firstWhereOrNull((_ArchiveEntry candidate) =>
+          candidate._localHeaderOffset == entry._localHeaderOffset &&
+          candidate._compressedSize == entry._compressedSize &&
+          candidate._declaredSize == entry._declaredSize) ??
+      entry;
 
   @override
   Uint8List? read(String name, int? maxBytes) => switch (findFile(name)) {

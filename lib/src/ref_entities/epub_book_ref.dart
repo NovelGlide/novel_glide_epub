@@ -114,9 +114,12 @@ class EpubBookRef {
   /// every file a `ZipDecoder` decodes, or one made with the plain
   /// `ArchiveFile(name, size, stream)` constructor, `ArchiveFile.content`
   /// itself inflates or reads the whole entry, with no limit, and keeps it:
-  /// [maxBytes] can only refuse it afterwards. A caller reading files it
-  /// does not trust opens them with `EpubReader.openBook` or
-  /// `EpubReader.openBookFile`, whose reads are stopped part-way.
+  /// [maxBytes] can only refuse it afterwards. What `ArchiveFile.content`
+  /// throws, the `FormatException` of a damaged deflated entry say, comes
+  /// out of the read as it is, not as one of this package's exceptions. A
+  /// caller reading files it does not trust opens them with
+  /// `EpubReader.openBook` or `EpubReader.openBookFile`, whose reads are
+  /// stopped part-way.
   Future<Uint8List?> readEntry(String name, {int? maxBytes}) async {
     if (maxBytes != null) {
       RangeError.checkNotNegative(maxBytes, 'maxBytes');
@@ -130,7 +133,9 @@ class EpubBookRef {
   }
 
   /// A copy of the bytes [file], one of an [Archive] of the caller's, holds,
-  /// their count checked against [maxBytes] before any is read.
+  /// their count checked against [maxBytes] before any of them is copied:
+  /// before any is read, too, for a file holding a list or made with
+  /// `ArchiveFile.stream`.
   static Uint8List _copyHeld(ArchiveFile file, int? maxBytes) {
     final ContentBytes? held = ContentBytes.of(file.content);
     final int length = held?.length ?? 0;

@@ -2230,6 +2230,42 @@ void main() {
     });
   });
 
+  group('records of one name', () {
+    // TC-LIM-71 [Error guessing]: two records of a name the manifest lists,
+    // both pointing at one local header, the later declaring fewer bytes.
+    // They are two records, so the later is the entry, as the later record
+    // of a name always is: it reads as the bytes it declares, and its sizes
+    // are the ones `knownEntrySizes` gives.
+    test(
+        'TC-LIM-71 [Error guessing]: of two records at one local header with '
+        'other sizes, the later is read', () async {
+      const String name = 'OEBPS/dup.bin';
+      final Uint8List book = _craftBook(
+        chapter:
+            _CraftedZipEntry.stored(_chapterPath, utf8.encode(_chapterXhtml)),
+        listed: <_CraftedZipEntry>[
+          _CraftedZipEntry.stored(name, utf8.encode('NGE-SEED-FIRST-LONGER')),
+          _CraftedZipEntry.stored('OEBPS/dvp.bin', utf8.encode('NGE-SEED-X')),
+        ],
+      );
+      final int first = _recordOf(book, name);
+      final int later = _recordOf(book, 'OEBPS/dvp.bin');
+      book.setAll(later + _centralFileHeaderLength, utf8.encode(name));
+      ByteData.sublistView(book)
+        ..setUint32(later + 20, 8, Endian.little)
+        ..setUint32(later + 24, 8, Endian.little)
+        ..setUint32(
+            later + 42,
+            ByteData.sublistView(book).getUint32(first + 42, Endian.little),
+            Endian.little);
+      final EpubBookRef bookRef =
+          await reader.openBook(book, maxEntryBytes: _maxEntryBytes);
+
+      expect(bookRef.knownEntrySizes[name], 8);
+      expect(await bookRef.readEntry(name), utf8.encode('NGE-SEED'));
+    });
+  });
+
   group('the one decode', () {
     // TC-LIM-19 [Equivalence partitioning]: each compression method an EPUB
     // may use produces the chapter it holds.
