@@ -7,6 +7,7 @@ import 'package:quiver/core.dart';
 
 import '../entities/epub_content_type.dart';
 import '../epub_exception.dart';
+import '../utils/content_bytes.dart';
 import '../utils/zip_path_resolver.dart';
 
 /// One manifest file, read from the archive on demand.
@@ -68,16 +69,19 @@ abstract class EpubContentFileRef {
   /// An entry of a book this package opened is inflated again by each read,
   /// and its bytes are the caller's alone: nothing in the book keeps them. An
   /// entry a caller built returns the bytes it holds, shared with every other
-  /// read of it; a plain `List<int>` is copied into a `Uint8List` each time.
+  /// read of it: a `Uint8List`, or what is left of the stream of one made
+  /// with `ArchiveFile.stream`; a plain `List<int>` is copied into a
+  /// `Uint8List` each time. One made with no content throws
+  /// [EpubMissingArchiveEntryException].
   Uint8List openContentStream(ArchiveFile contentFileEntry) {
-    final Object? content = contentFileEntry.content;
-    return switch (content) {
-      Uint8List() => content,
-      List<int>() => Uint8List.fromList(content),
-      _ => throw EpubMissingArchiveEntryException(
+    final ContentBytes? held = ContentBytes.of(contentFileEntry.content);
+    if (held == null) {
+      throw EpubMissingArchiveEntryException(
           'Incorrect EPUB file: content file "$fileName" specified in '
-          'manifest is not found.'),
-    };
+          'manifest is not found.');
+    }
+    final List<int> bytes = held.read();
+    return bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
   }
 
   /// This file's bytes, as [openContentStream] gives them.

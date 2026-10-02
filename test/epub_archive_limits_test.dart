@@ -2168,6 +2168,40 @@ void main() {
             reader.openBook(zip(-1), maxEntryBytes: _maxEntryBytes),
             _throwsCorrupt);
       });
+
+      // TC-LIM-70 [Error guessing]: a record read after the book was
+      // opened, found by name, is checked as opening checks every record.
+      // Opened with its zip64 size 0, then changed in place to declare -1,
+      // it fails as a damaged directory when it is read, with the message
+      // opening gives, not as an error outside the package's own.
+      test(
+          'TC-LIM-70 [Error guessing]: a record changed after opening to '
+          'declare a ${field.key} size of -1 fails when it is found', () async {
+        final Uint8List book = bookWith(const _CraftedZipEntry(
+          name: strayPath,
+          method: _storeMethod,
+          declaredUncompressedSize: 0,
+          zip64UncompressedSize: 0,
+        ));
+        final int record = _recordOf(book, strayPath);
+        field.value(book, record);
+        final EpubBookRef bookRef =
+            await reader.openBook(book, maxEntryBytes: _maxEntryBytes);
+        ByteData.sublistView(book).setInt64(
+            record +
+                _centralFileHeaderLength +
+                utf8.encode(strayPath).length +
+                4,
+            -1,
+            Endian.little);
+
+        await expectLater(
+            bookRef.readEntry(strayPath),
+            throwsA(isA<EpubCorruptArchiveException>().having(
+                (EpubCorruptArchiveException e) => e.message,
+                'message',
+                startsWith('An entry declares a negative size'))));
+      });
     }
 
     // TC-LIM-69 [Boundary]: a record the book does not keep counts towards

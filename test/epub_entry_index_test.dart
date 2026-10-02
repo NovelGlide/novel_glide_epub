@@ -142,6 +142,19 @@ Uint8List _withRecords(Uint8List zip, int count) {
 
 final Matcher _throwsTooLarge = throwsA(isA<EpubArchiveTooLargeException>());
 
+/// A stream that counts how often its bytes are read out whole.
+class _CountingStream extends InputStream {
+  _CountingStream(List<int> super.data);
+
+  int reads = 0;
+
+  @override
+  Uint8List toUint8List([Uint8List? bytes]) {
+    reads++;
+    return super.toUint8List(bytes);
+  }
+}
+
 /// The `maxEntryBytes` a book is opened with, and the `maxBytes` one read of
 /// it passes.
 class _Limits {
@@ -252,11 +265,11 @@ void main() {
     });
 
     // TC-IDX-5 [Error guessing]: the table of contents is looked up
-    // regardless of case, as it always was, so an archive spelling it in
-    // another case than the manifest still opens. Of the entries matching
-    // it but for case, the first in the directory is kept, and only it:
-    // however many a crafted directory spells, each name the manifest
-    // lists keeps one more entry at most.
+    // regardless of case, so an archive spelling it in another case than the
+    // manifest still opens. Of the spellings matching it but for case, the
+    // first in the directory is kept, and only it: however many a crafted
+    // directory spells, each name the manifest lists keeps one more entry at
+    // most.
     test(
         'TC-IDX-5 [Error guessing]: a table of contents spelled in another '
         'case is kept, the first spelling only', () async {
@@ -275,14 +288,32 @@ void main() {
           isNot(anyOf(contains('OEBPS/TOC.NCX'), contains('OEBPS/Toc.Ncx'))));
     });
 
+    // TC-IDX-17 [Error guessing]: the package document is kept as the
+    // manifest's files are, so a spelling of its name in another case is
+    // kept too, the first in the directory, and listed under its own name.
+    test(
+        'TC-IDX-17 [Error guessing]: a package document spelled in another '
+        'case is kept as well', () async {
+      final Uint8List zip = _book(extra: <String, List<int>>{
+        'OEBPS/CONTENT.OPF': utf8.encode('NGE-SEED-UPPER'),
+        'OEBPS/Content.Opf': utf8.encode('NGE-SEED-MIXED'),
+      });
+      final EpubBookRef bookRef =
+          await _reader.openBook(zip, maxEntryBytes: null);
+
+      expect(bookRef.knownEntrySizes,
+          containsPair('OEBPS/CONTENT.OPF', 'NGE-SEED-UPPER'.length));
+      expect(bookRef.knownEntrySizes, contains('OEBPS/content.opf'));
+      expect(bookRef.knownEntrySizes, isNot(contains('OEBPS/Content.Opf')));
+    });
+
     // TC-IDX-15 [Error guessing]: several records of one name, or of one
-    // spelling of it, and a name spelled two ways. Opening reads the record
-    // it read before this package kept only some of them, found by running
-    // these cases against the release before: of the spellings that match
-    // the manifest's name but for case, the first in the directory; of the
-    // records of that spelling, the last. `readEntry` reads the last record
-    // of the spelling it is asked for, and `knownEntrySizes` holds one size
-    // for each spelling kept.
+    // spelling of it, and a name spelled two ways. The table of contents is
+    // read from the spelling that matches the manifest's name but for case
+    // and comes first in the directory, and of that spelling's records, from
+    // the last. `readEntry` reads the last record of the spelling it is
+    // asked for, and `knownEntrySizes` holds one size for each spelling
+    // kept.
     Uint8List tocBook(
         Map<String, String> titleByTemporaryName, Map<String, String> renames) {
       final Uint8List zip = _book(extra: <String, List<int>>{
@@ -611,6 +642,25 @@ void main() {
               (EpubArchiveTooLargeException e) => e.message,
               'message',
               'An entry holds 3 bytes; the read allows it at most 2.')));
+    });
+
+    // TC-IDX-18 [Boundary]: over an archive of the caller's, `maxBytes` is
+    // checked against the count of bytes a file holds before any is read, so
+    // a stream file holding more is refused with nothing read from its
+    // stream; one within it is read once.
+    test(
+        'TC-IDX-18 [Boundary]: a stream file over maxBytes is refused '
+        'unread', () async {
+      final _CountingStream stream = _CountingStream(<int>[1, 2, 3]);
+      final EpubBookRef bookRef = await built(
+          Archive()..addFile(ArchiveFile.stream('stream.bin', 3, stream)));
+
+      await expectLater(
+          bookRef.readEntry('stream.bin', maxBytes: 2), _throwsTooLarge);
+      expect(stream.reads, 0);
+      expect(
+          await bookRef.readEntry('stream.bin', maxBytes: 3), <int>[1, 2, 3]);
+      expect(stream.reads, 1);
     });
 
     // TC-IDX-16 [Error guessing]: a file the caller made with

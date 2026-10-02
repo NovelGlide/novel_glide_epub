@@ -103,16 +103,17 @@ class EpubReader {
   ///
   /// Of the central directory, the [EpubBookRef] keeps where to find
   /// `mimetype`, each `META-INF/` entry, the package document and each file its
-  /// manifest lists, with at most one entry more for each whose name differs
-  /// from it only in case, and nothing of any other record: what an open book
-  /// holds grows with its `META-INF/` entries and its manifest, not with the
-  /// records its directory has. Opening still reads every record, in three
-  /// passes at most, one at a time: one checking each record and keeping the
-  /// `META-INF/` entries, one finding the package document the container names,
-  /// unless it is one of those, and one keeping the manifest's files. So how
-  /// long opening takes grows with the directory. An entry the book does not
-  /// keep, one its manifest leaves out, is found by reading the directory once
-  /// more when it is asked for, and kept from then on.
+  /// manifest lists, with at most one entry more for the package document and
+  /// for each of those files, one whose name differs from it only in case, and
+  /// nothing of any other record: what an open book holds grows with its
+  /// `META-INF/` entries and its manifest, not with the records its directory
+  /// has. Opening still reads every record, in three passes at most, one at a
+  /// time: one checking each record and keeping the `META-INF/` entries, one
+  /// finding the package document the container names, unless it is one of
+  /// those, and one keeping the manifest's files. So how long opening takes
+  /// grows with the directory. An entry the book does not keep, one its
+  /// manifest leaves out, is found by reading the directory once more when it
+  /// is asked for, and kept from then on.
   ///
   /// Every read of an entry through the returned [EpubBookRef], by
   /// [EpubContentFileRef]'s reads, the cover reads, or
@@ -307,8 +308,8 @@ class EpubReader {
   /// entry.
   ///
   /// Every record is checked as the pass reads it for what no container of
-  /// its length holds. A zip64 size is read as a signed 64-bit value, so a
-  /// record can declare a negative one, which only a damaged directory does.
+  /// its length holds: each is made into its entry, which refuses a
+  /// negative size, and kept only when it is one of those above.
   ///
   /// The compressed sizes are the data each read takes, so an entry holding
   /// its own bytes fits them in the file with the others. More between them
@@ -325,12 +326,8 @@ class EpubReader {
     final _ZipContainerIndex container = _ZipContainerIndex(source, reads);
     int compressedTotal = 0;
     container._eachRecord((ZipFileHeader record, int fileLength) {
-      final int compressed = _recorded(record.compressedSize);
-      final int declared = _recorded(record.uncompressedSize);
-      if (compressed < 0 || declared < 0) {
-        throw EpubCorruptArchiveException('An entry declares a negative size: '
-            '$compressed compressed, $declared uncompressed.');
-      }
+      final _ArchiveEntry entry = container._entryOf(record);
+      final int compressed = entry._compressedSize;
       // Compared before adding, so a zip64 size near 2^63 cannot wrap it.
       if (compressed > fileLength - compressedTotal) {
         throw EpubCorruptArchiveException('The entries declare more '
@@ -338,9 +335,8 @@ class EpubReader {
             'they overlap, or run past its end.');
       }
       compressedTotal += compressed;
-      final String name = _ZipContainerIndex._nameOf(record);
-      if (name == 'mimetype' || name.startsWith('META-INF/')) {
-        container.addFile(container._entryOf(record));
+      if (entry.name == 'mimetype' || entry.name.startsWith('META-INF/')) {
+        container.addFile(entry);
       }
     });
     return container;
@@ -797,13 +793,22 @@ final class _ZipContainerIndex extends ContainerIndex {
   }
 
   /// The entry [record] describes.
-  _ArchiveEntry _entryOf(ZipFileHeader record) => _ArchiveEntry(
-      record.filename,
-      EpubReader._recorded(record.uncompressedSize),
-      _source,
-      EpubReader._recorded(record.localHeaderOffset),
-      EpubReader._recorded(record.compressedSize),
-      _reads);
+  ///
+  /// Every record any pass makes an entry of comes through here, so every
+  /// one is checked alike, the first time the book is opened or any later,
+  /// when [_source] may hold other bytes by then. A zip64 size is read as a
+  /// signed 64-bit value, so a record can declare a negative one, which only
+  /// a damaged directory does.
+  _ArchiveEntry _entryOf(ZipFileHeader record) {
+    final int compressed = EpubReader._recorded(record.compressedSize);
+    final int declared = EpubReader._recorded(record.uncompressedSize);
+    if (compressed < 0 || declared < 0) {
+      throw EpubCorruptArchiveException('An entry declares a negative size: '
+          '$compressed compressed, $declared uncompressed.');
+    }
+    return _ArchiveEntry(record.filename, declared, _source,
+        EpubReader._recorded(record.localHeaderOffset), compressed, _reads);
+  }
 
   /// [record]'s name as an `ArchiveFile` made from it has it: each `\` read
   /// as a `/`.

@@ -691,6 +691,34 @@ void main() {
       expect(copied, plain);
       expect(copied, isNot(same(plain)));
     });
+
+    // TC-REF-30 [Equivalence partitioning]: an entry a caller built with
+    // `ArchiveFile.stream` holds its bytes as a stream, which
+    // `ArchiveFile.content` hands back as it is. `openContentStream` reads
+    // what is left of it, as `EpubBookRef.readEntry` does over an archive
+    // holding the same entry; it is not a missing entry.
+    test(
+        'TC-REF-30 [EP]: an entry built on a stream reads as its bytes, '
+        'through openContentStream and readEntry alike', () async {
+      final EpubBookRef bookRef =
+          await const EpubReader().openBook(seedArchive(), maxEntryBytes: null);
+      final EpubTextContentFileRef chapter =
+          bookRef.content.html['chapter1.xhtml']!;
+      ArchiveFile streamed() => ArchiveFile.stream(
+          'OEBPS/chapter1.xhtml', 3, InputStream(<int>[0x4E, 0x47, 0x45]));
+
+      expect(streamed().content, isA<InputStream>());
+      expect(chapter.openContentStream(streamed()), <int>[0x4E, 0x47, 0x45]);
+      expect(
+          await EpubBookRef(
+            epubArchive: Archive()..addFile(streamed()),
+            title: bookRef.title,
+            authorList: bookRef.authorList,
+            schema: bookRef.schema,
+            content: bookRef.content,
+          ).readEntry('OEBPS/chapter1.xhtml'),
+          <int>[0x4E, 0x47, 0x45]);
+    });
   });
 
   group('EpubChapterRef', () {
