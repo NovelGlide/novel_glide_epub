@@ -36,11 +36,18 @@ final int? size = ref.knownEntrySizes['OEBPS/content.opf'];
   not added. Each access builds a new map; a caller that looks at it
   repeatedly keeps the map.
 - Over an `Archive` the caller built, which has no `maxEntryBytes`,
-  `readEntry` is held to `maxBytes` alone: the count of bytes a file holds
-  is checked before any is read or copied, so a refused read reads nothing
-  of the file. It returns a copy of the bytes, from a list or from the
-  stream of a file made with `ArchiveFile.stream`, and no bytes for a file
-  made with no content.
+  `readEntry` is held to `maxBytes` alone, checked against the count of
+  bytes `ArchiveFile.content` gives before they are copied. It returns a
+  copy of the bytes, from a list or from the stream of a file made with
+  `ArchiveFile.stream`, and no bytes for a file made with no content. A
+  refused read costs nothing only for a file already holding a list, or
+  one made with `ArchiveFile.stream`. For a file whose content
+  `package:archive` produces when it is asked for, every file a
+  `ZipDecoder` decodes, or one made with the plain `ArchiveFile(name, size,
+  stream)` constructor, `ArchiveFile.content` inflates or reads the whole
+  entry, with no limit, and keeps it, and `maxBytes` refuses it only
+  afterwards. A caller reading files it does not trust opens them with
+  `EpubReader.openBook` or `openBookFile`, whose reads are stopped part-way.
 - `EpubContentFileRef.openContentStream`, and the reads that go through it,
   now read a file a caller made with `ArchiveFile.stream`, as what is left of
   its stream, where they threw `EpubMissingArchiveEntryException`; a file

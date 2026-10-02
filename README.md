@@ -43,6 +43,13 @@ parameters, and each call states them:
 - `maxTotalBytes` (`readBook` and `readBookFile` only): the most the entries
   one call reads may inflate to between them.
 
+These limits hold for books the package opens. An `EpubBookRef` a caller
+builds over an `Archive` of its own has no `maxEntryBytes`, and `readEntry`
+on it can refuse an entry past `maxBytes` only after `ArchiveFile.content`
+has produced it: for every file a `ZipDecoder` decodes, that is the whole
+entry inflated, with no limit. Files the caller does not trust are opened
+with `openBook` or `openBookFile`.
+
 `null` sets no limit. **Without a limit, a crafted entry can inflate until
 memory runs out**, so a caller reading files it does not trust passes both.
 A limit below zero throws `ArgumentError`. The package does not check a
