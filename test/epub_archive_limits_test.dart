@@ -27,6 +27,14 @@
 //     refusing a position exactly at the end. Every position set here, by
 //     the reader or by `package:archive`, is read from at once, and that
 //     read is refused at the end either way.
+//   * In `_ZipContainerIndex._heldOr`, either `&&` as `||`, reusing a held
+//     entry when only some of its offset and sizes match. Every entry held
+//     before `keep` began came from the last record of its name, and `keep`
+//     adds that name's records in directory order, so the last one it adds
+//     matches the held entry in all three and the name ends on it either
+//     way; an earlier record's entry is replaced before `keep` returns.
+//     Only a source whose bytes changed between two of opening's passes
+//     could tell the two apart.
 //
 // Not equivalent, and not pinned: deleting `_ArchiveFileSource`'s
 // `closeSync`. It leaks a file handle and changes nothing a read returns;
