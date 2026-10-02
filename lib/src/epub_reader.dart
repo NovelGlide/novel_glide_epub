@@ -102,16 +102,17 @@ class EpubReader {
   /// once keeps the bytes itself.
   ///
   /// Of the central directory, the [EpubBookRef] keeps where to find
-  /// `mimetype`, each `META-INF/` entry, the package document and each file
-  /// its manifest lists, and nothing of any other record: what an open book
+  /// `mimetype`, each `META-INF/` entry, the package document and each file its
+  /// manifest lists, with at most one entry more for each whose name differs
+  /// from it only in case, and nothing of any other record: what an open book
   /// holds grows with its `META-INF/` entries and its manifest, not with the
   /// records its directory has. Opening still reads every record, in three
-  /// passes at most, one at a time: one checking each record and keeping
-  /// the `META-INF/` entries, one finding the package document the container
-  /// names, unless it is one of those, and one keeping the manifest's files.
-  /// So how long opening takes grows with the directory. An entry the book
-  /// does not keep, one its manifest leaves out, is found by reading the
-  /// directory once more when it is asked for, and kept from then on.
+  /// passes at most, one at a time: one checking each record and keeping the
+  /// `META-INF/` entries, one finding the package document the container names,
+  /// unless it is one of those, and one keeping the manifest's files. So how
+  /// long opening takes grows with the directory. An entry the book does not
+  /// keep, one its manifest leaves out, is found by reading the directory once
+  /// more when it is asked for, and kept from then on.
   ///
   /// Every read of an entry through the returned [EpubBookRef], by
   /// [EpubContentFileRef]'s reads, the cover reads, or
@@ -319,8 +320,9 @@ class EpubReader {
   /// decompression bomb lies in, so no limit is held against them: what
   /// bounds an entry is the count of the bytes it really inflates to when
   /// it is read.
-  static _Container _openContainer(_ArchiveSource source, _EntryReads reads) {
-    final _Container container = _Container(source, reads);
+  static _ZipContainerIndex _openContainer(
+      _ArchiveSource source, _EntryReads reads) {
+    final _ZipContainerIndex container = _ZipContainerIndex(source, reads);
     int compressedTotal = 0;
     container._eachRecord((ZipFileHeader record, int fileLength) {
       final int compressed = _recorded(record.compressedSize);
@@ -336,7 +338,7 @@ class EpubReader {
             'they overlap, or run past its end.');
       }
       compressedTotal += compressed;
-      final String name = _Container._nameOf(record);
+      final String name = _ZipContainerIndex._nameOf(record);
       if (name == 'mimetype' || name.startsWith('META-INF/')) {
         container.addFile(container._entryOf(record));
       }
@@ -714,8 +716,8 @@ final class _ArchiveEntry extends ArchiveFile {
 /// grows with the entries asked for, not with the records the directory
 /// has. A name the directory does not hold is looked for again each time it
 /// is asked for.
-final class _Container extends ContainerIndex {
-  _Container(this._source, this._reads);
+final class _ZipContainerIndex extends ContainerIndex {
+  _ZipContainerIndex(this._source, this._reads);
 
   final _ArchiveSource _source;
   final _EntryReads _reads;
@@ -730,12 +732,19 @@ final class _Container extends ContainerIndex {
 
   @override
   void keep(Set<String> names) {
-    final Set<String> folded =
-        names.map((String name) => name.toLowerCase()).toSet();
+    // The one spelling kept for each name matched but for case: the first
+    // in the directory, which a lookup regardless of case going through
+    // [files] in directory order finds first. Later records of that
+    // spelling replace it, as later records of a name always do.
+    final Map<String, String?> spellingByFolded = <String, String?>{
+      for (final String name in names) name.toLowerCase(): null,
+    };
     _eachRecord((ZipFileHeader record, int fileLength) {
       final String name = _nameOf(record);
-      // Removed when matched, so a name is matched but for case once.
-      if (names.contains(name) || folded.remove(name.toLowerCase())) {
+      final String folded = name.toLowerCase();
+      if (names.contains(name) ||
+          (spellingByFolded.containsKey(folded) &&
+              (spellingByFolded[folded] ??= name) == name)) {
         addFile(_entryOf(record));
       }
     });

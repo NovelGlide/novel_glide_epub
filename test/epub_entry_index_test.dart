@@ -274,6 +274,98 @@ void main() {
       expect(bookRef.knownEntrySizes,
           isNot(anyOf(contains('OEBPS/TOC.NCX'), contains('OEBPS/Toc.Ncx'))));
     });
+
+    // TC-IDX-15 [Error guessing]: several records of one name, or of one
+    // spelling of it, and a name spelled two ways. Opening reads the record
+    // it read before this package kept only some of them, found by running
+    // these cases against the release before: of the spellings that match
+    // the manifest's name but for case, the first in the directory; of the
+    // records of that spelling, the last. `readEntry` reads the last record
+    // of the spelling it is asked for, and `knownEntrySizes` holds one size
+    // for each spelling kept.
+    Uint8List tocBook(
+        Map<String, String> titleByTemporaryName, Map<String, String> renames) {
+      final Uint8List zip = _book(extra: <String, List<int>>{
+        for (final MapEntry<String, String> entry
+            in titleByTemporaryName.entries)
+          entry.key: utf8.encode(_ncx(entry.value)),
+      });
+      renames.forEach((String from, String to) => _rename(zip, from, to));
+      return zip;
+    }
+
+    Future<void> expectToc(Uint8List zip,
+        {required String title,
+        required Map<String, String> readByName}) async {
+      final EpubBookRef bookRef =
+          await _reader.openBook(zip, maxEntryBytes: null);
+      expect(bookRef.schema.navigation.docTitle.titles, <String>[title]);
+      for (final MapEntry<String, String> read in readByName.entries) {
+        expect(await bookRef.readEntry(read.key), utf8.encode(_ncx(read.value)),
+            reason: read.key);
+        expect(bookRef.knownEntrySizes[read.key],
+            utf8.encode(_ncx(read.value)).length,
+            reason: read.key);
+      }
+      expect(
+          bookRef.knownEntrySizes.keys
+              .where((String name) => name.toLowerCase() == 'oebps/toc.ncx'),
+          unorderedEquals(readByName.keys));
+    }
+
+    test(
+        'TC-IDX-15 [Error guessing]: of two records of the exact name, the '
+        'later is read', () async {
+      await expectToc(
+          tocBook(<String, String>{'OEBPS/toc.ncy': 'NGE-SEED Later'},
+              <String, String>{'OEBPS/toc.ncy': 'OEBPS/toc.ncx'}),
+          title: 'NGE-SEED Later',
+          readByName: <String, String>{'OEBPS/toc.ncx': 'NGE-SEED Later'});
+    });
+
+    test(
+        'TC-IDX-15 [Error guessing]: of two records of one spelling in '
+        'another case, the later is read', () async {
+      await expectToc(
+          tocBook(<String, String>{
+            'OEBPS/TOC.NCY': 'NGE-SEED Later'
+          }, <String, String>{
+            'OEBPS/toc.ncx': 'OEBPS/TOC.NCX',
+            'OEBPS/TOC.NCY': 'OEBPS/TOC.NCX',
+          }),
+          title: 'NGE-SEED Later',
+          readByName: <String, String>{'OEBPS/TOC.NCX': 'NGE-SEED Later'});
+    });
+
+    test(
+        'TC-IDX-15 [Error guessing]: the exact name before a spelling in '
+        'another case is read', () async {
+      await expectToc(
+          tocBook(<String, String>{'OEBPS/TOC.NCX': 'NGE-SEED Upper'},
+              const <String, String>{}),
+          title: 'NGE-SEED Index Book',
+          readByName: <String, String>{
+            'OEBPS/toc.ncx': 'NGE-SEED Index Book',
+            'OEBPS/TOC.NCX': 'NGE-SEED Upper',
+          });
+    });
+
+    test(
+        'TC-IDX-15 [Error guessing]: a spelling in another case before the '
+        'exact name is read', () async {
+      await expectToc(
+          tocBook(<String, String>{
+            'OEBPS/toc.ncy': 'NGE-SEED Exact'
+          }, <String, String>{
+            'OEBPS/toc.ncx': 'OEBPS/TOC.NCX',
+            'OEBPS/toc.ncy': 'OEBPS/toc.ncx',
+          }),
+          title: 'NGE-SEED Index Book',
+          readByName: <String, String>{
+            'OEBPS/TOC.NCX': 'NGE-SEED Index Book',
+            'OEBPS/toc.ncx': 'NGE-SEED Exact',
+          });
+    });
   });
 
   group('readEntry', () {
@@ -489,11 +581,11 @@ void main() {
       ..addFile(ArchiveFile('a.bin', 3, Uint8List.fromList(<int>[1, 2, 3])))
       ..addFile(ArchiveFile('b.bin', 2, <int>[4, 5]));
 
-    Future<EpubBookRef> built() async {
+    Future<EpubBookRef> built([Archive? over]) async {
       final EpubBookRef opened =
           await _reader.openBook(_book(), maxEntryBytes: null);
       return EpubBookRef(
-        epubArchive: archive,
+        epubArchive: over ?? archive,
         title: '',
         authorList: const <String>[],
         schema: opened.schema,
@@ -519,6 +611,23 @@ void main() {
               (EpubArchiveTooLargeException e) => e.message,
               'message',
               'An entry holds 3 bytes; the read allows it at most 2.')));
+    });
+
+    // TC-IDX-16 [Error guessing]: a file the caller made with
+    // `ArchiveFile.stream` holds its bytes as a stream, and one made with no
+    // content holds none; `ArchiveFile.content` hands back the stream, or
+    // null. Each reads as the bytes it holds, held to `maxBytes` alike.
+    test(
+        'TC-IDX-16 [Error guessing]: a stream file and an empty file of the '
+        'caller\'s read as their bytes', () async {
+      final EpubBookRef bookRef = await built(Archive()
+        ..addFile(ArchiveFile.stream('stream.bin', 2, InputStream(<int>[6, 7])))
+        ..addFile(ArchiveFile('empty.bin', 0, null)));
+
+      expect(await bookRef.readEntry('stream.bin'), <int>[6, 7]);
+      expect(await bookRef.readEntry('empty.bin'), isEmpty);
+      await expectLater(
+          bookRef.readEntry('stream.bin', maxBytes: 1), _throwsTooLarge);
     });
   });
 }

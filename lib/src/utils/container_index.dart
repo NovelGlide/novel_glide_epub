@@ -16,9 +16,11 @@ abstract class ContainerIndex extends Archive {
   /// central directory.
   ///
   /// A name is matched as `package:archive` names entries, with each `\` read
-  /// as a `/`. An entry whose name differs from one of [names] only in case
-  /// is kept too, the first in the directory for each, so that a document
-  /// looked up regardless of case is found among [files].
+  /// as a `/`, and of several records of one name the last is kept. Entries
+  /// whose names differ from one of [names] only in case are kept too, so
+  /// that a document looked up regardless of case is found among [files]:
+  /// of their spellings, only the first in the directory, so one more entry
+  /// at most for each of [names].
   void keep(Set<String> names);
 
   /// The bytes of the entry named [name], read as every read of an entry

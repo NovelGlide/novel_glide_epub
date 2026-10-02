@@ -64,8 +64,12 @@ class EpubBookRef {
   ///
   /// A book opened by `EpubReader` keeps `mimetype`, every `META-INF/`
   /// entry, the package document and every file its manifest lists that the
-  /// archive holds, and no other: an entry [readEntry] finds by looking
-  /// through the archive's directory is not added here. A size is the
+  /// archive holds. So that the table of contents is found regardless of
+  /// case, it also keeps, for each file the manifest lists, the entry whose
+  /// name differs from it only in case that comes first in the directory,
+  /// under the name the archive gives it. It keeps no other: an entry
+  /// [readEntry] finds by looking through the archive's directory is not
+  /// added here. A size is the
   /// archive's own claim, not what the entry inflates to, which only a read
   /// of it tells. A book built over an [Archive] of the caller's has the size
   /// of each of its files.
@@ -91,8 +95,10 @@ class EpubBookRef {
   /// [EpubCorruptArchiveException], and one compressed with a method an
   /// EPUB may not use with [EpubUnsupportedCompressionException]. A
   /// [maxBytes] below zero throws [ArgumentError]. A book built over an
-  /// [Archive] of the caller's returns the bytes its file holds, refused the
-  /// same way when there are more than [maxBytes].
+  /// [Archive] of the caller's returns a copy of the bytes its file holds,
+  /// as a list or, for one made with `ArchiveFile.stream`, as a stream, and
+  /// no bytes for a file made with no content; they are refused the same
+  /// way when there are more than [maxBytes].
   Future<Uint8List?> readEntry(String name, {int? maxBytes}) async {
     if (maxBytes != null) {
       RangeError.checkNotNegative(maxBytes, 'maxBytes');
@@ -105,7 +111,11 @@ class EpubBookRef {
     if (file == null) {
       return null;
     }
-    final Uint8List bytes = Uint8List.fromList(file.content as List<int>);
+    final Uint8List bytes = Uint8List.fromList(switch (file.content) {
+      final InputStreamBase stream => stream.toUint8List(),
+      final List<int> held => held,
+      _ => const <int>[],
+    });
     if (maxBytes != null && bytes.length > maxBytes) {
       throw EpubArchiveTooLargeException('An entry holds ${bytes.length} '
           'bytes; the read allows it at most $maxBytes.');

@@ -488,8 +488,8 @@ void main() {
     });
 
     // TC-REF-13 [Scenario/use-case]: `==` compares the three declared fields
-    // and ignores the archive, so the same file opened twice from two
-    // separately decoded archives compares equal.
+    // and ignores the archive, so the same file opened twice, two refs of
+    // their own, compares equal.
     test(
         'TC-REF-13 [Scenario]: refs to the same file from two opens are '
         'equal', () async {
@@ -503,14 +503,14 @@ void main() {
       final EpubTextContentFileRef second =
           secondBook.content.html['chapter1.xhtml']!;
 
-      expect(firstBook, isNot(same(secondBook)));
+      expect(first, isNot(same(second)));
       expect(first, equals(second));
       expect(first.hashCode, equals(second.hashCode));
     });
 
     // TC-REF-14 [Equivalence partitioning]: each of the three compared fields
-    // decides once. The twin is the opened ref rebuilt over the same archive
-    // with that one field replaced.
+    // decides once. The twin is the opened ref rebuilt with that one field
+    // replaced, over an empty archive, which equality ignores.
     for (final String field in <String>[
       'fileName',
       'contentMimeType',
