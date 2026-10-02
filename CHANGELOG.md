@@ -31,8 +31,9 @@ final int? size = ref.knownEntrySizes['OEBPS/content.opf'];
   `ArgumentError`.
 - `knownEntrySizes` maps each entry the book keeps to the uncompressed size
   its header declares: `mimetype`, every `META-INF/` entry, the package
-  document, and every file the manifest lists that the archive holds. An
-  entry `readEntry` finds outside them is not added.
+  document, every file the manifest lists that the archive holds, and the
+  case variants described below. An entry `readEntry` finds outside them is
+  not added.
 - **Opening holds what grows with `META-INF/` and the manifest, not with the
   ZIP's records.** Opening reads the central directory through the same
   4 KiB window as before and keeps the location of the entries above only;
@@ -58,9 +59,12 @@ final int? size = ref.knownEntrySizes['OEBPS/content.opf'];
   read, through `readEntry` or an `EpubContentFileRef`; after that it is
   kept and read directly. A name the archive does not hold is looked for
   again each time it is asked for.
-- The table of contents is still looked up regardless of case. Of the
-  entries whose names match a manifest file's but for case, the first in the
-  directory is kept as well, one for each file at most.
+- The table of contents is still looked up regardless of case, and finds
+  the entry it found before. Of the entries whose names match a manifest
+  file's but for case, the spelling that comes first in the directory is
+  kept as well (its last record, when it has several, as for any name), one
+  for each file at most. They are listed in `knownEntrySizes` under the
+  names the archive gives them.
 
 **Breaking: the package has no built-in limits; each call passes its own.**
 How large a file may be, how many entries it may hold, and how much an entry
