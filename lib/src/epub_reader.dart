@@ -741,9 +741,30 @@ final class _ZipContainerIndex extends ContainerIndex {
       if (names.contains(name) ||
           (spellingByFolded.containsKey(folded) &&
               (spellingByFolded[folded] ??= name) == name)) {
-        addFile(_entryOf(record));
+        addFile(_heldOr(_entryOf(record)));
       }
     });
+  }
+
+  /// The entry already held for the record [entry] was made from, the one
+  /// at the same local header, kept or found by name before; [entry] itself
+  /// when there is none.
+  ///
+  /// So a record has one entry however many ways it was reached: a package
+  /// document opening found, or kept as a `META-INF/` entry, that its own
+  /// manifest also lists is one entry, inflated once and counted once by a
+  /// book read whole.
+  _ArchiveEntry _heldOr(_ArchiveEntry entry) {
+    for (final ArchiveFile? held in <ArchiveFile?>[
+      super.findFile(entry.name),
+      _foundByName[entry.name],
+    ]) {
+      if (held is _ArchiveEntry &&
+          held._localHeaderOffset == entry._localHeaderOffset) {
+        return held;
+      }
+    }
+    return entry;
   }
 
   @override

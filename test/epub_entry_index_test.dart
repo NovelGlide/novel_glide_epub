@@ -307,6 +307,46 @@ void main() {
       expect(bookRef.knownEntrySizes, isNot(contains('OEBPS/Content.Opf')));
     });
 
+    // TC-IDX-19 [Error guessing]: a manifest that lists its own package
+    // document, the document outside `META-INF/` and inside it. Opening
+    // reaches its record twice, by name and by the manifest, and both are one
+    // entry: a book read whole inflates it once and counts it once, so a
+    // `maxTotalBytes` of every entry it reads counted once is enough, and one
+    // byte less is not.
+    for (final String opfPath in <String>[
+      'OEBPS/content.opf',
+      'META-INF/book/content.opf',
+    ]) {
+      test(
+          'TC-IDX-19 [Error guessing]: a package document its manifest lists '
+          'is counted once by readBook ($opfPath)', () async {
+        final Uint8List zip = _book(
+            opfPath: opfPath,
+            manifestExtra: '<item id="opf" href="content.opf" '
+                'media-type="application/oebps-package+xml"/>');
+        final String directory = opfPath.substring(0, opfPath.lastIndexOf('/'));
+        final Archive whole = ZipDecoder().decodeBytes(zip);
+        final int readOnce = <String>[
+          'META-INF/container.xml',
+          opfPath,
+          '$directory/toc.ncx',
+          '$directory/chapter1.xhtml',
+          '$directory/Text/chapter 2.xhtml',
+          '$directory/style.css',
+        ].fold(0, (int sum, String name) {
+          return sum + (whole.findFile(name)!.content as List<int>).length;
+        });
+
+        final EpubBook book = await _reader.readBook(zip,
+            maxEntryBytes: null, maxTotalBytes: readOnce);
+        expect(book.content.allFiles, contains('content.opf'));
+        await expectLater(
+            _reader.readBook(zip,
+                maxEntryBytes: null, maxTotalBytes: readOnce - 1),
+            _throwsTooLarge);
+      });
+    }
+
     // TC-IDX-15 [Error guessing]: several records of one name, or of one
     // spelling of it, and a name spelled two ways. The table of contents is
     // read from the spelling that matches the manifest's name but for case
@@ -661,6 +701,33 @@ void main() {
       expect(
           await bookRef.readEntry('stream.bin', maxBytes: 3), <int>[1, 2, 3]);
       expect(stream.reads, 1);
+    });
+
+    // TC-IDX-20 [Error guessing]: a file `ZipDecoder` decodes produces its
+    // content when `ArchiveFile.content` is asked for, inflating the whole
+    // entry with no limit. `maxBytes` refuses it only after that: the
+    // message counts every byte the entry inflated to, and the decoder's
+    // record of it reads as stored, inflated, by then.
+    test(
+        'TC-IDX-20 [Error guessing]: an entry of a decoded archive is refused '
+        'by maxBytes after it was inflated whole', () async {
+      final ZipDecoder decoder = ZipDecoder();
+      final EpubBookRef bookRef = await built(decoder.decodeBytes(_book(
+          extra: <String, List<int>>{'extras/bomb.bin': Uint8List(8 << 20)})));
+      final ZipFile record = decoder.directory.fileHeaders
+          .singleWhere(
+              (ZipFileHeader header) => header.filename == 'extras/bomb.bin')
+          .file!;
+      expect(record.compressionMethod, ZipFile.zipCompressionDeflate);
+
+      await expectLater(
+          bookRef.readEntry('extras/bomb.bin', maxBytes: 1024),
+          throwsA(isA<EpubArchiveTooLargeException>().having(
+              (EpubArchiveTooLargeException e) => e.message,
+              'message',
+              'An entry holds ${8 << 20} bytes; the read allows it at most '
+                  '1024.')));
+      expect(record.compressionMethod, ZipFile.zipCompressionStore);
     });
 
     // TC-IDX-16 [Error guessing]: a file the caller made with

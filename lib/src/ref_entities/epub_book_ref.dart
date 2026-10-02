@@ -84,8 +84,9 @@ class EpubBookRef {
   /// The bytes of the archive entry named [name], whether or not the book's
   /// manifest lists it; null when the archive has no such entry.
   ///
-  /// [name] is the entry's full name in the archive, as written there, not
-  /// relative to the package document and with no escapes decoded. An entry
+  /// [name] is the entry's full name in the archive, as written there but
+  /// with each `\` in a record's name read as a `/`, not relative to the
+  /// package document and with no escapes decoded. An entry
   /// the book keeps is read at once. Any other is looked for in the
   /// archive's central directory, read through once more, record by record;
   /// one found is kept from then on, so the next read of it is direct, and a
@@ -101,12 +102,21 @@ class EpubBookRef {
   ///
   /// A book built over an [Archive] of the caller's has no `maxEntryBytes`:
   /// [maxBytes] is the only limit on a read of it, and without one nothing
-  /// bounds the read but the file. The read returns a copy of the bytes the
-  /// file holds, as a list or, for one made with `ArchiveFile.stream`, as a
-  /// stream, and no bytes for a file made with no content. Their count is
-  /// checked against [maxBytes] before any of them is read or copied, so a
-  /// file holding more is refused with [EpubArchiveTooLargeException]
-  /// having read nothing of it.
+  /// bounds the read but the file. The read returns a copy of the bytes
+  /// `ArchiveFile.content` gives, a list or the stream of a file made with
+  /// `ArchiveFile.stream`, and no bytes for a file made with no content.
+  /// Their count is checked against [maxBytes] before any of them is copied,
+  /// and a file holding more is refused with [EpubArchiveTooLargeException].
+  ///
+  /// That stops a read before it costs anything only for a file that already
+  /// holds its bytes as a list, or one made with `ArchiveFile.stream`. For a
+  /// file whose content `package:archive` produces when it is asked for,
+  /// every file a `ZipDecoder` decodes, or one made with the plain
+  /// `ArchiveFile(name, size, stream)` constructor, `ArchiveFile.content`
+  /// itself inflates or reads the whole entry, with no limit, and keeps it:
+  /// [maxBytes] can only refuse it afterwards. A caller reading files it
+  /// does not trust opens them with `EpubReader.openBook` or
+  /// `EpubReader.openBookFile`, whose reads are stopped part-way.
   Future<Uint8List?> readEntry(String name, {int? maxBytes}) async {
     if (maxBytes != null) {
       RangeError.checkNotNegative(maxBytes, 'maxBytes');
