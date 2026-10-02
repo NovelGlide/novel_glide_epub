@@ -33,7 +33,19 @@ final int? size = ref.knownEntrySizes['OEBPS/content.opf'];
   its header declares: `mimetype`, every `META-INF/` entry, the package
   document, every file the manifest lists that the archive holds, and the
   case variants described below. An entry `readEntry` finds outside them is
-  not added.
+  not added. Each access builds a new map; a caller that looks at it
+  repeatedly keeps the map.
+- Over an `Archive` the caller built, which has no `maxEntryBytes`,
+  `readEntry` is held to `maxBytes` alone: the count of bytes a file holds
+  is checked before any is read or copied, so a refused read reads nothing
+  of the file. It returns a copy of the bytes, from a list or from the
+  stream of a file made with `ArchiveFile.stream`, and no bytes for a file
+  made with no content.
+- `EpubContentFileRef.openContentStream`, and the reads that go through it,
+  now read a file a caller made with `ArchiveFile.stream`, as what is left of
+  its stream, where they threw `EpubMissingArchiveEntryException`; a file
+  made with no content still throws it. `ArchiveFile.content` is turned into
+  bytes the same way in both places.
 - **Opening holds what grows with `META-INF/` and the manifest, not with the
   ZIP's records.** Opening reads the central directory through the same
   4 KiB window as before and keeps the location of the entries above only;
@@ -59,12 +71,17 @@ final int? size = ref.knownEntrySizes['OEBPS/content.opf'];
   read, through `readEntry` or an `EpubContentFileRef`; after that it is
   kept and read directly. A name the archive does not hold is looked for
   again each time it is asked for.
-- The table of contents is still looked up regardless of case, and finds
-  the entry it found before. Of the entries whose names match a manifest
-  file's but for case, the spelling that comes first in the directory is
-  kept as well (its last record, when it has several, as for any name), one
-  for each file at most. They are listed in `knownEntrySizes` under the
-  names the archive gives them.
+- The table of contents is still looked up regardless of case. Of the
+  entries whose names match the package document's or a manifest file's but
+  for case, the spelling that comes first in the directory is kept as well
+  (its last record, when it has several, as for any name), one for each
+  document at most. They are listed in `knownEntrySizes` under the names
+  the archive gives them. So the lookup finds the entry it found before,
+  except in one arrangement: the table of contents lies inside `META-INF/`
+  (as it does when the package document is there), and the directory spells
+  it both as `META-INF/…` and in another case (`meta-inf/…`). Opening keeps
+  the `META-INF/` spelling first, so the lookup finds it, even where the
+  other comes first in the directory.
 
 **Breaking: the package has no built-in limits; each call passes its own.**
 How large a file may be, how many entries it may hold, and how much an entry
