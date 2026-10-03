@@ -52,7 +52,11 @@ Uint8List _bookWithCover() => buildEpubArchive(
             '</ncx>',
         'OEBPS/chapter1.xhtml': seedXhtml('NGE-SEED-RETAIN-CH1'),
       },
-      binaryEntries: <String, List<int>>{'OEBPS/cover.png': seedPngBytes()},
+      binaryEntries: <String, List<int>>{
+        'OEBPS/cover.png': seedPngBytes(),
+        // Left out of the manifest, so only `readEntry` reads it.
+        'OEBPS/unlisted.bin': seedPngBytes(),
+      },
     );
 
 void main() {
@@ -110,8 +114,9 @@ void main() {
 
   // TC-RET-2 [Scenario]: nothing in a ref keeps what a read returned. Once
   // the caller drops it, a full collection frees it, whichever way it was
-  // read: as bytes, through the stream methods, as the cover, or as the
-  // content of an entry of `epubArchive()`. The ref itself is alive
+  // read: as bytes, through the stream methods, as the cover, as the
+  // content of the entry the cover's ref finds, or by `readEntry`, of the
+  // cover and of an entry the manifest leaves out. The ref itself is alive
   // throughout.
   final Map<String, Future<Object?> Function()> reads =
       <String, Future<Object?> Function()>{
@@ -120,8 +125,10 @@ void main() {
     'openContentStream': () async =>
         cover().openContentStream(cover().getContentFileEntry()),
     'readCoverBytes': () => bookRef.readCoverBytes(),
-    'ArchiveFile.content': () async =>
-        bookRef.epubArchive().findFile('OEBPS/cover.png')!.content,
+    'ArchiveFile.content': () async => cover().getContentFileEntry().content,
+    'readEntry': () => bookRef.readEntry('OEBPS/cover.png'),
+    'readEntry of an unlisted entry': () =>
+        bookRef.readEntry('OEBPS/unlisted.bin'),
   };
   for (final MapEntry<String, Future<Object?> Function()> read
       in reads.entries) {
