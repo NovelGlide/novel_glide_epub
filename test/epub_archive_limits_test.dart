@@ -630,11 +630,13 @@ const String _chapterPath = 'OEBPS/chapter1.xhtml';
 /// any compression method: [chapter] is that entry. [extra] entries are added
 /// to the archive and referenced by nothing. [listed] entries, each named
 /// under `OEBPS/`, are added to the archive and to the manifest, so reading
-/// the book whole reads them.
+/// the book whole reads them. When [listsItself], the manifest lists the
+/// package document too.
 Uint8List _craftBook({
   required _CraftedZipEntry chapter,
   List<_CraftedZipEntry> extra = const <_CraftedZipEntry>[],
   List<_CraftedZipEntry> listed = const <_CraftedZipEntry>[],
+  bool listsItself = false,
 }) {
   return _craftZip(<_CraftedZipEntry>[
     _CraftedZipEntry.stored('mimetype', utf8.encode('application/epub+zip')),
@@ -665,6 +667,8 @@ Uint8List _craftBook({
                 'id="${entry.name.substring(6).replaceAll('.', '-')}" '
                 'href="${entry.name.substring(6)}" '
                 'media-type="application/octet-stream"/>').join()}'
+            '${listsItself ? '<item id="opf" href="content.opf" '
+                'media-type="application/oebps-package+xml"/>' : ''}'
             '</manifest>'
             '<spine toc="ncx"><itemref idref="ch1"/></spine>'
             '</package>')),
@@ -2270,16 +2274,26 @@ void main() {
     // each pass, and they can change in between. Each case changes the
     // package document's record once the document has been read, before its
     // manifest is kept, in one of the fields an entry is made of: where its
-    // local header is, the size it declares, the bytes it stores. The record
-    // as it is now is the entry: the entry made from it is not equal to the
-    // one held from before the change, and replaces it.
+    // local header is, the size it declares, the bytes it stores.
     // `_ChangingBytes` makes the change as the document's last stored byte
     // is read, so it lands in that window whatever opening awaits.
+    //
+    // Opened, the book reads the record as it is now: the pass that keeps
+    // the manifest's files makes a new entry of it, and `addFile` puts that
+    // in place of the one held from before the change, by name.
+    //
+    // Read whole, with a manifest that lists the package document, the book
+    // has read the document once already, before the change, and keeps what
+    // it read by entry key. The entry made after the change differs from
+    // the one before in the field changed, so its key does too: the record
+    // is read again, as it is now, and counted again. A key that left the
+    // changed field out would hand back the bytes read before the change,
+    // counted once.
     const String opfPath = 'OEBPS/content.opf';
 
-    /// [book] opened while [change] alters the package document's record,
-    /// at [record] in [data], after the document has been read.
-    Future<EpubBookRef> openChanging(
+    /// [book] as a list that [change] alters, at the package document's
+    /// record, at [record] in [data], once the document has been read.
+    _ChangingBytes changing(
         Uint8List book, void Function(ByteData data, int record) change) {
       final ByteData data = ByteData.sublistView(book);
       final int record = _recordOf(book, opfPath);
@@ -2288,11 +2302,14 @@ void main() {
           opfPath.length +
           data.getUint32(record + 20, Endian.little) -
           1;
-      return reader.openBook(
-          _ChangingBytes(book,
-              after: lastByte, change: () => change(data, record)),
-          maxEntryBytes: _maxEntryBytes);
+      return _ChangingBytes(book,
+          after: lastByte, change: () => change(data, record));
     }
+
+    /// [book] opened while [change] alters the package document's record.
+    Future<EpubBookRef> openChanging(
+            Uint8List book, void Function(ByteData data, int record) change) =>
+        reader.openBook(changing(book, change), maxEntryBytes: _maxEntryBytes);
 
     /// The bytes [name] stores in [book], as `_craftZip` wrote them.
     Uint8List storedOf(Uint8List book, String name) {
@@ -2307,6 +2324,42 @@ void main() {
 
     final _CraftedZipEntry chapter =
         _CraftedZipEntry.stored(_chapterPath, utf8.encode(_chapterXhtml));
+
+    /// Reads whole a book [build] makes, while [change] alters its package
+    /// document's record, and expects the document read after the change to
+    /// be [after], counted on top of the reads before it: a `maxTotalBytes`
+    /// of exactly that total reads the book, and one byte less does not.
+    /// [build] makes a book anew for each read, since the change is made to
+    /// the bytes themselves.
+    Future<void> expectReadAgain(
+        Uint8List Function() build,
+        void Function(ByteData data, int record) change,
+        List<int> after) async {
+      final Uint8List book = build();
+      final int total = <String>[
+            'META-INF/container.xml',
+            opfPath,
+            'OEBPS/toc.ncx',
+            _chapterPath,
+          ].fold(
+              0, (int sum, String name) => sum + storedOf(book, name).length) +
+          after.length;
+
+      final EpubBook read = await reader.readBook(changing(build(), change),
+          maxEntryBytes: _maxEntryBytes, maxTotalBytes: total);
+
+      expect(
+          switch (read.content.allFiles['content.opf']) {
+            final EpubTextContentFile text => utf8.encode(text.content),
+            final EpubByteContentFile bytes => bytes.content,
+            _ => null,
+          },
+          after);
+      await expectLater(
+          reader.readBook(changing(build(), change),
+              maxEntryBytes: _maxEntryBytes, maxTotalBytes: total - 1),
+          _throwsTooLarge);
+    }
 
     test(
         'TC-LIM-72 [Error guessing]: a record moved to another local header '
@@ -2361,6 +2414,112 @@ void main() {
 
       expect(bookRef.knownEntrySizes[opfPath], opf.length);
       expect(await bookRef.readEntry(opfPath), opf.sublist(0, opf.length - 8));
+    });
+
+    test(
+        'TC-LIM-72 [Error guessing]: read whole, a record moved to another '
+        'local header while the book opens is read again from there', () async {
+      final int length =
+          storedOf(_craftBook(chapter: chapter, listsItself: true), opfPath)
+              .length;
+      final List<int> moved = List<int>.generate(
+          length, (int i) => 'NGE-SEED-MOVED '.codeUnitAt(i % 15));
+      Uint8List build() => _craftBook(
+              chapter: chapter,
+              listsItself: true,
+              extra: <_CraftedZipEntry>[
+                _CraftedZipEntry.stored('OEBPS/moved.bin', moved),
+              ]);
+      final Uint8List book = build();
+      final int movedHeader = ByteData.sublistView(book)
+          .getUint32(_recordOf(book, 'OEBPS/moved.bin') + 42, Endian.little);
+
+      await expectReadAgain(
+          build,
+          (ByteData data, int record) =>
+              data.setUint32(record + 42, movedHeader, Endian.little),
+          moved);
+    });
+
+    test(
+        'TC-LIM-72 [Error guessing]: read whole, a record that declares '
+        'another size while the book opens is read again', () async {
+      Uint8List build() => _craftBook(chapter: chapter, listsItself: true);
+      final Uint8List opf = storedOf(build(), opfPath);
+
+      await expectReadAgain(
+          build,
+          (ByteData data, int record) =>
+              data.setUint32(record + 24, opf.length + 8, Endian.little),
+          opf);
+    });
+
+    test(
+        'TC-LIM-72 [Error guessing]: read whole, a record that stores fewer '
+        'bytes while the book opens is read again to its new length', () async {
+      Uint8List build() => _craftBook(chapter: chapter, listsItself: true);
+      final Uint8List opf = storedOf(build(), opfPath);
+
+      await expectReadAgain(
+          build,
+          (ByteData data, int record) =>
+              data.setUint32(record + 20, opf.length - 8, Endian.little),
+          opf.sublist(0, opf.length - 8));
+    });
+
+    // TC-LIM-73 [Error guessing]: two records of two names the manifest
+    // lists, both pointing at one local header and declaring the same sizes.
+    // They differ in name alone, and are two entries: a book read whole
+    // reads and counts each.
+    test(
+        'TC-LIM-73 [Error guessing]: two names at one local header are each '
+        'read and counted by readBook', () async {
+      final List<int> bytes = utf8.encode('NGE-SEED-SHARED');
+      Uint8List build() {
+        final Uint8List book = _craftBook(
+          chapter: chapter,
+          listed: <_CraftedZipEntry>[
+            _CraftedZipEntry.stored('OEBPS/first.bin', bytes),
+            _CraftedZipEntry.stored(
+                'OEBPS/other.bin', utf8.encode('NGE-SEED-OTHERS')),
+          ],
+        );
+        final ByteData data = ByteData.sublistView(book);
+        data.setUint32(
+            _recordOf(book, 'OEBPS/other.bin') + 42,
+            data.getUint32(
+                _recordOf(book, 'OEBPS/first.bin') + 42, Endian.little),
+            Endian.little);
+        return book;
+      }
+
+      final Uint8List book = build();
+      final int total = <String>[
+            'META-INF/container.xml',
+            opfPath,
+            'OEBPS/toc.ncx',
+            _chapterPath,
+          ].fold(
+              0, (int sum, String name) => sum + storedOf(book, name).length) +
+          2 * bytes.length;
+
+      final EpubBook read = await reader.readBook(build(),
+          maxEntryBytes: _maxEntryBytes, maxTotalBytes: total);
+
+      expect(<List<int>?>[
+        for (final String name in <String>['first.bin', 'other.bin'])
+          switch (read.content.allFiles[name]) {
+            final EpubByteContentFile file => file.content,
+            _ => null,
+          },
+      ], <List<int>>[
+        bytes,
+        bytes
+      ]);
+      await expectLater(
+          reader.readBook(build(),
+              maxEntryBytes: _maxEntryBytes, maxTotalBytes: total - 1),
+          _throwsTooLarge);
     });
   });
 

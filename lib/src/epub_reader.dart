@@ -328,7 +328,7 @@ class EpubReader {
     int compressedTotal = 0;
     container._eachRecord((ZipFileHeader record, int fileLength) {
       final _ArchiveEntry entry = container._entryOf(record);
-      final int compressed = entry._key.compressedSize;
+      final int compressed = entry._identity.compressedSize;
       // Compared before adding, so a zip64 size near 2^63 cannot wrap it.
       if (compressed > fileLength - compressedTotal) {
         throw EpubCorruptArchiveException('The entries declare more '
@@ -668,11 +668,11 @@ final class _FileBytes extends UnmodifiableListView<int> {
 /// the caller's limits. [_source] is read as it is then, whatever it held
 /// when the book was opened.
 final class _ArchiveEntry extends ArchiveFile {
-  _ArchiveEntry(this._key, this._source, this._reads)
-      : super(_key.name, _key.declaredSize, null);
+  _ArchiveEntry(this._identity, this._source, this._reads)
+      : super(_identity.name, _identity.declaredSize, null);
 
   /// What this entry is: the record it was made from.
-  final _EntryKey _key;
+  final _ArchiveEntryKey _identity;
   final _ArchiveSource _source;
   final _EntryReads _reads;
 
@@ -692,11 +692,11 @@ final class _ArchiveEntry extends ArchiveFile {
           // What `ZipFileHeader.readLocalFileHeader` does, less keeping the
           // parsed header, and the copy of its extra field, in a
           // `ZipFileHeader`.
-          input.position = _key.localHeaderOffset;
-          final ZipFile local = ZipFile(
-              input, ZipFileHeader()..compressedSize = _key.compressedSize);
+          input.position = _identity.localHeaderOffset;
+          final ZipFile local = ZipFile(input,
+              ZipFileHeader()..compressedSize = _identity.compressedSize);
           return EpubReader._inflate(local.rawContent as _BoundedInputStream,
-              local.compressionMethod, limit, _key.declaredSize);
+              local.compressionMethod, limit, _identity.declaredSize);
         },
       ));
 }
@@ -709,8 +709,8 @@ final class _ArchiveEntry extends ArchiveFile {
 /// these read alike, and are one entry, however each was reached. The
 /// entry's source is left out: an entry is only ever compared with another
 /// of the same book.
-final class _EntryKey extends Equatable {
-  const _EntryKey(this.name, this.localHeaderOffset, this.compressedSize,
+final class _ArchiveEntryKey extends Equatable {
+  const _ArchiveEntryKey(this.name, this.localHeaderOffset, this.compressedSize,
       this.declaredSize);
 
   /// The record's name, each `\` read as a `/`, as `ArchiveFile` has it.
@@ -766,9 +766,9 @@ final class _ZipContainerIndex extends ContainerIndex {
     // Each record kept is a new entry; `addFile` replaces the entry of its
     // name, so the last record of a name the pass meets is the one kept. An
     // entry already held, a package document opening found or a `META-INF/`
-    // entry its manifest lists, has the same [_EntryKey] as the one this pass
-    // makes from the same record, so a book read whole, which keeps what it
-    // reads by key, inflates and counts the record once.
+    // entry its manifest lists, has the same [_ArchiveEntryKey] as the one
+    // this pass makes from the same record, so a book read whole, which keeps
+    // what it reads by key, inflates and counts the record once.
     _eachRecord((ZipFileHeader record, int fileLength) {
       final String name = _nameOf(record);
       final String folded = name.toLowerCase();
@@ -841,7 +841,7 @@ final class _ZipContainerIndex extends ContainerIndex {
           '$compressed compressed, $declared uncompressed.');
     }
     return _ArchiveEntry(
-        _EntryKey(
+        _ArchiveEntryKey(
             _nameOf(record),
             EpubReader._recorded(record.localHeaderOffset),
             compressed,
@@ -886,22 +886,24 @@ base class _EntryReads {
 
 /// The reads of one [EpubReader.readBook], which holds every entry it reads
 /// in the [EpubBook] it returns: what each entry inflates to is kept for the
-/// call by its [_EntryKey], so that one read twice, a chapter read for the
-/// content and for the chapters say, or two entries made from one record,
-/// is inflated and counted once, and what they inflate to between them is
-/// held to [_maxTotalBytes], when there is one, as well as each to its own
-/// limit. A read refused adds nothing: what it inflated is dropped with it.
+/// call by its [_ArchiveEntryKey], so that one read twice, a chapter read for
+/// the content and for the chapters say, or two entries made from one
+/// record, is inflated and counted once, and what they inflate to between
+/// them is held to [_maxTotalBytes], when there is one, as well as each to
+/// its own limit. A read refused adds nothing: what it inflated is dropped
+/// with it.
 final class _BookEntryReads extends _EntryReads {
   _BookEntryReads(super.maxEntryBytes, int? maxTotalBytes)
       : _maxTotalBytes = _EntryReads._checked(maxTotalBytes, 'maxTotalBytes');
 
   final int? _maxTotalBytes;
-  final Map<_EntryKey, Uint8List> _bytesByEntry = <_EntryKey, Uint8List>{};
+  final Map<_ArchiveEntryKey, Uint8List> _bytesByEntry =
+      <_ArchiveEntryKey, Uint8List>{};
   int _total = 0;
 
   @override
   Uint8List read(_ArchiveEntry entry) =>
-      _bytesByEntry[entry._key] ??= _counted(entry._read(_limitNow));
+      _bytesByEntry[entry._identity] ??= _counted(entry._read(_limitNow));
 
   /// What the next read may inflate to: the tighter of the two limits, the
   /// total's being what it has left; `null` when there is neither.
