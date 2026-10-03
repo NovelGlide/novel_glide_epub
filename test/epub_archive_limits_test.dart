@@ -27,14 +27,6 @@
 //     refusing a position exactly at the end. Every position set here, by
 //     the reader or by `package:archive`, is read from at once, and that
 //     read is refused at the end either way.
-//   * In `_ZipContainerIndex._heldOr`, either `&&` as `||`, reusing a held
-//     entry when only some of its offset and sizes match. Every entry held
-//     before `keep` began came from the last record of its name, and `keep`
-//     adds that name's records in directory order, so the last one it adds
-//     matches the held entry in all three and the name ends on it either
-//     way; an earlier record's entry is replaced before `keep` returns.
-//     Only a source whose bytes changed between two of opening's passes
-//     could tell the two apart.
 //
 // Not equivalent, and not pinned: deleting `_ArchiveFileSource`'s
 // `closeSync`. It leaks a file handle and changes nothing a read returns;
@@ -49,6 +41,7 @@
 // `epub_archive_memory_test.dart`'s TC-MEM-3, TC-MEM-5 and TC-MEM-10 do, in
 // a process of their own, which the mutation run's per-test coverage cannot
 // trace back to these lines.
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -2272,6 +2265,38 @@ void main() {
       expect(bookRef.knownEntrySizes[name], 8);
       expect(await bookRef.readEntry(name), utf8.encode('NGE-SEED'));
     });
+
+    // TC-LIM-72 [Error guessing]: opening reads the caller's bytes again for
+    // each pass, and they can change in between. The package document's
+    // record is changed once the document has been read, before its manifest
+    // is kept: the same local header, the same declared size, fewer bytes
+    // stored. The record as it is now is the entry, not the one held from
+    // before the change.
+    test(
+        'TC-LIM-72 [Error guessing]: a record changed while the book opens is '
+        'read as it is now', () async {
+      const String name = 'OEBPS/content.opf';
+      final Uint8List book = _craftBook(
+          chapter: _CraftedZipEntry.stored(
+              _chapterPath, utf8.encode(_chapterXhtml)));
+      final ByteData data = ByteData.sublistView(book);
+      final int record = _recordOf(book, name);
+      final int stored = data.getUint32(record + 20, Endian.little);
+      final int lastByte = data.getUint32(record + 42, Endian.little) +
+          _localFileHeaderLength +
+          name.length +
+          stored -
+          1;
+      final List<int> opf = book.sublist(lastByte + 1 - stored, lastByte + 1);
+      final EpubBookRef bookRef = await reader.openBook(
+          _ChangingBytes(book, after: lastByte, change: () {
+            data.setUint32(record + 20, stored - 8, Endian.little);
+          }),
+          maxEntryBytes: _maxEntryBytes);
+
+      expect(bookRef.knownEntrySizes[name], stored);
+      expect(await bookRef.readEntry(name), opf.sublist(0, stored - 8));
+    });
   });
 
   group('the one decode', () {
@@ -2679,6 +2704,40 @@ int _indexOf(List<int> bytes, List<int> pattern, [int start = 0]) {
 }
 
 /// The two limits a `readBook` takes.
+/// [_bytes] as a list, changed by [_change] once the byte at [_after] has
+/// been read for the first time.
+final class _ChangingBytes extends ListBase<int> {
+  _ChangingBytes(this._bytes,
+      {required int after, required void Function() change})
+      : _after = after,
+        _change = change;
+
+  final Uint8List _bytes;
+  final int _after;
+  final void Function() _change;
+  bool _changed = false;
+
+  @override
+  int get length => _bytes.length;
+
+  @override
+  set length(int newLength) => throw UnsupportedError('A fixed length.');
+
+  @override
+  int operator [](int index) {
+    final int byte = _bytes[index];
+    if (index == _after && !_changed) {
+      _changed = true;
+      _change();
+    }
+    return byte;
+  }
+
+  @override
+  void operator []=(int index, int value) =>
+      throw UnsupportedError('Read only.');
+}
+
 class _Limits {
   const _Limits(this.entry, this.total);
 

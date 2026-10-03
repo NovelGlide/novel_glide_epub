@@ -767,9 +767,10 @@ final class _ZipContainerIndex extends ContainerIndex {
   /// So a record has one entry however many ways it was reached: a package
   /// document opening found, or kept as a `META-INF/` entry, that its own
   /// manifest also lists is one entry, inflated once and counted once by a
-  /// book read whole. Another record at the same local header declaring
-  /// other sizes is another record, and gets an entry of its own, so the
-  /// last record of a name is the one kept, as it always is.
+  /// book read whole. Each pass reads the source again, and the bytes a
+  /// caller passed can change between two of them. A record at the same
+  /// local header whose sizes differ from those of the held entry gets an
+  /// entry of its own, and is read by the sizes it declares now.
   static _ArchiveEntry _heldOr(_ArchiveEntry entry, List<_ArchiveEntry> held) =>
       held.firstWhereOrNull((_ArchiveEntry candidate) =>
           candidate._localHeaderOffset == entry._localHeaderOffset &&
