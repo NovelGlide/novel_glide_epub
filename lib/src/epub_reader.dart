@@ -737,8 +737,10 @@ final class _ZipContainerIndex extends ContainerIndex {
     };
     // The entries held before this pass, kept or found by name: each record
     // the pass keeps that one of them was made from keeps that entry. Taken
-    // before the pass, so an entry the pass itself adds, and may replace
-    // with a later record of its name, is not mistaken for one.
+    // before the pass, so an entry the pass itself adds is not mistaken for
+    // one. Which record of a name is kept is not decided here: `addFile`
+    // replaces the entry of a name, so the last record of it the pass meets
+    // is the one kept, whether it was held or not.
     final Map<String, List<_ArchiveEntry>> heldByName =
         <String, List<_ArchiveEntry>>{};
     for (final _ArchiveEntry held in <_ArchiveEntry>[
@@ -760,17 +762,19 @@ final class _ZipContainerIndex extends ContainerIndex {
     });
   }
 
-  /// The entry of [held] made from the same record as [entry], at the same
-  /// local header and declaring the same sizes; [entry] itself when there is
-  /// none.
+  /// The entry of [held], the entries held under [entry]'s name, made from
+  /// a record equal to [entry]'s; [entry] itself when there is none.
   ///
-  /// So a record has one entry however many ways it was reached: a package
-  /// document opening found, or kept as a `META-INF/` entry, that its own
-  /// manifest also lists is one entry, inflated once and counted once by a
-  /// book read whole. Each pass reads the source again, and the bytes a
-  /// caller passed can change between two of them. A record at the same
-  /// local header whose sizes differ from those of the held entry gets an
-  /// entry of its own, and is read by the sizes it declares now.
+  /// An entry is its name, its local header and the two sizes its record
+  /// declares, and nothing else: it holds no bytes, and reads its
+  /// compression method from the local header each time it is read. So a
+  /// record equal to a held entry's in all of them is that entry, and the
+  /// held entry is reused: a package document opening found, or kept as a
+  /// `META-INF/` entry, that its own manifest also lists is one entry,
+  /// inflated once and counted once by a book read whole. A record that
+  /// differs in any of them is another record, another of the name or the
+  /// same one changed since the held entry was made, and gets an entry of
+  /// its own.
   static _ArchiveEntry _heldOr(_ArchiveEntry entry, List<_ArchiveEntry> held) =>
       held.firstWhereOrNull((_ArchiveEntry candidate) =>
           candidate._localHeaderOffset == entry._localHeaderOffset &&

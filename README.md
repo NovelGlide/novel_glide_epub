@@ -88,16 +88,19 @@ What that costs in memory:
   it directly; a name the archive does not hold reads as `null`, and is looked
   for again each time. An entry is read each time it is asked for, local
   header and all, inflated into memory, and handed to the caller; one never
-  asked for is never read. The size an entry declares is never allocated on
-  its word: the buffer is capped at the limit and at what the entry's
-  compressed bytes can inflate to, so an honest entry is held once, limit or
-  none. The `EpubBookRef` keeps nothing it has read, so holding it costs the
-  same however long it is kept, and each read is held to `maxEntryBytes`, or
-  to a tighter `maxBytes` a `readEntry` call passes, with no total across
-  reads. A caller that wants an entry inflated once however often it uses it
-  keeps the bytes itself. `openBook` holds the bytes it was given; an
-  `EpubBookRef` from `openBookFile` holds only the path, opening the file for
-  each read and closing it after, so there is nothing to close.
+  asked for is never read. Each pass, and each read, reads the file or byte
+  list as it is then: one changed while the book opens or after is read as it
+  is at that read, and the package does not detect the change. The size an
+  entry declares is never allocated on its word: the buffer is capped at the
+  limit and at what the entry's compressed bytes can inflate to, so an honest
+  entry is held once, limit or none. The `EpubBookRef` keeps nothing it has
+  read, so holding it costs the same however long it is kept, and each read is
+  held to `maxEntryBytes`, or to a tighter `maxBytes` a `readEntry` call
+  passes, with no total across reads. A caller that wants an entry inflated
+  once however often it uses it keeps the bytes itself. `openBook` holds the
+  bytes it was given; an `EpubBookRef` from `openBookFile` holds only the
+  path, opening the file for each read and closing it after, so there is
+  nothing to close.
 - **`readBook` / `readBookFile`** read every entry the `EpubBook` holds
   through the same inflater, each once, into the `EpubBook` they return,
   which holds them all at once: what the call reads is held to
