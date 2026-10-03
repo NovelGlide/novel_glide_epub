@@ -12,6 +12,7 @@ environment:
 dependencies:
   archive: ^3.6.1
   collection: ^1.15.0
+  equatable: ^3.0.0
   image: ^4.0.17
   # Used by navigation_reader; was reached transitively until
   # `depend_on_referenced_packages` pointed out it was never declared.

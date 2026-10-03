@@ -2271,7 +2271,8 @@ void main() {
     // package document's record once the document has been read, before its
     // manifest is kept, in one of the fields an entry is made of: where its
     // local header is, the size it declares, the bytes it stores. The record
-    // as it is now is the entry, not the one held from before the change.
+    // as it is now is the entry: the entry made from it is not equal to the
+    // one held from before the change, and replaces it.
     // `_ChangingBytes` makes the change as the document's last stored byte
     // is read, so it lands in that window whatever opening awaits.
     const String opfPath = 'OEBPS/content.opf';
@@ -2767,7 +2768,6 @@ int _indexOf(List<int> bytes, List<int> pattern, [int start = 0]) {
   return -1;
 }
 
-/// The two limits a `readBook` takes.
 /// [_bytes] as a list, changed by [_change] once the byte at [_after] has
 /// been read for the first time.
 final class _ChangingBytes extends ListBase<int> {
@@ -2802,6 +2802,7 @@ final class _ChangingBytes extends ListBase<int> {
       throw UnsupportedError('Read only.');
 }
 
+/// The two limits a `readBook` takes.
 class _Limits {
   const _Limits(this.entry, this.total);
 

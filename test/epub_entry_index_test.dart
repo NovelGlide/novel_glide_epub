@@ -309,10 +309,11 @@ void main() {
 
     // TC-IDX-19 [Error guessing]: a manifest that lists its own package
     // document, the document outside `META-INF/` and inside it. Opening
-    // reaches its record twice, by name and by the manifest, and both are one
-    // entry: a book read whole inflates it once and counts it once, so a
-    // `maxTotalBytes` of every entry it reads counted once is enough, and one
-    // byte less is not.
+    // reaches its record twice, by name and by the manifest, and makes an
+    // entry each time; made from one record, they are equal, and a book read
+    // whole keeps what it reads by entry, so it inflates the record once and
+    // counts it once: a `maxTotalBytes` of every entry it reads counted once
+    // is enough, and one byte less is not.
     for (final String opfPath in <String>[
       'OEBPS/content.opf',
       'META-INF/book/content.opf',
@@ -349,9 +350,10 @@ void main() {
 
     // TC-IDX-21 [Error guessing]: a package document inside `META-INF/`,
     // which the first pass keeps, written twice at two local headers, and
-    // listed by its own manifest. The later record is the document; reached
-    // by the first pass and again by the manifest it is still one entry, so
-    // a book read whole counts it once.
+    // listed by its own manifest. The later record is the document, the one
+    // `addFile` leaves in place in each pass; the entries the first pass and
+    // the manifest's pass make of it are equal, so a book read whole counts
+    // it once.
     test(
         'TC-IDX-21 [Error guessing]: a package document in META-INF written '
         'twice and listed by its manifest is counted once by readBook',
