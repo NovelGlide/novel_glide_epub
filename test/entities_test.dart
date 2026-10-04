@@ -274,14 +274,14 @@ void main() {
       });
     }
 
-    // TC-ENT-38 [Error guessing]: the base checks `other is! EpubContentFile`
-    // rather than its own runtime type, so the relation with a subclass is
-    // ASYMMETRIC: the base accepts a text file with matching fields, while the
-    // text file's own override rejects the bare one. A `==` that is not
-    // symmetric breaks `Set` and `Map` membership, so this matters the moment
-    // a third subclass appears — it is pinned, not endorsed.
+    // TC-ENT-38 [Error guessing]: equality compares the runtime type, so a
+    // bare file and a text file whose three base fields match are unequal in
+    // BOTH directions. Before Equatable the base checked only
+    // `other is EpubContentFile`, so the bare file accepted the text file
+    // while the text file rejected it; a `==` that is not symmetric breaks
+    // `Set` and `Map` membership.
     test(
-        'TC-ENT-38 [Error guessing]: the inherited comparison is asymmetric '
+        'TC-ENT-38 [Error guessing]: the inherited comparison is symmetric '
         'with a subclass', () {
       const SeedBareContentFile bare = SeedBareContentFile(
         fileName: 'NGE-SEED-shared',
@@ -295,7 +295,7 @@ void main() {
         content: '',
       );
 
-      expect(bare == text, isTrue);
+      expect(bare == text, isFalse);
       expect(text == bare, isFalse);
 
       expect(bare == unrelatedOperand, isFalse);

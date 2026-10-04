@@ -512,6 +512,18 @@ void main() {
         equals(seedIdentifier(identifier: '', id: null, scheme: null)),
       );
     });
+
+    // TC-OPF-27 [Scenario/use-case]: a class with no `toString` of its own
+    // takes Equatable's. With assertions enabled, as under `dart test` and
+    // in a debug build, it prints the class name and its compared fields;
+    // before Equatable it printed `Instance of 'EpubMetadataDate'`. With
+    // assertions off it still prints that.
+    test(
+        'TC-OPF-27 [Scenario]: with assertions on, a class with no toString '
+        'of its own prints its fields', () {
+      expect(
+          seedDate().toString(), 'EpubMetadataDate(2026-09-21, publication)');
+    });
   });
 
   group('EpubMetadataMeta', () {
@@ -532,29 +544,29 @@ void main() {
       });
     }
 
-    // TC-OPF-10 [Error guessing]: `attributes` appears in neither `==` nor
-    // `hashCode`, so two metas that differ only in their attribute bag compare
-    // EQUAL. The bag is a raw view of the element for callers — it duplicates
-    // the named fields and carries whatever else the element had — not part of
-    // the meta's identity. Nothing in the class body says so, so it is pinned.
+    // TC-OPF-10 [Equivalence partitioning]: `attributes` takes part in `==`
+    // and `hashCode`, so two metas that differ only in their attribute bag
+    // are UNEQUAL. Before Equatable the bag was left out of both, and such
+    // metas compared equal. The bag is compared by entry: two maps built
+    // separately, their entries added in different orders, are one value.
     test(
-        'TC-OPF-10 [Error guessing]: attributes takes no part in equality or '
-        'hashCode', () {
+        'TC-OPF-10 [Equivalence partitioning]: attributes takes part in '
+        'equality and hashCode', () {
       final EpubMetadataMeta withAttributes = seedMeta(
-        attributes: <String, String>{'data-nge-seed': 'yes'},
+        attributes: <String, String>{'data-nge-seed': 'yes', 'lang': 'en'},
       );
-      final EpubMetadataMeta otherAttributes = seedMeta(
+      final EpubMetadataMeta sameAttributes = seedMeta(
+        attributes: <String, String>{'lang': 'en', 'data-nge-seed': 'yes'},
+      );
+      final EpubMetadataMeta otherValue = seedMeta(
         attributes: <String, String>{'data-nge-seed': 'no', 'lang': 'en'},
       );
       final EpubMetadataMeta withoutAttributes = seedMeta();
 
-      expect(
-          withAttributes.attributes, <String, String>{'data-nge-seed': 'yes'});
-      expect(withoutAttributes.attributes, isEmpty);
-      expect(withAttributes, equals(withoutAttributes));
-      expect(withAttributes.hashCode, equals(withoutAttributes.hashCode));
-      expect(withAttributes, equals(otherAttributes));
-      expect(withAttributes.hashCode, equals(otherAttributes.hashCode));
+      expect(withAttributes, equals(sameAttributes));
+      expect(withAttributes.hashCode, equals(sameAttributes.hashCode));
+      expectDistinct(withAttributes, withoutAttributes);
+      expectDistinct(withAttributes, otherValue);
     });
   });
 

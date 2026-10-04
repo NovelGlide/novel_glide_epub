@@ -1,7 +1,6 @@
-import 'package:quiver/collection.dart' as collections;
-import 'package:quiver/core.dart';
+import 'package:equatable/equatable.dart';
 
-class EpubNavigationDocTitle {
+class EpubNavigationDocTitle extends Equatable {
   const EpubNavigationDocTitle({required this.titles});
 
   /// The `<text>` children; empty when the `<docTitle>` has none, although
@@ -9,14 +8,5 @@ class EpubNavigationDocTitle {
   final List<String> titles;
 
   @override
-  int get hashCode => hashObjects(titles.map((String title) => title.hashCode));
-
-  @override
-  bool operator ==(Object other) {
-    if (other is! EpubNavigationDocTitle) {
-      return false;
-    }
-
-    return collections.listsEqual(titles, other.titles);
-  }
+  List<Object?> get props => <Object?>[titles];
 }

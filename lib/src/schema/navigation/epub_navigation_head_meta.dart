@@ -1,6 +1,6 @@
-import 'package:quiver/core.dart';
+import 'package:equatable/equatable.dart';
 
-class EpubNavigationHeadMeta {
+class EpubNavigationHeadMeta extends Equatable {
   const EpubNavigationHeadMeta(
       {required this.name, required this.content, this.scheme});
 
@@ -9,16 +9,5 @@ class EpubNavigationHeadMeta {
   final String? scheme;
 
   @override
-  int get hashCode => hash3(name.hashCode, content.hashCode, scheme.hashCode);
-
-  @override
-  bool operator ==(Object other) {
-    if (other is! EpubNavigationHeadMeta) {
-      return false;
-    }
-
-    return name == other.name &&
-        content == other.content &&
-        scheme == other.scheme;
-  }
+  List<Object?> get props => <Object?>[name, content, scheme];
 }

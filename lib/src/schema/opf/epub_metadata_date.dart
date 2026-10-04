@@ -1,6 +1,6 @@
-import 'package:quiver/core.dart';
+import 'package:equatable/equatable.dart';
 
-class EpubMetadataDate {
+class EpubMetadataDate extends Equatable {
   const EpubMetadataDate({required this.date, this.event});
 
   /// The element's text; empty when the element is.
@@ -10,13 +10,5 @@ class EpubMetadataDate {
   final String? event;
 
   @override
-  int get hashCode => hash2(date.hashCode, event.hashCode);
-
-  @override
-  bool operator ==(Object other) {
-    if (other is! EpubMetadataDate) {
-      return false;
-    }
-    return date == other.date && event == other.event;
-  }
+  List<Object?> get props => <Object?>[date, event];
 }

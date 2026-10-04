@@ -1,5 +1,4 @@
-import 'package:quiver/collection.dart' as collections;
-import 'package:quiver/core.dart';
+import 'package:equatable/equatable.dart';
 
 import 'epub_navigation_doc_author.dart';
 import 'epub_navigation_doc_title.dart';
@@ -13,7 +12,7 @@ import 'epub_navigation_page_list.dart';
 /// An EPUB 3 nav document is read into the same shape. It has no NCX head,
 /// doc author or nav list, so those read as empty, and its doc title is the
 /// package's `dc:title`s.
-class EpubNavigation {
+class EpubNavigation extends Equatable {
   const EpubNavigation({
     required this.head,
     required this.docTitle,
@@ -34,34 +33,6 @@ class EpubNavigation {
   final List<EpubNavigationList> navLists;
 
   @override
-  int get hashCode {
-    final List<int> objects = <int>[
-      head.hashCode,
-      docTitle.hashCode,
-      navMap.hashCode,
-      pageList.hashCode,
-      ...docAuthors.map((EpubNavigationDocAuthor author) => author.hashCode),
-      ...navLists.map((EpubNavigationList navList) => navList.hashCode)
-    ];
-    return hashObjects(objects);
-  }
-
-  @override
-  bool operator ==(Object other) {
-    if (other is! EpubNavigation) {
-      return false;
-    }
-
-    if (!collections.listsEqual(docAuthors, other.docAuthors)) {
-      return false;
-    }
-    if (!collections.listsEqual(navLists, other.navLists)) {
-      return false;
-    }
-
-    return head == other.head &&
-        docTitle == other.docTitle &&
-        navMap == other.navMap &&
-        pageList == other.pageList;
-  }
+  List<Object?> get props =>
+      <Object?>[head, docTitle, docAuthors, navMap, pageList, navLists];
 }

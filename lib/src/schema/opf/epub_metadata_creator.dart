@@ -1,6 +1,6 @@
-import 'package:quiver/core.dart';
+import 'package:equatable/equatable.dart';
 
-class EpubMetadataCreator {
+class EpubMetadataCreator extends Equatable {
   const EpubMetadataCreator({required this.creator, this.fileAs, this.role});
 
   /// The element's text; empty when the element is.
@@ -9,15 +9,5 @@ class EpubMetadataCreator {
   final String? role;
 
   @override
-  int get hashCode => hash3(creator.hashCode, fileAs.hashCode, role.hashCode);
-
-  @override
-  bool operator ==(Object other) {
-    if (other is! EpubMetadataCreator) {
-      return false;
-    }
-    return creator == other.creator &&
-        fileAs == other.fileAs &&
-        role == other.role;
-  }
+  List<Object?> get props => <Object?>[creator, fileAs, role];
 }

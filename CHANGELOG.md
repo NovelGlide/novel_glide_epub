@@ -2,6 +2,72 @@
 
 ## Unreleased
 
+**Breaking: equality is decided by `package:equatable`, and `quiver` is no
+longer a dependency.** Every entity, ref entity and schema class that
+compared itself by hand now extends `Equatable` and lists the fields it
+compares in `props`; the hand-written `operator ==` and `hashCode` are gone.
+The fields compared are the same as before, except for
+`EpubMetadataMeta.attributes` (below).
+Lists and maps are still compared by element. `EpubBook` still compares its
+cover by the bytes it decodes to, and `EpubBookRef` and `EpubContentFileRef`
+still leave out the archive they read from.
+
+- **The runtime type is compared.** Two objects of different classes are
+  never equal, whatever their fields hold.
+
+  ```dart
+  final EpubTextContentFileRef text = book.content.html['a.xhtml']!;
+  final EpubByteContentFileRef bytes = EpubByteContentFileRef(
+    epubArchive: archive,
+    contentDirectoryPath: 'OEBPS',
+    fileName: text.fileName,
+    contentType: text.contentType,
+    contentMimeType: text.contentMimeType,
+  );
+
+  // Before
+  text == bytes; // true, and both hashed alike
+  // After
+  text == bytes; // false
+  ```
+
+  The same goes for a subclass of `EpubContentFile` with no fields of its
+  own. Before, it inherited a `==` that accepted any `EpubContentFile` with
+  matching base fields, so it equalled a text file while the text file did
+  not equal it. Now neither equals the other.
+- **`EpubMetadataMeta` compares `attributes`.** Two metas that differ only
+  in their attribute map are now unequal; before, the map was left out of
+  `==` and `hashCode`. The map is compared by entry, so the order its
+  entries were added in doesn't matter.
+
+  ```dart
+  const EpubMetadataMeta a = EpubMetadataMeta(
+      content: 'x', attributes: <String, String>{'lang': 'en'});
+  const EpubMetadataMeta b = EpubMetadataMeta(
+      content: 'x', attributes: <String, String>{'lang': 'ja'});
+
+  // Before
+  a == b; // true
+  // After
+  a == b; // false
+  ```
+
+- **Every `hashCode` changes.** Equatable hashes the runtime type and the
+  `props`, so no class gives the hash code it gave before. Don't persist a
+  hash code or compare one across versions.
+- **`toString` changes where a class had none of its own.** With assertions
+  enabled, as under `dart test` and in a debug build, such a class now
+  prints its name and the fields it compares, for example
+  `EpubMetadataDate(2026-09-21, publication)` where it printed
+  `Instance of 'EpubMetadataDate'`. With assertions off it prints what it
+  did before. `EpubBook` is one such class, and it prints every byte of its
+  cover. Classes that override `toString`, such as `EpubChapter`, are
+  unchanged.
+- **Every converted class has two new public getters**, `props` and
+  `stringify`, from `Equatable`.
+- **`quiver` is no longer a dependency.** A consumer that used it without
+  declaring it has to add it to its own `pubspec.yaml`.
+
 **Breaking: `EpubBookRef.epubArchive()` is removed. Read an entry by its
 archive name with `readEntry`, and look up the sizes of the entries the book
 keeps in `knownEntrySizes`.** An opened book no longer holds a record for

@@ -1,10 +1,9 @@
-import 'package:quiver/collection.dart' as collections;
-import 'package:quiver/core.dart';
+import 'package:equatable/equatable.dart';
 
 import 'epub_navigation_content.dart';
 import 'epub_navigation_label.dart';
 
-class EpubNavigationPoint {
+class EpubNavigationPoint extends Equatable {
   const EpubNavigationPoint({
     required this.id,
     required this.playOrder,
@@ -26,39 +25,14 @@ class EpubNavigationPoint {
   final List<EpubNavigationPoint> childNavigationPoints;
 
   @override
-  int get hashCode {
-    final List<int> objects = <int>[
-      id.hashCode,
-      className.hashCode,
-      playOrder.hashCode,
-      content.hashCode,
-      ...navigationLabels.map((EpubNavigationLabel label) => label.hashCode),
-      ...childNavigationPoints
-          .map((EpubNavigationPoint point) => point.hashCode)
-    ];
-    return hashObjects(objects);
-  }
-
-  @override
-  bool operator ==(Object other) {
-    if (other is! EpubNavigationPoint) {
-      return false;
-    }
-
-    if (!collections.listsEqual(navigationLabels, other.navigationLabels)) {
-      return false;
-    }
-
-    if (!collections.listsEqual(
-        childNavigationPoints, other.childNavigationPoints)) {
-      return false;
-    }
-
-    return id == other.id &&
-        className == other.className &&
-        playOrder == other.playOrder &&
-        content == other.content;
-  }
+  List<Object?> get props => <Object?>[
+        id,
+        className,
+        playOrder,
+        navigationLabels,
+        content,
+        childNavigationPoints
+      ];
 
   @override
   String toString() {

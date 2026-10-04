@@ -539,14 +539,14 @@ void main() {
       });
     }
 
-    // TC-REF-15 [Error guessing]: the base uses `is!` and does NOT narrow to
-    // the runtime subclass, so a text ref and a byte ref that agree on all
-    // three fields compare EQUAL in both directions. Neither subclass
-    // overrides `==`, which is what makes this differ from the loaded
-    // entities (TC-ENT-5).
+    // TC-REF-15 [Error guessing]: equality compares the runtime type, so a
+    // text ref and a byte ref that agree on all three fields are UNEQUAL in
+    // both directions, like the loaded entities (TC-ENT-5). Before Equatable
+    // the base checked only `other is EpubContentFileRef`, so the two compared
+    // equal and hashed alike; the runtime type now feeds `hashCode` too.
     test(
-        'TC-REF-15 [Error guessing]: the base comparison ignores the '
-        'subclass', () async {
+        'TC-REF-15 [Error guessing]: the comparison tells the subclasses '
+        'apart', () async {
       final EpubBookRef bookRef =
           await const EpubReader().openBook(seedArchive(), maxEntryBytes: null);
       final EpubTextContentFileRef text =
@@ -562,8 +562,9 @@ void main() {
         contentMimeType: text.contentMimeType,
         contentType: text.contentType,
       );
-      expect(text, equals(bytes));
-      expect(bytes, equals(text));
+      expect(text, isNot(equals(bytes)));
+      expect(bytes, isNot(equals(text)));
+      expect(text.hashCode, isNot(equals(bytes.hashCode)));
 
       expect(text == unrelatedOperand, isFalse);
       expect(text == nullOperand, isFalse);
@@ -1009,7 +1010,7 @@ void main() {
         title: 'NGE-SEED Reversed',
         contentFileName: 'part_split_001.xhtml',
         otherTextContentFileRefs: <EpubTextContentFileRef>[partA],
-        otherContentFileNames: <String>['part_split_000.xhtml'],
+        otherContentFileNames: const <String>['part_split_000.xhtml'],
       );
 
       expect(

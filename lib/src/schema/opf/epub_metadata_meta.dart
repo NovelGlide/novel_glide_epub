@@ -1,10 +1,10 @@
-import 'package:quiver/core.dart';
+import 'package:equatable/equatable.dart';
 
 /// One `<meta>` of the package metadata, in either version's shape.
 ///
 /// EPUB 2 and EPUB 3 give the element different attributes, so a field one
 /// version requires is one the other never carries, and is nullable here.
-class EpubMetadataMeta {
+class EpubMetadataMeta extends Equatable {
   const EpubMetadataMeta({
     required this.content,
     this.attributes = const <String, String>{},
@@ -36,25 +36,6 @@ class EpubMetadataMeta {
   final Map<String, String> attributes;
 
   @override
-  int get hashCode => hashObjects(<Object?>[
-        name.hashCode,
-        content.hashCode,
-        id.hashCode,
-        refines.hashCode,
-        property.hashCode,
-        scheme.hashCode
-      ]);
-
-  @override
-  bool operator ==(Object other) {
-    if (other is! EpubMetadataMeta) {
-      return false;
-    }
-    return name == other.name &&
-        content == other.content &&
-        id == other.id &&
-        refines == other.refines &&
-        property == other.property &&
-        scheme == other.scheme;
-  }
+  List<Object?> get props =>
+      <Object?>[name, content, id, refines, property, scheme, attributes];
 }

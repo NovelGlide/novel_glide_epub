@@ -1,6 +1,6 @@
-import 'package:quiver/core.dart';
+import 'package:equatable/equatable.dart';
 
-class EpubManifestItem {
+class EpubManifestItem extends Equatable {
   const EpubManifestItem({
     required this.id,
     required this.href,
@@ -26,40 +26,17 @@ class EpubManifestItem {
   final String? properties;
 
   @override
-  int get hashCode => hashObjects(<Object?>[
-        id.hashCode,
-        href.hashCode,
-        mediaType.hashCode,
-        mediaOverlay.hashCode,
-        requiredNamespace.hashCode,
-        requiredModules.hashCode,
-        fallback.hashCode,
-        fallbackStyle.hashCode,
-        properties.hashCode
-      ]);
-
-  @override
-  bool operator ==(Object other) =>
-      other is EpubManifestItem &&
-      _describesSameResource(other) &&
-      _hasSameFallbackChain(other);
-
-  /// The half of the item that says WHAT it is: the resource it points at and
-  /// how a reading system is meant to treat it.
-  bool _describesSameResource(EpubManifestItem other) =>
-      id == other.id &&
-      href == other.href &&
-      mediaType == other.mediaType &&
-      mediaOverlay == other.mediaOverlay &&
-      properties == other.properties;
-
-  /// The half that says what to do when the resource CANNOT be used: the
-  /// EPUB2 fallback and required-module attributes.
-  bool _hasSameFallbackChain(EpubManifestItem other) =>
-      fallback == other.fallback &&
-      fallbackStyle == other.fallbackStyle &&
-      requiredNamespace == other.requiredNamespace &&
-      requiredModules == other.requiredModules;
+  List<Object?> get props => <Object?>[
+        id,
+        href,
+        mediaType,
+        mediaOverlay,
+        requiredNamespace,
+        requiredModules,
+        fallback,
+        fallbackStyle,
+        properties
+      ];
 
   @override
   String toString() {

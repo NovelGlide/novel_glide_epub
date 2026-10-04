@@ -1,11 +1,10 @@
 import 'dart:async';
 
-import 'package:quiver/collection.dart' as collections;
-import 'package:quiver/core.dart';
+import 'package:equatable/equatable.dart';
 
 import 'epub_text_content_file_ref.dart';
 
-class EpubChapterRef {
+class EpubChapterRef extends Equatable {
   const EpubChapterRef({
     required this.epubTextContentFileRef,
     required this.title,
@@ -35,36 +34,15 @@ class EpubChapterRef {
   final List<String> otherContentFileNames;
 
   @override
-  int get hashCode {
-    final List<int> objects = <int>[
-      title.hashCode,
-      contentFileName.hashCode,
-      // The two split-chapter lists are hashed by ELEMENT, like
-      // `subChapters`: two refs over one chapter hold equal lists that are
-      // not the same list, so hashing the list object would give them two
-      // different hash codes.
-      ...otherContentFileNames.map((String fileName) => fileName.hashCode),
-      ...otherTextContentFileRefs
-          .map((EpubTextContentFileRef fileRef) => fileRef.hashCode),
-      anchor.hashCode,
-      epubTextContentFileRef.hashCode,
-      ...subChapters.map((EpubChapterRef subChapter) => subChapter.hashCode),
-    ];
-    return hashObjects(objects);
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      other is EpubChapterRef &&
-      title == other.title &&
-      contentFileName == other.contentFileName &&
-      collections.listsEqual(
-          otherContentFileNames, other.otherContentFileNames) &&
-      anchor == other.anchor &&
-      epubTextContentFileRef == other.epubTextContentFileRef &&
-      collections.listsEqual(
-          otherTextContentFileRefs, other.otherTextContentFileRefs) &&
-      collections.listsEqual(subChapters, other.subChapters);
+  List<Object?> get props => <Object?>[
+        epubTextContentFileRef,
+        otherTextContentFileRefs,
+        title,
+        contentFileName,
+        anchor,
+        subChapters,
+        otherContentFileNames
+      ];
 
   /// The chapter's own file followed by its split parts, read concurrently
   /// and joined in that order.

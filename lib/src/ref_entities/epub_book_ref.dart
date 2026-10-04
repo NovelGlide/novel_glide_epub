@@ -2,9 +2,8 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
+import 'package:equatable/equatable.dart';
 import 'package:image/image.dart';
-import 'package:quiver/collection.dart' as collections;
-import 'package:quiver/core.dart';
 
 import '../entities/epub_schema.dart';
 import '../epub_exception.dart';
@@ -15,7 +14,7 @@ import '../utils/content_bytes.dart';
 import 'epub_chapter_ref.dart';
 import 'epub_content_ref.dart';
 
-class EpubBookRef {
+class EpubBookRef extends Equatable {
   const EpubBookRef({
     required Archive epubArchive,
     required this.title,
@@ -37,28 +36,10 @@ class EpubBookRef {
   final EpubSchema schema;
   final EpubContentRef content;
 
+  /// The archive the book reads from is left out: it has no equality of its
+  /// own, so with it two opens of the same file would never be equal.
   @override
-  int get hashCode {
-    final List<int> objects = <int>[
-      title.hashCode,
-      schema.hashCode,
-      content.hashCode,
-      ...authorList.map((String author) => author.hashCode),
-    ];
-    return hashObjects(objects);
-  }
-
-  @override
-  bool operator ==(Object other) {
-    if (other is! EpubBookRef) {
-      return false;
-    }
-
-    return title == other.title &&
-        schema == other.schema &&
-        content == other.content &&
-        collections.listsEqual(authorList, other.authorList);
-  }
+  List<Object?> get props => <Object?>[title, authorList, schema, content];
 
   /// The declared uncompressed size of each entry the book keeps, by its
   /// name in the archive.
