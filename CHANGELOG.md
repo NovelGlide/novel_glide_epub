@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 **Breaking: equality is decided by `package:equatable`, and `quiver` is no
 longer a dependency.** Every entity, ref entity and schema class that
