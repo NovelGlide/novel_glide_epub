@@ -41,4 +41,10 @@ class EpubBook extends Equatable {
   /// reads of one book decode two images, equal pixel for pixel. Null when
   /// the book has no cover.
   List<int>? get _coverBytes => coverImage?.getBytes();
+
+  /// The title and the number of chapters; never the content or the cover.
+  @override
+  String toString() {
+    return 'Title: $title, Chapter count: ${chapters.length}';
+  }
 }

@@ -13,4 +13,11 @@ class EpubByteContentFile extends EpubContentFile {
   @override
   List<Object?> get props =>
       <Object?>[fileName, contentType, contentMimeType, content];
+
+  /// The file's name, type and the length of its content; never the content.
+  @override
+  String toString() {
+    return 'File name: $fileName, Content type: ${contentType.name}, '
+        'MIME type: $contentMimeType, Length: ${content.length} bytes';
+  }
 }

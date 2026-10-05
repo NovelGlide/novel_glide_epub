@@ -55,14 +55,37 @@ still leave out the archive they read from.
 - **Every `hashCode` changes.** Equatable hashes the runtime type and the
   `props`, so no class gives the hash code it gave before. Don't persist a
   hash code or compare one across versions.
-- **`toString` changes where a class had none of its own.** With assertions
-  enabled, as under `dart test` and in a debug build, such a class now
-  prints its name and the fields it compares, for example
-  `EpubMetadataDate(2026-09-21, publication)` where it printed
-  `Instance of 'EpubMetadataDate'`. With assertions off it prints what it
-  did before. `EpubBook` is one such class, and it prints every byte of its
-  cover. Classes that override `toString`, such as `EpubChapter`, are
-  unchanged.
+- **`toString` changes where a class had none of its own.**
+  - `EpubBook`, `EpubContent`, `EpubTextContentFile` and
+    `EpubByteContentFile` now print a one-line summary, with or without
+    assertions, where they printed `Instance of '…'`. None of them prints a
+    file's content, its bytes or the cover, so the line stays short however
+    big the book is:
+
+    | Class | Prints |
+    |---|---|
+    | `EpubBook` | `Title: <title>, Chapter count: <n>` |
+    | `EpubContent` | `HTML: <n>, CSS: <n>, Images: <n>, Fonts: <n>, All files: <n>` |
+    | `EpubTextContentFile` | `File name: <name>, Content type: <type>, MIME type: <mime>, Length: <n> characters` |
+    | `EpubByteContentFile` | `File name: <name>, Content type: <type>, MIME type: <mime>, Length: <n> bytes` |
+
+  - Every other converted class without a `toString` of its own prints its
+    name and the fields it compares when assertions are enabled, as under
+    `dart test` and in a debug build: for example
+    `EpubMetadataDate(2026-09-21, publication)` where it printed
+    `Instance of 'EpubMetadataDate'`. Nested fields print the same way, so
+    `EpubSchema` prints its whole package metadata, manifest, spine and
+    navigation, and `EpubBookRef` prints its schema plus the name, type and
+    MIME type of every file it refers to. None of them prints a file's
+    content. With assertions off they print `Instance of '…'` as before.
+  - Classes that already had a `toString`, such as `EpubChapter` and
+    `EpubManifestItem`, are unchanged.
+- **Every converted class is `@immutable`**, which it inherits from
+  `Equatable`. A consumer's subclass of one, such as of `EpubContentFile` or
+  `EpubContentFileRef`, gets the analyzer's `must_be_immutable` warning if it
+  declares a field that isn't final. Where a consumer enables the
+  `prefer_const_literals_to_create_immutables` lint, a non-const literal
+  passed to one of these constructors can trigger it.
 - **Every converted class has two new public getters**, `props` and
   `stringify`, from `Equatable`.
 - **`quiver` is no longer a dependency.** A consumer that used it without

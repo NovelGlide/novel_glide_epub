@@ -13,7 +13,7 @@
 //     (TC-OPF-26).
 //
 // Every field of every class gets a one-field-at-a-time partition row that
-// checks `==` AND `hashCode`, so dropping any clause of either is caught.
+// checks `==` AND `hashCode`, so dropping any entry of `props` is caught.
 import 'package:novel_glide_epub/novel_glide_epub.dart';
 import 'package:novel_glide_epub/src/schema/opf/epub_metadata_contributor.dart';
 import 'package:novel_glide_epub/src/schema/opf/epub_metadata_date.dart';
@@ -233,9 +233,9 @@ void expectDistinct(Object a, Object b) {
 
 void main() {
   group('The OPF layer as a whole', () {
-    // TC-OPF-1 [Error guessing]: every `==` in this directory opens with an
-    // `is` check, so an unrelated operand and a null one both answer false
-    // rather than throw a `TypeError` — the Dart equality contract.
+    // TC-OPF-1 [Error guessing]: Equatable compares the runtime type first,
+    // so an unrelated operand and a null one both answer false rather than
+    // throw a `TypeError` — the Dart equality contract.
     for (final MapEntry<String, Object> row in <String, Object>{
       'EpubPackage': seedPackage(),
       'EpubMetadata': seedMetadata(),
@@ -515,9 +515,8 @@ void main() {
 
     // TC-OPF-27 [Scenario/use-case]: a class with no `toString` of its own
     // takes Equatable's. With assertions enabled, as under `dart test` and
-    // in a debug build, it prints the class name and its compared fields;
-    // before Equatable it printed `Instance of 'EpubMetadataDate'`. With
-    // assertions off it still prints that.
+    // in a debug build, it prints the class name and its compared fields.
+    // With assertions off it prints `Instance of 'EpubMetadataDate'`.
     test(
         'TC-OPF-27 [Scenario]: with assertions on, a class with no toString '
         'of its own prints its fields', () {
@@ -546,9 +545,8 @@ void main() {
 
     // TC-OPF-10 [Equivalence partitioning]: `attributes` takes part in `==`
     // and `hashCode`, so two metas that differ only in their attribute bag
-    // are UNEQUAL. Before Equatable the bag was left out of both, and such
-    // metas compared equal. The bag is compared by entry: two maps built
-    // separately, their entries added in different orders, are one value.
+    // are UNEQUAL. The bag is compared by entry: two maps built separately,
+    // their entries added in different orders, are one value.
     test(
         'TC-OPF-10 [Equivalence partitioning]: attributes takes part in '
         'equality and hashCode', () {

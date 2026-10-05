@@ -9,7 +9,7 @@
 // so the equality contract is checked over reader-produced values too.
 //
 // Every field of every class gets a one-field-at-a-time partition row that
-// checks `==` AND `hashCode`, so dropping any clause of either is caught. A
+// checks `==` AND `hashCode`, so dropping any entry of `props` is caught. A
 // field the NCX makes optional is nullable, and TC-NSC-32 pins that a null
 // there is a value of its own.
 import 'dart:typed_data';
@@ -171,9 +171,9 @@ void expectDistinct(Object a, Object b) {
 
 void main() {
   group('The navigation layer as a whole', () {
-    // TC-NSC-1 [Error guessing]: every `==` in this directory opens with an
-    // `is` check, so an unrelated operand and a null one both answer false
-    // rather than throw a `TypeError` — the Dart equality contract.
+    // TC-NSC-1 [Error guessing]: Equatable compares the runtime type first,
+    // so an unrelated operand and a null one both answer false rather than
+    // throw a `TypeError` — the Dart equality contract.
     for (final MapEntry<String, Object> row in <String, Object>{
       'EpubNavigation': seedNavigation(),
       'EpubNavigationHead': seedHead(),

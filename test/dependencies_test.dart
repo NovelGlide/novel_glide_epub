@@ -1,9 +1,7 @@
 // The package's own dependency list, read from the files a consumer resolves.
 //
-// Equality is decided by `package:equatable` alone, so `package:quiver`,
-// which used to supply the hand-written `==` and `hashCode` helpers, is no
-// longer a dependency. A consumer that reached quiver only through this
-// package has to declare it itself.
+// Equality is decided by `package:equatable` alone, and `package:quiver` is
+// not a dependency: a consumer that uses quiver declares it itself.
 import 'dart:io';
 
 import 'package:test/test.dart';

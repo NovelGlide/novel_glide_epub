@@ -29,4 +29,12 @@ class EpubContent extends Equatable {
 
   @override
   List<Object?> get props => <Object?>[html, css, images, fonts, allFiles];
+
+  /// How many files each map holds; never a file's content.
+  @override
+  String toString() {
+    return 'HTML: ${html.length}, CSS: ${css.length}, '
+        'Images: ${images.length}, Fonts: ${fonts.length}, '
+        'All files: ${allFiles.length}';
+  }
 }
