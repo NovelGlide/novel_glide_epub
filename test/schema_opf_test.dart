@@ -514,9 +514,11 @@ void main() {
     });
 
     // TC-OPF-27 [Scenario/use-case]: a class with no `toString` of its own
-    // takes Equatable's. With assertions enabled, as under `dart test` and
-    // in a debug build, it prints the class name and its compared fields.
-    // With assertions off it prints `Instance of 'EpubMetadataDate'`.
+    // takes Equatable's, which prints the class name and its compared fields
+    // whenever it stringifies. That is `EquatableConfig.stringify`, a global a
+    // consumer can set; left unset it is true with assertions enabled, as
+    // under `dart test`. When it does not stringify, equatable 3.x prints
+    // `Instance of 'EpubMetadataDate'` and 2.x prints `EpubMetadataDate`.
     test(
         'TC-OPF-27 [Scenario]: with assertions on, a class with no toString '
         'of its own prints its fields', () {
@@ -570,8 +572,7 @@ void main() {
 
   group('EpubMetadata', () {
     // TC-OPF-11 [Equivalence partitioning]: the fifteen Dublin Core lists and
-    // `metaItems`, each decisive on its own. `==` compares them in several
-    // groups, so every one gets a row of its own.
+    // `metaItems`, each decisive on its own.
     for (final MapEntry<String, EpubMetadata> row in <String, EpubMetadata>{
       'descriptions':
           seedMetadata(descriptions: <String>['NGE-SEED other description']),
@@ -722,8 +723,8 @@ void main() {
       expect(seedSpineItemRef(idRef: '').toString(), 'IdRef: ');
     });
 
-    // TC-OPF-18 [Equivalence partitioning]: the spine's three fields. `items`
-    // is checked first and short-circuits, so it is exercised on its own.
+    // TC-OPF-18 [Equivalence partitioning]: the spine's three fields, each
+    // decisive on its own.
     for (final MapEntry<String, EpubSpine> row in <String, EpubSpine>{
       'items': seedSpine(items: <EpubSpineItemRef>[]),
       'tableOfContents': seedSpine(tableOfContents: 'nav'),

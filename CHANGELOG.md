@@ -69,15 +69,22 @@ still leave out the archive they read from.
     | `EpubTextContentFile` | `File name: <name>, Content type: <type>, MIME type: <mime>, Length: <n> characters` |
     | `EpubByteContentFile` | `File name: <name>, Content type: <type>, MIME type: <mime>, Length: <n> bytes` |
 
-  - Every other converted class without a `toString` of its own prints its
-    name and the fields it compares when assertions are enabled, as under
-    `dart test` and in a debug build: for example
+  - Every other converted class without a `toString` of its own takes
+    `Equatable`'s. When it stringifies, it prints the class name and the
+    fields it compares: for example
     `EpubMetadataDate(2026-09-21, publication)` where it printed
     `Instance of 'EpubMetadataDate'`. Nested fields print the same way, so
-    `EpubSchema` prints its whole package metadata, manifest, spine and
-    navigation, and `EpubBookRef` prints its schema plus the name, type and
-    MIME type of every file it refers to. None of them prints a file's
-    content. With assertions off they print `Instance of '…'` as before.
+    `EpubSchema` prints its package's version, metadata, manifest, spine and
+    guide, its navigation and its content directory path, and `EpubBookRef`
+    prints its schema plus the name, type and MIME type of every file it
+    refers to. None of them prints a file's content.
+  - Whether these classes stringify is `EquatableConfig.stringify`, a global
+    a consumer can set; none of them overrides `stringify`. Left unset, it
+    is true when assertions are enabled, as under `dart test` and in a debug
+    build, and false otherwise.
+  - When they don't stringify, the output depends on the `equatable` version
+    a consumer resolves: 3.x prints `Instance of '…'`, as before, and 2.x
+    prints only the class name, such as `EpubMetadataDate`.
   - Classes that already had a `toString`, such as `EpubChapter` and
     `EpubManifestItem`, are unchanged.
 - **Every converted class is `@immutable`**, which it inherits from

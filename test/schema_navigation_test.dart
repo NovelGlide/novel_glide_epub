@@ -585,7 +585,6 @@ void main() {
 
   group('EpubNavigationList / EpubNavigationTarget', () {
     // TC-NSC-23 [Equivalence partitioning]: all six target fields decide.
-    // `navigationLabels` is checked last, after the five scalars short-circuit.
     for (final MapEntry<String, EpubNavigationTarget> row
         in <String, EpubNavigationTarget>{
       'id': seedTarget(id: 'nt-2'),
@@ -625,8 +624,7 @@ void main() {
   });
 
   group('EpubNavigation', () {
-    // TC-NSC-26 [Equivalence partitioning]: all six fields decide. `docAuthors`
-    // and `navLists` are checked before the four scalars, so each gets a row.
+    // TC-NSC-26 [Equivalence partitioning]: all six fields decide.
     for (final MapEntry<String, EpubNavigation> row in <String, EpubNavigation>{
       'head': seedNavigation(
         head: seedHead(
