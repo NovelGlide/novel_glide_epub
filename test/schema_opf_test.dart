@@ -13,7 +13,7 @@
 //     (TC-OPF-26).
 //
 // Every field of every class gets a one-field-at-a-time partition row that
-// checks `==` AND `hashCode`, so dropping any clause of either is caught.
+// checks `==` AND `hashCode`, so dropping any entry of `props` is caught.
 import 'package:novel_glide_epub/novel_glide_epub.dart';
 import 'package:novel_glide_epub/src/schema/opf/epub_metadata_contributor.dart';
 import 'package:novel_glide_epub/src/schema/opf/epub_metadata_date.dart';
@@ -233,9 +233,9 @@ void expectDistinct(Object a, Object b) {
 
 void main() {
   group('The OPF layer as a whole', () {
-    // TC-OPF-1 [Error guessing]: every `==` in this directory opens with an
-    // `is` check, so an unrelated operand and a null one both answer false
-    // rather than throw a `TypeError` — the Dart equality contract.
+    // TC-OPF-1 [Error guessing]: Equatable compares the runtime type first,
+    // so an unrelated operand and a null one both answer false rather than
+    // throw a `TypeError` — the Dart equality contract.
     for (final MapEntry<String, Object> row in <String, Object>{
       'EpubPackage': seedPackage(),
       'EpubMetadata': seedMetadata(),
@@ -512,6 +512,19 @@ void main() {
         equals(seedIdentifier(identifier: '', id: null, scheme: null)),
       );
     });
+
+    // TC-OPF-27 [Scenario/use-case]: a class with no `toString` of its own
+    // takes Equatable's, which prints the class name and its compared fields
+    // whenever it stringifies. That is `EquatableConfig.stringify`, a global a
+    // consumer can set; left unset it is true with assertions enabled, as
+    // under `dart test`. When it does not stringify, equatable 3.x prints
+    // `Instance of 'EpubMetadataDate'` and 2.x prints `EpubMetadataDate`.
+    test(
+        'TC-OPF-27 [Scenario]: with assertions on, a class with no toString '
+        'of its own prints its fields', () {
+      expect(
+          seedDate().toString(), 'EpubMetadataDate(2026-09-21, publication)');
+    });
   });
 
   group('EpubMetadataMeta', () {
@@ -532,36 +545,34 @@ void main() {
       });
     }
 
-    // TC-OPF-10 [Error guessing]: `attributes` appears in neither `==` nor
-    // `hashCode`, so two metas that differ only in their attribute bag compare
-    // EQUAL. The bag is a raw view of the element for callers — it duplicates
-    // the named fields and carries whatever else the element had — not part of
-    // the meta's identity. Nothing in the class body says so, so it is pinned.
+    // TC-OPF-10 [Equivalence partitioning]: `attributes` takes part in `==`
+    // and `hashCode`, so two metas that differ only in their attribute bag
+    // are UNEQUAL. The bag is compared by entry: two maps built separately,
+    // their entries added in different orders, are one value.
     test(
-        'TC-OPF-10 [Error guessing]: attributes takes no part in equality or '
-        'hashCode', () {
+        'TC-OPF-10 [Equivalence partitioning]: attributes takes part in '
+        'equality and hashCode', () {
       final EpubMetadataMeta withAttributes = seedMeta(
-        attributes: <String, String>{'data-nge-seed': 'yes'},
+        attributes: <String, String>{'data-nge-seed': 'yes', 'lang': 'en'},
       );
-      final EpubMetadataMeta otherAttributes = seedMeta(
+      final EpubMetadataMeta sameAttributes = seedMeta(
+        attributes: <String, String>{'lang': 'en', 'data-nge-seed': 'yes'},
+      );
+      final EpubMetadataMeta otherValue = seedMeta(
         attributes: <String, String>{'data-nge-seed': 'no', 'lang': 'en'},
       );
       final EpubMetadataMeta withoutAttributes = seedMeta();
 
-      expect(
-          withAttributes.attributes, <String, String>{'data-nge-seed': 'yes'});
-      expect(withoutAttributes.attributes, isEmpty);
-      expect(withAttributes, equals(withoutAttributes));
-      expect(withAttributes.hashCode, equals(withoutAttributes.hashCode));
-      expect(withAttributes, equals(otherAttributes));
-      expect(withAttributes.hashCode, equals(otherAttributes.hashCode));
+      expect(withAttributes, equals(sameAttributes));
+      expect(withAttributes.hashCode, equals(sameAttributes.hashCode));
+      expectDistinct(withAttributes, withoutAttributes);
+      expectDistinct(withAttributes, otherValue);
     });
   });
 
   group('EpubMetadata', () {
     // TC-OPF-11 [Equivalence partitioning]: the fifteen Dublin Core lists and
-    // `metaItems`, each decisive on its own. `==` compares them in several
-    // groups, so every one gets a row of its own.
+    // `metaItems`, each decisive on its own.
     for (final MapEntry<String, EpubMetadata> row in <String, EpubMetadata>{
       'descriptions':
           seedMetadata(descriptions: <String>['NGE-SEED other description']),
@@ -712,8 +723,8 @@ void main() {
       expect(seedSpineItemRef(idRef: '').toString(), 'IdRef: ');
     });
 
-    // TC-OPF-18 [Equivalence partitioning]: the spine's three fields. `items`
-    // is checked first and short-circuits, so it is exercised on its own.
+    // TC-OPF-18 [Equivalence partitioning]: the spine's three fields, each
+    // decisive on its own.
     for (final MapEntry<String, EpubSpine> row in <String, EpubSpine>{
       'items': seedSpine(items: <EpubSpineItemRef>[]),
       'tableOfContents': seedSpine(tableOfContents: 'nav'),

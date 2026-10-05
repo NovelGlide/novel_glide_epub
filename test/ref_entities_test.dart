@@ -231,9 +231,9 @@ void main() {
       });
     }
 
-    // TC-REF-4 [Error guessing]: `is!`-guarded, so an unrelated operand is
-    // rejected rather than throwing — the trait the OPF and navigation
-    // schema classes share (TC-OPF-1, TC-NSC-1).
+    // TC-REF-4 [Error guessing]: Equatable compares the runtime type first,
+    // so an unrelated operand is rejected rather than throwing — the trait
+    // the OPF and navigation schema classes share (TC-OPF-1, TC-NSC-1).
     test('TC-REF-4 [Error guessing]: an unrelated operand is not equal',
         () async {
       final EpubBookRef bookRef =
@@ -405,7 +405,7 @@ void main() {
       });
     }
 
-    // TC-REF-10 [Error guessing]: `is!`-guarded.
+    // TC-REF-10 [Error guessing]: the runtime type is compared first.
     test('TC-REF-10 [Error guessing]: an unrelated operand is not equal', () {
       expect(const EpubContentRef() == unrelatedOperand, isFalse);
       expect(const EpubContentRef() == nullOperand, isFalse);
@@ -539,14 +539,13 @@ void main() {
       });
     }
 
-    // TC-REF-15 [Error guessing]: the base uses `is!` and does NOT narrow to
-    // the runtime subclass, so a text ref and a byte ref that agree on all
-    // three fields compare EQUAL in both directions. Neither subclass
-    // overrides `==`, which is what makes this differ from the loaded
-    // entities (TC-ENT-5).
+    // TC-REF-15 [Error guessing]: equality compares the runtime type, so a
+    // text ref and a byte ref that agree on all three fields are UNEQUAL in
+    // both directions, like the loaded entities (TC-ENT-5), and the runtime
+    // type feeds `hashCode` too.
     test(
-        'TC-REF-15 [Error guessing]: the base comparison ignores the '
-        'subclass', () async {
+        'TC-REF-15 [Error guessing]: the comparison tells the subclasses '
+        'apart', () async {
       final EpubBookRef bookRef =
           await const EpubReader().openBook(seedArchive(), maxEntryBytes: null);
       final EpubTextContentFileRef text =
@@ -562,8 +561,9 @@ void main() {
         contentMimeType: text.contentMimeType,
         contentType: text.contentType,
       );
-      expect(text, equals(bytes));
-      expect(bytes, equals(text));
+      expect(text, isNot(equals(bytes)));
+      expect(bytes, isNot(equals(text)));
+      expect(text.hashCode, isNot(equals(bytes.hashCode)));
 
       expect(text == unrelatedOperand, isFalse);
       expect(text == nullOperand, isFalse);
@@ -808,7 +808,7 @@ void main() {
 
     // TC-REF-21 [Error guessing]: the two split-chapter lists —
     // `otherContentFileNames` and `otherTextContentFileRefs` — are compared
-    // with `listsEqual` and hashed by element, like `subChapters`. The reader
+    // and hashed by element, like `subChapters`. The reader
     // hands every ref lists of its own, so a comparison by list identity
     // would make two refs over one archive unequal and hash them apart.
     test(
@@ -839,7 +839,7 @@ void main() {
 
     // TC-REF-22 [Equivalence partitioning]: each remaining field decides
     // equality once. Every row differs from the opened ref in that field
-    // alone, so each clause of the `&&` chain is the one that decides.
+    // alone, so each entry of `props` is the one that decides.
     for (final String field in <String>[
       'title',
       'contentFileName',
@@ -879,8 +879,8 @@ void main() {
       });
     }
 
-    // TC-REF-23 [Error guessing]: `is!`-guarded, so an unrelated operand is
-    // rejected without throwing.
+    // TC-REF-23 [Error guessing]: Equatable compares the runtime type first,
+    // so an unrelated operand is rejected without throwing.
     test('TC-REF-23 [Error guessing]: an unrelated operand is not equal',
         () async {
       final EpubChapterRef chapter = await openSingleChapter(seedArchive());
@@ -1009,7 +1009,7 @@ void main() {
         title: 'NGE-SEED Reversed',
         contentFileName: 'part_split_001.xhtml',
         otherTextContentFileRefs: <EpubTextContentFileRef>[partA],
-        otherContentFileNames: <String>['part_split_000.xhtml'],
+        otherContentFileNames: const <String>['part_split_000.xhtml'],
       );
 
       expect(

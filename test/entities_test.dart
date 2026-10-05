@@ -128,11 +128,12 @@ EpubBook seedBook({
 
 /// The smallest possible concrete `EpubContentFile`.
 ///
-/// Both shipped subclasses override `==` and `hashCode`, so the base
-/// implementations are unreachable from anything this package constructs — see
-/// TC-ENT-36. They are nonetheless public API: `EpubContentFile` is exported
-/// and abstract rather than sealed, and any further subclass inherits them.
-/// This class is what lets the base behaviour be pinned at all.
+/// Both shipped subclasses list their own `props`, so the base's `props` is
+/// never what any file this package constructs is compared by — see
+/// TC-ENT-36. It is nonetheless public API: `EpubContentFile` is exported and
+/// abstract rather than sealed, and a further subclass with no fields of its
+/// own inherits it. This class is what lets the base behaviour be pinned at
+/// all.
 class SeedBareContentFile extends EpubContentFile {
   const SeedBareContentFile({
     super.fileName = 'NGE-SEED-bare',
@@ -156,6 +157,18 @@ const Object? nullOperand = null;
 /// non-String operand.
 const Object unrelatedNumber = 42;
 
+/// Whether assertions are on, which is when Equatable's own `toString` would
+/// print every field. The `toString` tests below check it, so they cannot
+/// pass in a mode where the override is never what decides.
+bool assertionsEnabled() {
+  bool enabled = false;
+  assert(() {
+    enabled = true;
+    return true;
+  }());
+  return enabled;
+}
+
 void main() {
   group('EpubContentFile (the abstract base, via its subclasses)', () {
     // TC-ENT-1 [Scenario/use-case]: the base `==` compares exactly the three
@@ -169,7 +182,7 @@ void main() {
     });
 
     // TC-ENT-2 [Equivalence partitioning]: one differing field per run, so
-    // every operand of the `&&` chain is the one that decides.
+    // every entry of `props` is the one that decides.
     for (final MapEntry<String, EpubTextContentFile> row
         in <String, EpubTextContentFile>{
       'fileName': seedTextFile(fileName: 'NGE-SEED-other.xhtml'),
@@ -184,9 +197,9 @@ void main() {
       });
     }
 
-    // TC-ENT-3 [Error guessing]: the entity classes use `is!`, so an unrelated
-    // operand is rejected rather than throwing — the trait the OPF schema
-    // classes share (TC-OPF-1).
+    // TC-ENT-3 [Error guessing]: Equatable compares the runtime type first, so
+    // an unrelated operand is rejected rather than throwing — the trait the
+    // OPF schema classes share (TC-OPF-1).
     test('TC-ENT-3 [Error guessing]: an unrelated operand is not equal', () {
       expect(seedTextFile() == unrelatedOperand, isFalse);
       expect(seedTextFile() == nullOperand, isFalse);
@@ -214,11 +227,9 @@ void main() {
       expect(a, isNot(equals(seedTextFile())));
     });
 
-    // TC-ENT-5 [Scenario/use-case]: both subclasses override `==` and narrow
-    // to their own runtime type, so a text file and a byte file are unequal in
-    // BOTH directions even when the three base fields match. The base
-    // implementation is therefore never what decides between two subclass
-    // instances.
+    // TC-ENT-5 [Scenario/use-case]: equality compares the runtime type, so a
+    // text file and a byte file are unequal in BOTH directions even when the
+    // three base fields match.
     test('TC-ENT-5 [Scenario]: the two subclasses reject each other', () {
       final EpubContentFile text = seedTextFile(
         fileName: 'NGE-SEED-shared',
@@ -240,10 +251,10 @@ void main() {
       expect(text.contentMimeType, equals(bytes.contentMimeType));
     });
 
-    // TC-ENT-36 [Scenario/use-case]: the base's own `==` and `hashCode`, which
-    // no instance this package builds can reach — both shipped subclasses
-    // override them. Exercised through `SeedBareContentFile` so the inherited
-    // behaviour is pinned for any future subclass.
+    // TC-ENT-36 [Scenario/use-case]: the base's own `props`, which no file
+    // this package builds is compared by — both shipped subclasses list their
+    // own. Exercised through `SeedBareContentFile` so the inherited behaviour
+    // is pinned for any future subclass.
     test(
         'TC-ENT-36 [Scenario]: the inherited comparison uses the three base '
         'fields', () {
@@ -274,14 +285,12 @@ void main() {
       });
     }
 
-    // TC-ENT-38 [Error guessing]: the base checks `other is! EpubContentFile`
-    // rather than its own runtime type, so the relation with a subclass is
-    // ASYMMETRIC: the base accepts a text file with matching fields, while the
-    // text file's own override rejects the bare one. A `==` that is not
-    // symmetric breaks `Set` and `Map` membership, so this matters the moment
-    // a third subclass appears — it is pinned, not endorsed.
+    // TC-ENT-38 [Error guessing]: equality compares the runtime type, so a
+    // bare file and a text file whose three base fields match are unequal in
+    // BOTH directions. A `==` that is not symmetric breaks `Set` and `Map`
+    // membership.
     test(
-        'TC-ENT-38 [Error guessing]: the inherited comparison is asymmetric '
+        'TC-ENT-38 [Error guessing]: the inherited comparison is symmetric '
         'with a subclass', () {
       const SeedBareContentFile bare = SeedBareContentFile(
         fileName: 'NGE-SEED-shared',
@@ -295,7 +304,7 @@ void main() {
         content: '',
       );
 
-      expect(bare == text, isTrue);
+      expect(bare == text, isFalse);
       expect(text == bare, isFalse);
 
       expect(bare == unrelatedOperand, isFalse);
@@ -304,14 +313,13 @@ void main() {
   });
 
   group('EpubTextContentFile', () {
-    // TC-ENT-6 [Error guessing]: the subclass narrows to its own type.
+    // TC-ENT-6 [Error guessing]: equality compares the runtime type.
     test('TC-ENT-6 [Error guessing]: a byte file is not a text file', () {
       expect(seedTextFile() == seedByteFile(), isFalse);
       expect(seedTextFile() == unrelatedNumber, isFalse);
     });
 
-    // TC-ENT-7 [Boundary value]: `hash4` is fed the raw values here, not
-    // their hash codes — a distinct code path from the base's `hash3`.
+    // TC-ENT-7 [Boundary value]: `content` feeds `hashCode`, not only `==`.
     test(
         'TC-ENT-7 [Boundary]: differing content yields a differing '
         'hashCode', () {
@@ -319,6 +327,24 @@ void main() {
         seedTextFile().hashCode,
         isNot(equals(seedTextFile(content: 'NGE-SEED other').hashCode)),
       );
+    });
+
+    // TC-ENT-43 [Boundary value]: a text file prints its name, type, MIME
+    // type and the length of its content, never the content itself, so a
+    // file of any size prints one short line.
+    test(
+        'TC-ENT-43 [Boundary]: a text file prints its length, not its '
+        'content', () {
+      final EpubTextContentFile file =
+          seedTextFile(content: 'NGE-SEED-BODY ' * 10000);
+
+      expect(assertionsEnabled(), isTrue);
+      expect(
+        file.toString(),
+        'File name: NGE-SEED-chapter.xhtml, Content type: xhtml11, '
+        'MIME type: application/xhtml+xml, Length: 140000 characters',
+      );
+      expect(file.toString(), isNot(contains('NGE-SEED-BODY')));
     });
   });
 
@@ -333,8 +359,8 @@ void main() {
       expect(a.hashCode, equals(b.hashCode));
     });
 
-    // TC-ENT-9 [Equivalence partitioning]: every operand of the byte file's
-    // `&&` chain decides once.
+    // TC-ENT-9 [Equivalence partitioning]: every entry of the byte file's
+    // `props` decides once.
     for (final MapEntry<String, EpubByteContentFile> row
         in <String, EpubByteContentFile>{
       'content': seedByteFile(content: <int>[9, 9, 9]),
@@ -360,7 +386,7 @@ void main() {
       expect(a, isNot(equals(seedByteFile())));
     });
 
-    // TC-ENT-11 [Error guessing]: narrows to its own type.
+    // TC-ENT-11 [Error guessing]: equality compares the runtime type.
     test('TC-ENT-11 [Error guessing]: a text file is not a byte file', () {
       expect(seedByteFile() == seedTextFile(), isFalse);
       expect(seedByteFile() == nullOperand, isFalse);
@@ -377,6 +403,22 @@ void main() {
       final EpubByteContentFile b = seedByteFile(content: <int>[9, 9, 9]);
 
       expect(a.hashCode, isNot(equals(b.hashCode)));
+    });
+
+    // TC-ENT-44 [Boundary value]: a byte file prints its name, type, MIME
+    // type and its byte count, never the bytes, so a file of any size prints
+    // one short line.
+    test('TC-ENT-44 [Boundary]: a byte file prints its length, not its bytes',
+        () {
+      final EpubByteContentFile file =
+          seedByteFile(content: List<int>.filled(100000, 7));
+
+      expect(assertionsEnabled(), isTrue);
+      expect(
+        file.toString(),
+        'File name: NGE-SEED-cover.png, Content type: imagePng, '
+        'MIME type: image/png, Length: 100000 bytes',
+      );
     });
   });
 
@@ -468,11 +510,47 @@ void main() {
       expect(build().hashCode, equals(build().hashCode));
     });
 
-    // TC-ENT-15 [Error guessing]: `is!`-guarded, so unrelated operands are
-    // rejected without throwing.
+    // TC-ENT-15 [Error guessing]: Equatable compares the runtime type first,
+    // so unrelated operands are rejected without throwing.
     test('TC-ENT-15 [Error guessing]: an unrelated operand is not equal', () {
       expect(const EpubContent() == unrelatedOperand, isFalse);
       expect(const EpubContent() == nullOperand, isFalse);
+    });
+
+    // TC-ENT-45 [Scenario/use-case]: a content prints how many files each map
+    // holds, never a file. Each map holds a different count, so a count
+    // printed under the wrong label is caught.
+    test('TC-ENT-45 [Scenario]: a content prints its file count per map', () {
+      final EpubContent content = EpubContent(
+        html: <String, EpubTextContentFile>{'a.xhtml': seedTextFile()},
+        css: <String, EpubTextContentFile>{
+          'a.css': seedTextFile(fileName: 'a.css'),
+          'b.css': seedTextFile(fileName: 'b.css'),
+        },
+        images: <String, EpubByteContentFile>{
+          'a.png': seedByteFile(fileName: 'a.png'),
+          'b.png': seedByteFile(fileName: 'b.png'),
+          'c.png': seedByteFile(fileName: 'c.png'),
+        },
+        allFiles: <String, EpubContentFile>{
+          'a.xhtml': seedTextFile(),
+          'a.css': seedTextFile(fileName: 'a.css'),
+          'b.css': seedTextFile(fileName: 'b.css'),
+          'a.png': seedByteFile(fileName: 'a.png'),
+          'b.png': seedByteFile(fileName: 'b.png'),
+          'c.png': seedByteFile(fileName: 'c.png'),
+        },
+      );
+
+      expect(assertionsEnabled(), isTrue);
+      expect(
+        content.toString(),
+        'HTML: 1, CSS: 2, Images: 3, Fonts: 0, All files: 6',
+      );
+      expect(
+        const EpubContent().toString(),
+        'HTML: 0, CSS: 0, Images: 0, Fonts: 0, All files: 0',
+      );
     });
   });
 
@@ -516,7 +594,7 @@ void main() {
       expect(seedSchema(), isNot(equals(other)));
     });
 
-    // TC-ENT-19 [Error guessing]: `is!`-guarded.
+    // TC-ENT-19 [Error guessing]: the runtime type is compared first.
     test('TC-ENT-19 [Error guessing]: an unrelated operand is not equal', () {
       expect(seedSchema() == unrelatedOperand, isFalse);
       expect(seedSchema() == nullOperand, isFalse);
@@ -566,8 +644,8 @@ void main() {
       });
     }
 
-    // TC-ENT-22 [Error guessing]: `otherContentFileNames` is compared with
-    // `listsEqual` and hashed by element, like every other collection field.
+    // TC-ENT-22 [Error guessing]: `otherContentFileNames` is compared and
+    // hashed by element, like every other collection field.
     // Two chapters built separately generally hold two distinct lists, so a
     // comparison by list identity would make two chapters with identical
     // data unequal and hash them apart. Both halves are asserted: equal names in two distinct
@@ -594,7 +672,7 @@ void main() {
       expect(a.hashCode, isNot(equals(c.hashCode)));
     });
 
-    // TC-ENT-23 [Error guessing]: `is!`-guarded.
+    // TC-ENT-23 [Error guessing]: the runtime type is compared first.
     test('TC-ENT-23 [Error guessing]: an unrelated operand is not equal', () {
       expect(seedChapter() == unrelatedOperand, isFalse);
       expect(seedChapter() == nullOperand, isFalse);
@@ -704,8 +782,8 @@ void main() {
       expect(withoutCover == withCover, isFalse);
     });
 
-    // TC-ENT-31 [Error guessing]: `is`-guarded, so an unrelated operand is
-    // rejected rather than throwing.
+    // TC-ENT-31 [Error guessing]: Equatable compares the runtime type first,
+    // so an unrelated operand is rejected rather than throwing.
     test('TC-ENT-31 [Error guessing]: an unrelated operand is not equal', () {
       expect(seedBook() == unrelatedOperand, isFalse);
       expect(seedBook() == nullOperand, isFalse);
@@ -748,6 +826,34 @@ void main() {
           seedBook(chapters: <EpubChapter>[seedChapter(title: 'Two')]);
 
       expect(a.hashCode, isNot(equals(b.hashCode)));
+    });
+
+    // TC-ENT-46 [Boundary value]: a book prints its title and chapter count,
+    // never its content, chapters' text or cover, so a book of any size
+    // prints one short line.
+    test(
+        'TC-ENT-46 [Boundary]: a book prints its title and chapter count, '
+        'not its content', () {
+      final String body = 'NGE-SEED-BODY ' * 10000;
+      final EpubBook book = seedBook(
+        content: EpubContent(
+          html: <String, EpubTextContentFile>{
+            'NGE-SEED-chapter.xhtml': seedTextFile(content: body),
+          },
+          images: <String, EpubByteContentFile>{
+            'NGE-SEED-cover.png':
+                seedByteFile(content: List<int>.filled(100000, 7)),
+          },
+        ),
+        chapters: <EpubChapter>[
+          seedChapter(htmlContent: body),
+          seedChapter(title: 'NGE-SEED Two'),
+        ],
+        coverImage: seedImage(7),
+      );
+
+      expect(assertionsEnabled(), isTrue);
+      expect(book.toString(), 'Title: NGE-SEED Book, Chapter count: 2');
     });
   });
 

@@ -1,6 +1,3 @@
-import 'package:quiver/collection.dart' as collections;
-import 'package:quiver/core.dart';
-
 import 'epub_content_file.dart';
 
 class EpubByteContentFile extends EpubContentFile {
@@ -14,24 +11,13 @@ class EpubByteContentFile extends EpubContentFile {
   final List<int> content;
 
   @override
-  int get hashCode {
-    final List<int> objects = <int>[
-      contentMimeType.hashCode,
-      contentType.hashCode,
-      fileName.hashCode,
-      ...content.map((int content) => content.hashCode),
-    ];
-    return hashObjects(objects);
-  }
+  List<Object?> get props =>
+      <Object?>[fileName, contentType, contentMimeType, content];
 
+  /// The file's name, type and the length of its content; never the content.
   @override
-  bool operator ==(Object other) {
-    if (other is! EpubByteContentFile) {
-      return false;
-    }
-    return collections.listsEqual(content, other.content) &&
-        contentMimeType == other.contentMimeType &&
-        contentType == other.contentType &&
-        fileName == other.fileName;
+  String toString() {
+    return 'File name: $fileName, Content type: ${contentType.name}, '
+        'MIME type: $contentMimeType, Length: ${content.length} bytes';
   }
 }

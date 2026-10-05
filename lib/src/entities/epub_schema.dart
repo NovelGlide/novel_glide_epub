@@ -1,9 +1,9 @@
-import 'package:quiver/core.dart';
+import 'package:equatable/equatable.dart';
 
 import '../schema/navigation/epub_navigation.dart';
 import '../schema/opf/epub_package.dart';
 
-class EpubSchema {
+class EpubSchema extends Equatable {
   const EpubSchema({
     required this.package,
     required this.navigation,
@@ -18,17 +18,6 @@ class EpubSchema {
   final String contentDirectoryPath;
 
   @override
-  int get hashCode => hash3(
-      package.hashCode, navigation.hashCode, contentDirectoryPath.hashCode);
-
-  @override
-  bool operator ==(Object other) {
-    if (other is! EpubSchema) {
-      return false;
-    }
-
-    return package == other.package &&
-        navigation == other.navigation &&
-        contentDirectoryPath == other.contentDirectoryPath;
-  }
+  List<Object?> get props =>
+      <Object?>[package, navigation, contentDirectoryPath];
 }

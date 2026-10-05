@@ -17,7 +17,6 @@ dependencies:
   # Used by navigation_reader; was reached transitively until
   # `depend_on_referenced_packages` pointed out it was never declared.
   path: ^1.9.0
-  quiver: ^3.0.1+1
   xml: ^6.0.1
 
 dev_dependencies:

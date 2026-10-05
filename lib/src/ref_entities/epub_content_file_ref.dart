@@ -3,7 +3,7 @@ import 'dart:convert' as convert;
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
-import 'package:quiver/core.dart';
+import 'package:equatable/equatable.dart';
 
 import '../entities/epub_content_type.dart';
 import '../epub_exception.dart';
@@ -11,7 +11,7 @@ import '../utils/content_bytes.dart';
 import '../utils/zip_path_resolver.dart';
 
 /// One manifest file, read from the archive on demand.
-abstract class EpubContentFileRef {
+abstract class EpubContentFileRef extends Equatable {
   const EpubContentFileRef({
     required Archive epubArchive,
     required String contentDirectoryPath,
@@ -32,20 +32,11 @@ abstract class EpubContentFileRef {
   final EpubContentType contentType;
   final String contentMimeType;
 
+  /// The archive and the package document's directory are left out: the
+  /// archive has no equality of its own, so with it the same file opened
+  /// twice would give two refs that are never equal.
   @override
-  int get hashCode =>
-      hash3(fileName.hashCode, contentMimeType.hashCode, contentType.hashCode);
-
-  @override
-  bool operator ==(Object other) {
-    if (other is! EpubContentFileRef) {
-      return false;
-    }
-
-    return other.fileName == fileName &&
-        other.contentMimeType == contentMimeType &&
-        other.contentType == contentType;
-  }
+  List<Object?> get props => <Object?>[fileName, contentType, contentMimeType];
 
   ArchiveFile getContentFileEntry() {
     final String contentFilePath =

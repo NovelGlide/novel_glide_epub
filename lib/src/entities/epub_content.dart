@@ -1,5 +1,4 @@
-import 'package:quiver/collection.dart' as collections;
-import 'package:quiver/core.dart';
+import 'package:equatable/equatable.dart';
 
 import 'epub_byte_content_file.dart';
 import 'epub_content_file.dart';
@@ -11,7 +10,7 @@ import 'epub_text_content_file.dart';
 /// file's [EpubContentFile.fileName], so a link finds its file whether the
 /// book escapes the name or writes it raw. Look a link up by its decoded
 /// form (`%E7%AC%AC.xhtml` and `第.xhtml` are one key, `第.xhtml`).
-class EpubContent {
+class EpubContent extends Equatable {
   const EpubContent({
     this.html = const <String, EpubTextContentFile>{},
     this.css = const <String, EpubTextContentFile>{},
@@ -29,32 +28,13 @@ class EpubContent {
   final Map<String, EpubContentFile> allFiles;
 
   @override
-  int get hashCode {
-    final List<int> objects = <int>[
-      ...html.keys.map((String key) => key.hashCode),
-      ...html.values.map((EpubTextContentFile value) => value.hashCode),
-      ...css.keys.map((String key) => key.hashCode),
-      ...css.values.map((EpubTextContentFile value) => value.hashCode),
-      ...images.keys.map((String key) => key.hashCode),
-      ...images.values.map((EpubByteContentFile value) => value.hashCode),
-      ...fonts.keys.map((String key) => key.hashCode),
-      ...fonts.values.map((EpubByteContentFile value) => value.hashCode),
-      ...allFiles.keys.map((String key) => key.hashCode),
-      ...allFiles.values.map((EpubContentFile value) => value.hashCode),
-    ];
+  List<Object?> get props => <Object?>[html, css, images, fonts, allFiles];
 
-    return hashObjects(objects);
-  }
-
+  /// How many files each map holds; never a file's content.
   @override
-  bool operator ==(Object other) {
-    if (other is! EpubContent) {
-      return false;
-    }
-    return collections.mapsEqual(html, other.html) &&
-        collections.mapsEqual(css, other.css) &&
-        collections.mapsEqual(images, other.images) &&
-        collections.mapsEqual(fonts, other.fonts) &&
-        collections.mapsEqual(allFiles, other.allFiles);
+  String toString() {
+    return 'HTML: ${html.length}, CSS: ${css.length}, '
+        'Images: ${images.length}, Fonts: ${fonts.length}, '
+        'All files: ${allFiles.length}';
   }
 }

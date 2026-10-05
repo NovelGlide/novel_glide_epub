@@ -1,6 +1,6 @@
-import 'package:quiver/core.dart';
+import 'package:equatable/equatable.dart';
 
-class EpubNavigationContent {
+class EpubNavigationContent extends Equatable {
   const EpubNavigationContent({this.id, this.source});
 
   final String? id;
@@ -12,15 +12,7 @@ class EpubNavigationContent {
   final String? source;
 
   @override
-  int get hashCode => hash2(id.hashCode, source.hashCode);
-
-  @override
-  bool operator ==(Object other) {
-    if (other is! EpubNavigationContent) {
-      return false;
-    }
-    return id == other.id && source == other.source;
-  }
+  List<Object?> get props => <Object?>[id, source];
 
   @override
   String toString() {

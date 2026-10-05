@@ -1,9 +1,8 @@
-import 'package:quiver/collection.dart' as collections;
-import 'package:quiver/core.dart';
+import 'package:equatable/equatable.dart';
 
 import 'epub_guide_reference.dart';
 
-class EpubGuide {
+class EpubGuide extends Equatable {
   const EpubGuide({required this.items});
 
   /// Empty when the `<guide>` has no `<reference>`, although OPF 2 requires
@@ -11,15 +10,5 @@ class EpubGuide {
   final List<EpubGuideReference> items;
 
   @override
-  int get hashCode =>
-      hashObjects(items.map((EpubGuideReference item) => item.hashCode));
-
-  @override
-  bool operator ==(Object other) {
-    if (other is! EpubGuide) {
-      return false;
-    }
-
-    return collections.listsEqual(items, other.items);
-  }
+  List<Object?> get props => <Object?>[items];
 }
