@@ -7,3 +7,4 @@ pubspec_overrides.yaml
 
 # Review reports the assistant files locally; they are not part of the package.
 .claude/.assistant/
+.DS_Store
