@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- Recognize EPUB 3 navigation documents when `nav` appears alongside other
+  whitespace-separated manifest properties.
+
 ## 0.3.0
 
 **Breaking: equality is decided by `package:equatable`, and `quiver` is no
