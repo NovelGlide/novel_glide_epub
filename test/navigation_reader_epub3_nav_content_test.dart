@@ -36,10 +36,12 @@ String _navDocument(String listItems) =>
     '<body><nav epub:type="toc"><ol>$listItems</ol></nav></body>'
     '</html>';
 
-Uint8List _epub3With(String listItems) => buildEpubArchive(
+Uint8List _epub3With(String listItems, {String properties = 'nav'}) =>
+    buildEpubArchive(
       opfPath: 'OEBPS/content.opf',
       textEntries: <String, String>{
-        'OEBPS/content.opf': _opfEpub3,
+        'OEBPS/content.opf': _opfEpub3.replaceFirst(
+            'properties="nav"', 'properties="$properties"'),
         'OEBPS/nav.xhtml': _navDocument(listItems),
         'OEBPS/chapter1.xhtml': seedXhtml('NGE-SEED-CH1'),
         'OEBPS/chapter2.xhtml': seedXhtml('NGE-SEED-CH2'),
@@ -48,6 +50,33 @@ Uint8List _epub3With(String listItems) => buildEpubArchive(
 
 void main() {
   group('NavigationReader EPUB3 nav document contents', () {
+    for (final String properties in <String>[
+      'nav scripted',
+      'scripted nav',
+      '  scripted  nav  mathml  ',
+      'scripted&#x9;nav&#xA;mathml',
+    ]) {
+      test('finds nav as a whole property token: $properties', () async {
+        final EpubBookRef book = await const EpubReader().openBook(
+          _epub3With('<li><a href="chapter1.xhtml">Chapter</a></li>',
+              properties: properties),
+          maxEntryBytes: null,
+        );
+        expect(book.schema.navigation.navMap.points.single.content.source,
+            'chapter1.xhtml');
+      });
+    }
+
+    test('does not mistake a partial property for nav', () {
+      expect(
+        () => const EpubReader().openBook(
+          _epub3With('<li><a href="chapter1.xhtml">Chapter</a></li>',
+              properties: 'scripted navigation'),
+          maxEntryBytes: null,
+        ),
+        throwsA(isA<EpubUnresolvedReferenceException>()),
+      );
+    });
     // TC-NAV3-1 [Scenario/use-case]: a nested `<ol>` becomes child navigation
     // points, and the docTitle is taken from the package metadata rather than
     // the nav document.
