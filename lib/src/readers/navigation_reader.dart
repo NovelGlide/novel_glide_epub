@@ -118,11 +118,13 @@ class NavigationReader {
   }
 
   /// The EPUB3 table of contents: an XHTML nav document flagged
-  /// `properties="nav"` in the manifest.
+  /// the `nav` token in its manifest properties.
   EpubNavigation _readEpub3Navigation(
       Archive epubArchive, String contentDirectoryPath, EpubPackage package) {
     final EpubManifestItem? tocManifestItem = package.manifest.items
-        .firstWhereOrNull((EpubManifestItem item) => item.properties == 'nav');
+        .firstWhereOrNull((EpubManifestItem item) =>
+            item.properties?.split(RegExp(r'[\x20\t\r\n]+')).contains('nav') ??
+            false);
     if (tocManifestItem == null) {
       throw const EpubUnresolvedReferenceException(
           'EPUB parsing error: TOC item, not found in EPUB manifest.');
